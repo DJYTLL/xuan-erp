@@ -1,0 +1,21 @@
+{
+  "name": "docs-site",
+  "version": "1.0.0",
+  "description": "Xuan ERP 微服务架构文档站",
+  "scripts": {
+    "docs:dev": "astro dev --host 127.0.0.1 --port 3000",
+    "docs:build": "astro build",
+    "docs:preview": "astro preview --host 127.0.0.1 --port 3000"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@astrojs/starlight": "^0.39.3",
+    "astro": "^6.4.4"
+  }
+}
+
+
+

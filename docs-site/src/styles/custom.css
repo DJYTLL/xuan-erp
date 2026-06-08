@@ -1,0 +1,62 @@
+:root {
+  --sl-font: "Inter", "Segoe UI", "Microsoft YaHei", sans-serif;
+  --sl-content-width: 52rem;
+  --sl-sidebar-width: 20rem;
+  --sl-text-5xl: 2.375rem;
+  --sl-color-accent-low: #e7f1ff;
+  --sl-color-accent: #1769e0;
+  --sl-color-accent-high: #123b7a;
+}
+
+:root[data-theme='dark'] {
+  --sl-color-accent-low: #17345f;
+  --sl-color-accent: #72a7ff;
+  --sl-color-accent-high: #d7e7ff;
+}
+
+body {
+  letter-spacing: 0;
+}
+
+.site-title {
+  font-weight: 700;
+}
+
+.hero {
+  grid-template-columns: minmax(0, 1fr);
+  padding-block: clamp(2rem, 6vw, 4.5rem);
+}
+
+.hero > img,
+.hero .hero-html {
+  display: none;
+}
+
+.hero h1 {
+  max-width: 820px;
+  font-size: clamp(2rem, 6vw, 3.6rem);
+  letter-spacing: 0;
+}
+
+.hero .tagline {
+  max-width: 760px;
+  color: var(--sl-color-gray-2);
+}
+
+.card {
+  border-radius: 8px;
+}
+
+.sl-markdown-content :is(h2, h3) {
+  letter-spacing: 0;
+}
+
+.right-sidebar {
+  font-size: 0.92rem;
+}
+
+@media (min-width: 72rem) {
+  .main-pane {
+    --sl-content-margin-inline: clamp(2rem, 5vw, 4rem);
+  }
+}
