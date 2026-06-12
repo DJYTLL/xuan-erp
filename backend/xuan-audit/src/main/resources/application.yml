@@ -1,0 +1,14 @@
+server:
+  port: 8112
+
+spring:
+  profiles:
+    default: dev
+  application:
+    name: xuan-audit
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

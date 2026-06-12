@@ -1,0 +1,14 @@
+server:
+  port: 8108
+
+spring:
+  profiles:
+    default: dev
+  application:
+    name: xuan-inventory
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

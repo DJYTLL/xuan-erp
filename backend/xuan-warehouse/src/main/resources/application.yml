@@ -1,0 +1,14 @@
+server:
+  port: 8115
+
+spring:
+  profiles:
+    default: dev
+  application:
+    name: xuan-warehouse
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

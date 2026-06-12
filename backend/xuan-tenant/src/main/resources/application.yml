@@ -1,0 +1,14 @@
+server:
+  port: 8116
+
+spring:
+  profiles:
+    default: dev
+  application:
+    name: xuan-tenant
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

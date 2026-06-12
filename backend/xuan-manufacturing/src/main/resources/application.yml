@@ -1,0 +1,14 @@
+server:
+  port: 8109
+
+spring:
+  profiles:
+    default: dev
+  application:
+    name: xuan-manufacturing
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

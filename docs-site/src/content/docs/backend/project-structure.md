@@ -2,39 +2,43 @@
 title: "项目根目录与 Maven 结构"
 ---
 
-Xuan ERP 采用后端微服务 monorepo。根目录承载 Maven 父工程、公共模块、业务服务、部署脚本和文档站。文档站放在 `docs-site`，后端服务与文档站同级。
+Xuan ERP 采用后端微服务 monorepo。`D:\xuan-erp` 是项目总目录，`docs-site` 放正式文档站，`backend` 放后端 Maven 父工程、公共模块、业务服务、后端部署脚本和后端构建脚本。
 
 ## 根目录结构
 
 ```text
 D:\xuan-erp
-  docs-site/
   pom.xml
-  xuan-common/
-  xuan-common-web/
-  xuan-common-security/
-  xuan-common-mybatis/
-  xuan-gateway/
-  xuan-iam/
-  xuan-tenant/
-  xuan-product/
-  xuan-party/
-  xuan-warehouse/
-  xuan-sales/
-  xuan-procurement/
-  xuan-inventory/
-  xuan-manufacturing/
-  xuan-finance/
-  xuan-document/
-  xuan-audit/
-  xuan-query/
-  deploy/
-  scripts/
+  docs-site/
+  backend/
+    pom.xml
+    xuan-common/
+    xuan-common-web/
+    xuan-common-security/
+    xuan-common-mybatis/
+    xuan-gateway/
+    xuan-iam/
+    xuan-tenant/
+    xuan-product/
+    xuan-party/
+    xuan-warehouse/
+    xuan-sales/
+    xuan-procurement/
+    xuan-inventory/
+    xuan-manufacturing/
+    xuan-finance/
+    xuan-document/
+    xuan-audit/
+    xuan-query/
+    deploy/
+    scripts/
 ```
 
 ## 父 POM 职责
 
-根目录 `pom.xml` 只负责版本、插件、模块和构建规范，不承载业务代码。
+根目录 `pom.xml` 只做 IDEA / Maven 顶层聚合，当前只聚合 `backend`，不聚合 `docs-site`。
+
+`backend/pom.xml` 负责后端版本、插件、模块和构建规范，不承载业务代码。
 
 ```xml
 <modules>
@@ -90,7 +94,7 @@ xuan-sales/
 ## 部署目录
 
 ```text
-deploy/
+backend/deploy/
   docker/
   k8s/
   nacos/
@@ -101,7 +105,7 @@ deploy/
 ## 脚本目录
 
 ```text
-scripts/
+backend/scripts/
   build/
   deploy/
   permissions/

@@ -23,19 +23,21 @@ title: "权限接入规范"
 ## 权限码命名
 
 ```text
-领域:资源:动作
+资源:动作
 ```
 
 示例：
 
 | 权限码 | 说明 |
 | --- | --- |
-| `product:product:view` | 查看商品 |
-| `product:product:create` | 新增商品 |
-| `sales:order:audit` | 审核销售单 |
-| `inventory:stock:adjust` | 调整库存 |
+| `warehouse:view` | 查看仓库 |
+| `warehouse:create` | 新增仓库 |
+| `erp-sale-draft:add` | 新增销售草稿 |
+| `erp-sale-return-draft:source-access` | 销售退货草稿访问来源单据 |
 
-对于页面级 CRUD，如果资源和领域一致，可以简化为 `sales:view`、`sales:create`、`sales:update`、`sales:delete`。复杂资源保留三级，例如 `finance:receivable:export`。
+后端 Spring Security 内部可以使用 `PERM_` 前缀，例如 `PERM_warehouse:view`；JWT、前端路由、按钮权限和权限 seed 统一使用原始权限码，不带 `PERM_`。
+
+跨业务单据引用数据时，权限归属当前业务场景，不复用被引用模块的查看权限。前端入口显示、接口请求前置判断、后端 Controller/ApplicationService 校验都应使用当前业务自己的权限。
 
 ## 服务内权限清单位置
 
@@ -60,12 +62,15 @@ menus:
     titleKey: route.salesOrder
 
 permissions:
-  - code: sales:view
+  - code: erp-sale-draft:view
     menuCode: trade:sales
     action: view
-  - code: sales:audit
+  - code: erp-sale-draft:audit
     menuCode: trade:sales
     action: audit
+  - code: erp-sale-return-draft:source-access
+    menuCode: trade:sales-return
+    action: source-access
 
 columns:
   - pageKey: sales-order
@@ -74,7 +79,7 @@ columns:
     sensitive: true
 ```
 
-这份清单是“本服务声明自己有哪些权限点”，不是“本服务保存角色拥有哪些权限”。角色授权仍然只在 IAM 中维护。
+这份清单是“本服务声明自己有哪些权限点”，不是“本服务保存角色拥有哪些权限”。角色授权仍然只在 IAM 中维护。后端 seed 是权限码事实源，前端只消费，不自行创造权限事实。
 
 ## 推荐同步流程
 
@@ -115,13 +120,15 @@ class SalesOrderController {
 ## 接口接入要求
 
 - 前端路由 meta、菜单 code、后端 permission code 要统一。
+- 路由 `meta.permission` 必须与后端权限码一致。
+- 前端按钮统一使用 `v-permission` 控制。
 - 新增页面时必须同时补菜单、权限、列权限映射。
 - 权限树和角色授权树默认使用完整菜单目录构建，不使用当前用户可见菜单构建。
 - super admin 只作为旁路，不代表接口可以没有权限定义。
 
 ## 新页面接入检查表
 
-新增页面时必须一次性完成：
+新增页面只要涉及菜单、页面权限、按钮权限、列权限任意一种，就视为“页面接入权限体系任务”，不是普通页面开发。新增页面时必须一次性完成：
 
 | 项 | 要求 |
 | --- | --- |
@@ -130,8 +137,11 @@ class SalesOrderController {
 | 菜单 seed | 菜单进入正确分组，不能落入未映射页面 |
 | permission seed | 查询、新增、修改、删除、审核、导入导出等动作按需补齐 |
 | column seed | 涉及敏感字段时补齐列权限 |
+| 管理页映射 | 补到 `RoleManagement.vue`、`PermissionManagement.vue`、`ColumnPermissionManagement.vue` 的映射中 |
 | 后端接口 | 每个首屏接口都有权限码和 super admin 旁路 |
-| 回归测试 | 锁住菜单映射、权限树、角色树、列权限树不会遗漏 |
+| 回归测试 | 先补失败测试，锁住菜单映射、权限树、角色树、列权限树不会遗漏 |
+
+命名要尽量同源：`pageKey`、菜单 `code`、`i18nKey`、`path`、`permission_code`、权限前缀应能互相对应。交付时必须说明这些映射，以及为什么不会落入“未映射页面”。
 
 ## 常见错误
 

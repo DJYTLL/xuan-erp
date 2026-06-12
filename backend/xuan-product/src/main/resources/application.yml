@@ -1,0 +1,14 @@
+server:
+  port: 8103
+
+spring:
+  profiles:
+    default: dev
+  application:
+    name: xuan-product
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

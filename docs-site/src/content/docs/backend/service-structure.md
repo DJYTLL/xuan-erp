@@ -2,34 +2,36 @@
 title: "服务工程结构"
 ---
 
-Xuan ERP 后端建议采用微服务 monorepo 管理，并以 DDD 作为业务服务的默认设计模式。根目录承载父 POM、公共模块、业务服务、部署脚本和文档站。每个业务服务保持独立启动、独立配置、独立数据库迁移和独立发布。
+Xuan ERP 后端建议采用微服务 monorepo 管理，并以 DDD 作为业务服务的默认设计模式。`D:\xuan-erp\backend` 承载父 POM、公共模块、业务服务、后端部署脚本和后端构建脚本。每个业务服务保持独立启动、独立配置、独立数据库迁移和独立发布。
 
 ## 推荐目录
 
 ```text
 D:\xuan-erp
-  docs-site/
   pom.xml
-  xuan-common/
-  xuan-common-security/
-  xuan-common-web/
-  xuan-common-mybatis/
-  xuan-gateway/
-  xuan-iam/
-  xuan-tenant/
-  xuan-product/
-  xuan-party/
-  xuan-warehouse/
-  xuan-sales/
-  xuan-procurement/
-  xuan-inventory/
-  xuan-manufacturing/
-  xuan-finance/
-  xuan-document/
-  xuan-audit/
-  xuan-query/
-  deploy/
-  scripts/
+  docs-site/
+  backend/
+    pom.xml
+    xuan-common/
+    xuan-common-security/
+    xuan-common-web/
+    xuan-common-mybatis/
+    xuan-gateway/
+    xuan-iam/
+    xuan-tenant/
+    xuan-product/
+    xuan-party/
+    xuan-warehouse/
+    xuan-sales/
+    xuan-procurement/
+    xuan-inventory/
+    xuan-manufacturing/
+    xuan-finance/
+    xuan-document/
+    xuan-audit/
+    xuan-query/
+    deploy/
+    scripts/
 ```
 
 ## 父工程职责
@@ -68,12 +70,14 @@ xuan-product/
 
 | 目录 | 职责 |
 | --- | --- |
-| `interfaces` | Controller、请求响应 DTO、Assembler |
-| `application` | 应用服务、命令、查询、事务编排、权限检查 |
-| `domain` | 聚合根、实体、值对象、领域服务、仓储接口、领域事件 |
-| `infrastructure` | Mapper、数据库实现、Feign、MQ、配置、第三方适配 |
+| `interfaces` | Controller、Request DTO、Response DTO、参数校验、权限注解、协议适配 |
+| `application` | ApplicationService、Command、Query、事务边界、幂等、审计、用例编排 |
+| `domain` | Aggregate、Domain Entity、Value Object、Domain Service、Domain Event、Repository 接口、业务规则 |
+| `infrastructure` | Repository 实现、MyBatis Mapper、PO/DO、外部服务 Client、MQ、缓存、文件存储 |
 
 详细规则见：[DDD 分层与领域建模](/backend/ddd/)。
+
+新项目不再使用传统 `Controller`、`Service`、`Mapper`、`Entity` 直通式开发模式。MyBatis Mapper、PO/DO 只能存在于 `infrastructure`，不能向上泄漏；领域规则必须进入 `domain`，由 ApplicationService 编排调用。
 
 
 

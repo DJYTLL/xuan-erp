@@ -1,0 +1,18 @@
+spring:
+  config:
+    import:
+      - optional:nacos:xuan-common.yaml
+      - optional:nacos:xuan-party.yaml
+  cloud:
+    nacos:
+      username: nacos
+      password: nacos
+      discovery:
+        server-addr: duaoyunxuan.synology.me:8848
+        namespace: prod
+        group: XUAN_ERP_GROUP
+      config:
+        server-addr: duaoyunxuan.synology.me:8848
+        namespace: prod
+        group: XUAN_ERP_GROUP
+        file-extension: yaml

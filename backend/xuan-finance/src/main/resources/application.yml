@@ -1,0 +1,14 @@
+server:
+  port: 8110
+
+spring:
+  profiles:
+    default: dev
+  application:
+    name: xuan-finance
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

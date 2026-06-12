@@ -32,6 +32,7 @@ export default defineConfig({
             { label: '本地开发', slug: 'guide/local-dev' },
             { label: '数据库准备', slug: 'guide/database-setup' },
             { label: 'Nacos 准备', slug: 'guide/nacos-setup' },
+            { label: '开发规范总览', slug: 'guide/development-rules' },
           ],
         },
         {

@@ -67,6 +67,64 @@ public class SalesOrderApplicationService {
 xuan-sales -> OpenFeign -> Spring Cloud LoadBalancer -> xuan-product 实例
 ```
 
+## 批量调用与 N+1 禁止规则
+
+服务间调用必须优先设计成批量查询。凡是一次业务请求中已经拿到一组 ID 的场景，调用方应一次性把 ID 集合传给被调用服务，由被调用服务批量返回快照数据，禁止在循环中逐条 Feign 调用。
+
+典型反例：
+
+```java
+for (SalesOrderItem item : items) {
+    ProductDTO product = productClient.getProduct(item.getProductId());
+    item.fillProductName(product.getName());
+}
+```
+
+这种写法会让一张销售单的明细行数直接变成远程请求次数。明细越多，耗时越长，也更容易放大下游抖动。
+
+推荐写法：
+
+```java
+List<Long> productIds = items.stream()
+    .map(SalesOrderItem::getProductId)
+    .distinct()
+    .toList();
+
+Map<Long, ProductDTO> productMap = productClient.listProductSnapshots(productIds);
+
+for (SalesOrderItem item : items) {
+    ProductDTO product = productMap.get(item.getProductId());
+    item.fillProductSnapshot(product);
+}
+```
+
+对应 Feign 接口：
+
+```java
+@FeignClient(name = "xuan-product", path = "/internal/products")
+public interface ProductClient {
+
+    @PostMapping("/snapshots:batch-get")
+    Map<Long, ProductDTO> listProductSnapshots(@RequestBody List<Long> productIds);
+}
+```
+
+Xuan ERP 约束：
+
+- 当前页面首屏或当前业务动作必须展示的数据，应由后端一次性聚合返回；禁止因为明细行、关联 ID 或字典项数量增长，造成前端或后端 N+1 次请求。
+- 后端一次服务调用能批量完成的数据补齐，不拆成循环 N 次 Feign 调用。
+- 销售单、采购单、库存单据、生产工单等包含明细行的接口，必须优先提供批量快照查询能力。
+- 商品名称、商品编码、仓库名称、单位、客户名称、供应商名称等展示字段，应由后端在 DTO 中一次性返回。
+- 批量接口要对 ID 去重，并对单次请求数量设置上限，避免一次请求过大。
+- 批量查询结果建议按 ID 返回 `Map` 或稳定顺序列表，调用方必须处理缺失 ID。
+
+边界和例外：
+
+- 历史轨迹、审计日志、附件列表等较重数据，可以由前端在用户点开时再懒加载。
+- 库存可用量等实时敏感数据，可以单独刷新，但后端仍要提供批量查询能力。
+- 超大明细不能无限一次性返回，必须使用分页、分段加载或单次数量上限。
+- 多个不相关写操作不能为了减少请求强行合并，应保持命令语义、事务边界和幂等规则清晰。
+
 ## LoadBalancer 示例
 
 `Spring Cloud LoadBalancer` 负责在多个服务实例中选择一个实际实例。使用 `RestTemplate`、`WebClient.Builder` 或 `RestClient.Builder` 按服务名调用时，需要通过 `@LoadBalanced` 标记客户端。

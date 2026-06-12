@@ -1,0 +1,21 @@
+server:
+  port: 8100
+
+spring:
+  profiles:
+    default: dev
+  application:
+    name: xuan-gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          discovery:
+            locator:
+              enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

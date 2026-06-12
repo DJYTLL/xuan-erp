@@ -1,0 +1,14 @@
+server:
+  port: 8113
+
+spring:
+  profiles:
+    default: dev
+  application:
+    name: xuan-query
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

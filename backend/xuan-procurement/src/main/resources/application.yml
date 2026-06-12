@@ -1,0 +1,14 @@
+server:
+  port: 8107
+
+spring:
+  profiles:
+    default: dev
+  application:
+    name: xuan-procurement
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

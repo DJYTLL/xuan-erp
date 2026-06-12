@@ -1,0 +1,14 @@
+server:
+  port: 8104
+
+spring:
+  profiles:
+    default: dev
+  application:
+    name: xuan-party
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
