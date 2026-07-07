@@ -1,0 +1,2 @@
+{"id":3,"tenant_id":"dev","quota":0,"usage":58,"max_size":0,"max_aggr_count":0,"max_aggr_size":0,"max_history_count":0,"gmt_create":"2026-06-23T02:33:11.006","gmt_modified":"2026-07-06T02:38:08.01"}
+{"id":6,"tenant_id":"prod","quota":0,"usage":57,"max_size":0,"max_aggr_count":0,"max_aggr_size":0,"max_history_count":0,"gmt_create":"2026-06-23T02:33:11.825","gmt_modified":"2026-07-06T02:38:08.015"}

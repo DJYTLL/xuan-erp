@@ -1,0 +1,4 @@
+/**
+ * infrastructure persistence repository package for xuan-manufacturing.
+ */
+package com.xuan.erp.manufacturing.infrastructure.persistence.repository;

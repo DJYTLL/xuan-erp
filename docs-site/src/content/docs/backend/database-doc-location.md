@@ -2,7 +2,7 @@
 title: "数据库结构文档规范"
 ---
 
-数据库结构文档用于说明每个服务拥有的数据表、字段、索引、唯一约束、租户隔离字段和初始化数据。它和 Flyway migration 互相对应，但职责不同：migration 负责执行变更，数据库结构文档负责解释当前结构和设计意图。
+数据库结构文档用于说明每个服务拥有的数据表、字段、普通索引、逻辑约束、租户隔离字段和初始化数据。它和 Flyway migration 互相对应，但职责不同：migration 负责执行变更，数据库结构文档负责解释当前结构和设计意图。
 
 ## 存放位置
 
@@ -34,7 +34,7 @@ xuan-product/src/main/resources/db/migration/
 - 当前 migration 最新版本。
 - 表清单。
 - 每张表的字段说明。
-- 主键、唯一约束、普通索引。
+- 主键、普通索引和应用层逻辑约束。
 - tenantId 隔离规则。
 - 逻辑删除规则。
 - 初始化数据说明。
@@ -61,8 +61,13 @@ xuan-product/src/main/resources/db/migration/
 
 | 名称 | 字段 | 类型 | 说明 |
 | --- | --- | --- | --- |
-| uk_product_tenant_code | tenant_id, code | unique | 同一租户商品编码唯一 |
+| idx_product_tenant_code | tenant_id, code | normal | 辅助应用层校验同一租户商品编码唯一 |
 | idx_product_name | tenant_id, name | normal | 商品名称搜索 |
+
+### 逻辑约束
+
+- 应用层校验同一租户活动商品编码唯一，数据库不建立唯一约束。
+- 应用层校验商品状态枚举、必填业务关系和跨服务引用有效性。
 
 ### 关联说明
 

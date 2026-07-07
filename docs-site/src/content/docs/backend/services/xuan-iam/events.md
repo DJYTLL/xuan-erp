@@ -8,6 +8,7 @@ title: "xuan-iam 事件文档"
 
 | 事件 | Topic | 触发时机 | 主要消费者 | 说明 |
 | --- | --- | --- | --- | --- |
+| `IamTenantBootstrapped` | `iam.tenant.bootstrapped` | `bootstrap_iam_tenant` 首次完成租户菜单授权初始化 | 租户开通编排、审计、读模型 | 通过 `iam_outbox_event.event_id = iam:tenant:{tenantId}:bootstrap:v1:event` 保持重复触发幂等 |
 | UserCreated, RolePermissionChanged, PermissionCatalogSynced | `xuan-iam-event` | 用户、角色、权限目录和授权变更事件 | 按业务协作需要订阅 | 事件结构开发时补齐 |
 
 ## 订阅事件

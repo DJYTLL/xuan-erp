@@ -1,0 +1,4 @@
+/**
+ * infrastructure rpc package for xuan-manufacturing.
+ */
+package com.xuan.erp.manufacturing.infrastructure.rpc;

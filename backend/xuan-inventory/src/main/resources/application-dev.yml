@@ -1,6 +1,7 @@
 spring:
   config:
     import:
+      - optional:nacos:xuan-infra.yaml
       - optional:nacos:xuan-common.yaml
       - optional:nacos:xuan-inventory.yaml
   cloud:
@@ -8,11 +9,11 @@ spring:
       username: nacos
       password: nacos
       discovery:
-        server-addr: duaoyunxuan.synology.me:8848
+        server-addr: duaoyunxuan.com:9041
         namespace: dev
         group: XUAN_ERP_GROUP
       config:
-        server-addr: duaoyunxuan.synology.me:8848
+        server-addr: duaoyunxuan.com:9041
         namespace: dev
         group: XUAN_ERP_GROUP
         file-extension: yaml

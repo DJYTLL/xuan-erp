@@ -68,13 +68,15 @@ title: "多租户设计"
 | 平台租户表 | 可不需要 | 租户主表本身 |
 | 审计日志 | 建议需要 | 操作日志、登录日志，平台操作可为空或使用平台租户标记 |
 
-租户内唯一索引必须包含 `tenant_id`：
+租户内唯一性只允许由应用层逻辑校验，数据库不建立唯一索引或唯一约束。数据库侧只保留普通索引辅助查询，索引字段必须包含 `tenant_id`，避免应用校验时误扫到其它租户的数据：
 
 ```sql
-unique key uk_product_code_tenant (tenant_id, product_code)
+CREATE INDEX IF NOT EXISTS idx_product_code_lookup
+    ON product (tenant_id, product_code)
+    WHERE deleted_at IS NULL;
 ```
 
-禁止只用 `product_code` 做全局唯一，除非该数据确实是平台全局数据。
+保存商品时，由应用层在 `tenant_id + product_code + deleted_at IS NULL` 范围内查询并拦截重复编码。禁止只按 `product_code` 做全局重复校验，除非该数据确实是平台全局数据。
 
 ## 服务内强制隔离
 

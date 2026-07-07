@@ -25,9 +25,24 @@ title: "服务通信"
     <groupId>org.springframework.cloud</groupId>
     <artifactId>spring-cloud-starter-loadbalancer</artifactId>
 </dependency>
+
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-sentinel</artifactId>
+</dependency>
 ```
 
 `spring-cloud-starter-loadbalancer` 的版本由 Spring Cloud BOM 管理，业务服务不单独覆盖。
+
+Sentinel 用于服务间调用熔断、慢调用保护和异常比例保护，版本由 Spring Cloud Alibaba BOM 管理。详细规则见：[Sentinel 准备](/guide/sentinel-setup/)。
+
+如果需要让 Sentinel 接管 OpenFeign 调用保护，开启：
+
+```yaml
+feign:
+  sentinel:
+    enabled: true
+```
 
 ## OpenFeign 示例
 
@@ -272,7 +287,6 @@ Feign 仍然可以作为普通 HTTP 客户端使用，但不会通过 Spring Clo
 
 - OpenFeign 调用规范。
 - LoadBalancer 负载均衡策略。
-- 服务 Token。
 - 用户上下文透传。
 - 内部接口路径规范。
 

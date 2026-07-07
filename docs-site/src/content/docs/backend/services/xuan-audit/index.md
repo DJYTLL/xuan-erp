@@ -11,7 +11,7 @@ xuan-audit 是 Xuan ERP 的审计服务，主要负责：操作审计、登录�
 | 服务名 | `xuan-audit` |
 | 职责 | 操作审计、登录审计、接口耗时、SQL 耗时、异常日志索引 |
 | 权限前缀 | `audit` |
-| 数据库/Schema | `xuan_audit` |
+| 数据库 | `xuan_audit` |
 | 事件 Topic | `xuan-audit-event` |
 | Java 包名 | `com.xuan.erp.audit` |
 
@@ -29,7 +29,7 @@ xuan-audit 是 Xuan ERP 的审计服务，主要负责：操作审计、登录�
 
 ## 数据所有权
 
-本服务只直接读写 `xuan_audit` 下属于自身的数据表。跨服务需要的数据通过接口、领域事件或 `xuan-query` 读模型获取，不直接跨库 Join。
+本服务连接并只直接读写独立数据库 `xuan_audit` 中属于自身的数据表。跨服务需要的数据通过接口、领域事件或 `xuan-query` 读模型获取，不直接跨库 Join。
 
 详细数据库结构见：[数据库结构](./database/)。
 

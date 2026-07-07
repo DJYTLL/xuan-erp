@@ -11,7 +11,7 @@ xuan-inventory 是 Xuan ERP 的库存服务，主要负责：库存余额、库�
 | 服务名 | `xuan-inventory` |
 | 职责 | 库存余额、库存流水、出入库、盘点、移库、库存预占与释放 |
 | 权限前缀 | `inventory` |
-| 数据库/Schema | `xuan_inventory` |
+| 数据库 | `xuan_inventory` |
 | 事件 Topic | `xuan-inventory-event` |
 | Java 包名 | `com.xuan.erp.inventory` |
 
@@ -29,7 +29,7 @@ xuan-inventory 是 Xuan ERP 的库存服务，主要负责：库存余额、库�
 
 ## 数据所有权
 
-本服务只直接读写 `xuan_inventory` 下属于自身的数据表。跨服务需要的数据通过接口、领域事件或 `xuan-query` 读模型获取，不直接跨库 Join。
+本服务连接并只直接读写独立数据库 `xuan_inventory` 中属于自身的数据表。跨服务需要的数据通过接口、领域事件或 `xuan-query` 读模型获取，不直接跨库 Join。
 
 详细数据库结构见：[数据库结构](./database/)。
 

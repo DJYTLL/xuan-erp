@@ -12,9 +12,13 @@ if (Test-Path $pidFile) {
   Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue
 }
 
-Get-CimInstance Win32_Process -Filter "name = 'node.exe'" | Where-Object {
-  $_.CommandLine -and $_.CommandLine -like "*$root*" -and $_.CommandLine -like '*astro*'
-} | ForEach-Object {
-  Stop-Process -Id $_.ProcessId -Force
-  Write-Output "Stopped remaining docs node process. PID: $($_.ProcessId)"
+try {
+  Get-CimInstance Win32_Process -Filter "name = 'node.exe'" | Where-Object {
+    $_.CommandLine -and $_.CommandLine -like "*$root*" -and $_.CommandLine -like '*astro*'
+  } | ForEach-Object {
+    Stop-Process -Id $_.ProcessId -Force
+    Write-Output "Stopped remaining docs node process. PID: $($_.ProcessId)"
+  }
+} catch {
+  Write-Output "Skipped scanning remaining node processes: $($_.Exception.Message)"
 }

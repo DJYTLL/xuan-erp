@@ -11,7 +11,7 @@ xuan-product 是 Xuan ERP 的商品服务，主要负责：商品、分类、单
 | 服务名 | `xuan-product` |
 | 职责 | 商品、分类、单位、品牌、价格、车型适配、商品条码 |
 | 权限前缀 | `product` |
-| 数据库/Schema | `xuan_product` |
+| 数据库 | `xuan_product` |
 | 事件 Topic | `xuan-product-event` |
 | Java 包名 | `com.xuan.erp.product` |
 
@@ -29,7 +29,7 @@ xuan-product 是 Xuan ERP 的商品服务，主要负责：商品、分类、单
 
 ## 数据所有权
 
-本服务只直接读写 `xuan_product` 下属于自身的数据表。跨服务需要的数据通过接口、领域事件或 `xuan-query` 读模型获取，不直接跨库 Join。
+本服务连接并只直接读写独立数据库 `xuan_product` 中属于自身的数据表。跨服务需要的数据通过接口、领域事件或 `xuan-query` 读模型获取，不直接跨库 Join。
 
 详细数据库结构见：[数据库结构](./database/)。
 

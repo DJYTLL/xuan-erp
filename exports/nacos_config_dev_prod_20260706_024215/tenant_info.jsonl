@@ -1,0 +1,2 @@
+{"id":2,"kp":"1","tenant_id":"dev","tenant_name":"dev","tenant_desc":"Xuan ERP development environment","create_source":"nacos","gmt_create":"2026-06-23T02:33:10.714","gmt_modified":"2026-06-23T02:33:10.714"}
+{"id":5,"kp":"1","tenant_id":"prod","tenant_name":"prod","tenant_desc":"Xuan ERP production environment","create_source":"nacos","gmt_create":"2026-06-23T02:33:10.989","gmt_modified":"2026-06-23T02:33:10.989"}

@@ -6,9 +6,75 @@ spring:
     default: dev
   application:
     name: xuan-tenant
+  cloud:
+    sentinel:
+      transport:
+        dashboard: ${XUAN_SENTINEL_DASHBOARD:127.0.0.1:9022}
+        port: ${XUAN_SENTINEL_PORT:8719}
+        client-ip: ${XUAN_SENTINEL_CLIENT_IP:127.0.0.1}
+      eager: true
+      datasource:
+        flow:
+          nacos:
+            server-addr: ${spring.cloud.nacos.config.server-addr}
+            namespace: ${spring.cloud.nacos.config.namespace}
+            username: ${spring.cloud.nacos.username:nacos}
+            password: ${spring.cloud.nacos.password:nacos}
+            group-id: XUAN_ERP_GROUP
+            data-id: xuan-tenant-sentinel-flow-rules.json
+            data-type: json
+            rule-type: flow
+        degrade:
+          nacos:
+            server-addr: ${spring.cloud.nacos.config.server-addr}
+            namespace: ${spring.cloud.nacos.config.namespace}
+            username: ${spring.cloud.nacos.username:nacos}
+            password: ${spring.cloud.nacos.password:nacos}
+            group-id: XUAN_ERP_GROUP
+            data-id: xuan-tenant-sentinel-degrade-rules.json
+            data-type: json
+            rule-type: degrade
+        param-flow:
+          nacos:
+            server-addr: ${spring.cloud.nacos.config.server-addr}
+            namespace: ${spring.cloud.nacos.config.namespace}
+            username: ${spring.cloud.nacos.username:nacos}
+            password: ${spring.cloud.nacos.password:nacos}
+            group-id: XUAN_ERP_GROUP
+            data-id: xuan-tenant-sentinel-param-flow-rules.json
+            data-type: json
+            rule-type: param-flow
+
+feign:
+  sentinel:
+    enabled: true
+
+seata:
+  enabled: true
+  application-id: ${spring.application.name}
+  tx-service-group: xuan-erp-tx-group
+  registry:
+    type: file
+  config:
+    type: file
+  service:
+    vgroup-mapping:
+      xuan-erp-tx-group: default
+    grouplist:
+      default: duaoyunxuan.com:9045
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+  packages-to-scan:
+    - com.xuan.erp.tenant.interfaces.controller

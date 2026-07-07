@@ -11,7 +11,7 @@ xuan-manufacturing 是 Xuan ERP 的组装拆分服务，主要负责：组装单
 | 服务名 | `xuan-manufacturing` |
 | 职责 | 组装单、拆分单、BOM 模板、成品与配件转换 |
 | 权限前缀 | `manufacturing` |
-| 数据库/Schema | `xuan_manufacturing` |
+| 数据库 | `xuan_manufacturing` |
 | 事件 Topic | `xuan-manufacturing-event` |
 | Java 包名 | `com.xuan.erp.manufacturing` |
 
@@ -29,7 +29,7 @@ xuan-manufacturing 是 Xuan ERP 的组装拆分服务，主要负责：组装单
 
 ## 数据所有权
 
-本服务只直接读写 `xuan_manufacturing` 下属于自身的数据表。跨服务需要的数据通过接口、领域事件或 `xuan-query` 读模型获取，不直接跨库 Join。
+本服务连接并只直接读写独立数据库 `xuan_manufacturing` 中属于自身的数据表。跨服务需要的数据通过接口、领域事件或 `xuan-query` 读模型获取，不直接跨库 Join。
 
 详细数据库结构见：[数据库结构](./database/)。
 

@@ -1,0 +1,10 @@
+tenant_info|2
+tenant_capacity|2
+config_info|115
+config_info_gray|0
+config_tags_relation|0
+his_config_info|11651
+ai_resource|0
+ai_resource_version|0
+pipeline_execution|0
+group_capacity|0

@@ -165,7 +165,7 @@ xuan-sales/src/main/resources/db/migration/
 - 版本号没有跳号。
 - 没有复用历史版本号。
 - 没有修改历史 migration 文件内容。
-- migration 只作用于本服务数据库或 schema。
+- migration 只作用于本服务数据库。
 
 部署时可以选择：
 
@@ -196,13 +196,15 @@ deploy/nacos/prod/xuan-sales.yaml
 
 基础服务和依赖服务优先：
 
-1. 基础设施：Nacos、Sentinel、RocketMQ、监控、日志。
-2. `xuan-iam`：权限目录、菜单、角色授权基础能力。
-3. `xuan-gateway`：路由、认证、限流。
-4. 基础档案服务：`xuan-product`、`xuan-party`、`xuan-warehouse`。
+1. 基础设施：Nacos、Sentinel、Seata、RocketMQ、Redis、Elasticsearch、监控、日志。
+2. 基础闭环服务：`xuan-iam`、`xuan-tenant`、`xuan-audit`、`xuan-gateway`。
+3. 第一个业务服务：`xuan-product`，用于验证接口、权限、租户隔离、审计日志、migration 和前端接入。
+4. 其他基础档案服务：`xuan-party`、`xuan-warehouse`。
 5. 交易服务：`xuan-sales`、`xuan-procurement`、`xuan-inventory`、`xuan-finance`。
-6. 辅助服务：`xuan-document`、`xuan-audit`、`xuan-query`。
+6. 辅助和读模型服务：`xuan-document`、`xuan-query`。
 7. 前端。
+
+首次上线时，`xuan-audit` 不应等到辅助服务阶段才接入。它需要跟 IAM、Tenant、Gateway 一起进入首个后端最小闭环，用于记录登录审计、操作审计、接口耗时、SQL 耗时和异常日志索引。
 
 非首次上线时，可以按受影响服务滚动发布，但依赖契约发生变化时必须先发布兼容版本。
 

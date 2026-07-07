@@ -1,0 +1,4 @@
+/**
+ * infrastructure mq package for xuan-manufacturing.
+ */
+package com.xuan.erp.manufacturing.infrastructure.mq;

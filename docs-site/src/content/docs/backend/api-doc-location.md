@@ -94,4 +94,6 @@ backend/services/xuan-product/
 
 ## 与 OpenAPI 的关系
 
-后续可以从代码生成 OpenAPI/Swagger，但 Markdown 文档仍保留业务语义、权限、租户、幂等、审计和领域规则说明。生成文档解决“接口长什么样”，Markdown 文档解决“接口为什么这样设计、如何安全调用”。
+后端服务默认使用 springdoc-openapi 生成 OpenAPI/Swagger。Markdown 文档仍保留业务语义、权限、租户、幂等、审计和领域规则说明。生成文档解决“接口长什么样”，Markdown 文档解决“接口为什么这样设计、如何安全调用”。
+
+详细接入方式见：[OpenAPI 与 springdoc-openapi](/backend/openapi-springdoc/)。

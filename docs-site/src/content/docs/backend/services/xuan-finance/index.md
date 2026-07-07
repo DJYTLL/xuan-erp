@@ -11,7 +11,7 @@ xuan-finance 是 Xuan ERP 的财务服务，主要负责：应收、应付、收
 | 服务名 | `xuan-finance` |
 | 职责 | 应收、应付、收款、付款、核销、资金流水 |
 | 权限前缀 | `finance` |
-| 数据库/Schema | `xuan_finance` |
+| 数据库 | `xuan_finance` |
 | 事件 Topic | `xuan-finance-event` |
 | Java 包名 | `com.xuan.erp.finance` |
 
@@ -29,7 +29,7 @@ xuan-finance 是 Xuan ERP 的财务服务，主要负责：应收、应付、收
 
 ## 数据所有权
 
-本服务只直接读写 `xuan_finance` 下属于自身的数据表。跨服务需要的数据通过接口、领域事件或 `xuan-query` 读模型获取，不直接跨库 Join。
+本服务连接并只直接读写独立数据库 `xuan_finance` 中属于自身的数据表。跨服务需要的数据通过接口、领域事件或 `xuan-query` 读模型获取，不直接跨库 Join。
 
 详细数据库结构见：[数据库结构](./database/)。
 

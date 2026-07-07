@@ -12,6 +12,7 @@ Thumbs.db
 logs/
 *.pid
 docs-site/.logs/
+.codex/
 
 # Node / Astro
 node_modules/
@@ -32,3 +33,4 @@ target/
 !.env.example
 **/application-local.yml
 **/application-*.local.yml
+.local/

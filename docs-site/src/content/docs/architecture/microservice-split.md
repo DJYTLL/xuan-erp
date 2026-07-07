@@ -27,7 +27,7 @@ title: "Xuan ERP 微服务拆分与权限架构说明"
 | 11  | `xuan-finance`       | 应收、应付、收款、付款、核销、客户欠款、供应商欠款、往来财务      |
 | 12  | `xuan-document`      | 打印模板、打印日志、单据打印快照、QZ Tray 签名、本地打印集成  |
 | 13  | `xuan-audit`         | 审计日志、删除原因、接口耗时、SQL 耗时、跨租户审计         |
-| 14  | `xuan-query`         | 页面聚合查询、只读宽表、报表、首页统计、前端读模型           |
+| 14  | `xuan-query`         | 页面聚合查询、只读宽表、报表、首页统计、前端读模型、搜索索引      |
 
 前端项目：
 
@@ -37,7 +37,7 @@ title: "Xuan ERP 微服务拆分与权限架构说明"
 
 ## 3. 数据所有权
 
-微服务化后，每个服务应拥有自己的数据库或独立 schema。业务服务之间不直接跨库 JOIN。
+微服务化后，每个服务应拥有自己的独立数据库。业务服务之间不直接跨库 JOIN。
 
 | 服务                          | 数据所有权                   |
 | --------------------------- | ----------------------- |
@@ -53,7 +53,7 @@ title: "Xuan ERP 微服务拆分与权限架构说明"
 | `xuan-finance`       | 应收、应付、收款、付款、核销          |
 | `xuan-document`      | 打印模板、打印日志、打印快照          |
 | `xuan-audit`         | 审计日志、接口耗时、SQL 耗时        |
-| `xuan-query`         | 只读宽表、报表表、页面聚合读模型        |
+| `xuan-query`         | 只读宽表、报表表、页面聚合读模型、搜索索引        |
 
 ## 4. 权限体系设计
 
@@ -183,7 +183,7 @@ xuan-procurement -> xuan-inventory: POST /internal/stock-inbounds
 
 ## 7. Query Service 如何查询数据
 
-`xuan-query` 不直接 JOIN 各业务服务数据库，也不把实时跨服务聚合作为主要查询方式。它维护自己的只读宽表数据库，所有复杂列表、报表、首页统计和页面首屏聚合数据都优先从自己的读模型表查询。
+`xuan-query` 不直接 JOIN 各业务服务数据库，也不把实时跨服务聚合作为主要查询方式。它维护自己的只读宽表数据库、Redis 缓存和 Elasticsearch 搜索索引，所有复杂列表、报表、首页统计、页面首屏聚合数据和搜索型数据都优先从自己的读模型能力查询。
 
 `xuan-query` 拥有自己的数据库，例如：
 
@@ -201,6 +201,15 @@ inventory_summary_view
 finance_summary_view
 ```
 
+搜索型数据进入 Elasticsearch，例如：
+
+```text
+xuan-prod-product-search
+xuan-prod-party-search
+xuan-prod-sales-order-search
+xuan-prod-audit-log
+```
+
 数据来源于各服务发布的事件：
 
 ```text
@@ -209,15 +218,16 @@ inventory-service 发布 StockChanged
 sales-service 发布 SaleApproved / SaleCancelled
 finance-service 发布 ReceivableChanged
 query-service 消费事件并更新自己的读模型表
+query-service 更新 Redis 缓存和 Elasticsearch 索引
 ```
 
 前端查询时：
 
 ```text
-前端 -> query-service -> xuan_query_db
+前端 -> query-service -> xuan_query_db / Redis / Elasticsearch
 ```
 
-这种方式牺牲一部分实时性，换取查询性能、稳定性和跨服务解耦。对必须实时校验的数据，例如审核前库存校验、付款核销、单据状态变更，仍然由对应领域服务直接查询自己的主库处理，不走 `xuan-query`。
+这种方式牺牲一部分实时性，换取查询性能、稳定性和跨服务解耦。对必须实时校验的数据，例如审核前库存校验、付款核销、单据状态变更，仍然由对应领域服务直接查询自己的主库处理，不走 `xuan-query`，也不走 Elasticsearch。
 
 ## 8. 典型业务链路
 
@@ -259,14 +269,36 @@ query-service 消费事件更新销售列表读模型
 - 故障面变大，需要超时、重试、熔断、降级。
 - 数据一致性从强一致变为大量最终一致。
 
-## 10. 最终建议
+## 10. 首个后端最小闭环
+
+第一阶段不一次性实现 14 个服务，先跑通五个基础闭环服务：
+
+```text
+xuan-gateway
+xuan-iam
+xuan-tenant
+xuan-audit
+xuan-product
+```
+
+这个组合用于验证后端微服务的最小可复制模式：
+
+- `xuan-gateway` 提供统一入口、路由、认证入口、限流和 Trace 透传。
+- `xuan-iam` 提供登录、用户、角色、权限、菜单和列权限。
+- `xuan-tenant` 提供租户生命周期、租户启停和租户上下文。
+- `xuan-audit` 提供登录审计、操作审计、接口耗时、SQL 耗时和异常日志索引。
+- `xuan-product` 作为第一个业务服务，验证接口、权限、租户隔离、Flyway migration 和前端页面接入。
+
+`xuan-audit` 放入第一个闭环不是要求一开始完成完整日志平台，而是要求从第一个业务服务开始就具备可追踪证据链。后续排查登录失败、权限拒绝、租户上下文丢失、网关转发异常、接口慢和 SQL 慢时，不能只靠临时控制台日志。
+
+## 11. 最终建议
 
 如果目标是生产级微服务，而不是简单拆目录，建议采用如下原则：
 
 ```text
 权限中心化：IAM 统一管理用户、角色、权限、菜单、列权限。
 服务自治化：每个业务服务拥有自己的数据和领域逻辑。
-查询模型化：复杂查询走 query-service 的读模型，不跨库 JOIN。
+查询模型化：复杂查询走 query-service 的读模型、Redis 缓存和 Elasticsearch 索引，不跨库 JOIN。
 服务治理平台化：K8s + Service Mesh + NetworkPolicy + Trace + Metrics。
 事务事件化：跨服务写操作通过事件、Outbox、Saga、幂等消费和对账保证。
 ```

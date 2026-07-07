@@ -4,7 +4,7 @@ title: "Xuan ERP Microservice Version Stack"
 
 更新时间：2026-06-07 11:59:31 +08:00
 
-本文记录当前 Xuan ERP 微服务化重构推荐使用的生产级技术栈版本。目标是围绕 Spring Boot、Spring Cloud、Spring Cloud Alibaba、Nacos、Sentinel、Seata、RocketMQ 等组件形成一套可落地、版本对应关系清晰的选型。
+本文记录当前 Xuan ERP 微服务化重构推荐使用的生产级技术栈版本。目标是围绕 Spring Boot、Spring Cloud、Spring Cloud Alibaba、Nacos、Sentinel、Seata、RocketMQ、Redis、Elasticsearch 等组件形成一套可落地、版本对应关系清晰的选型。
 
 ## 1. 首推版本组合
 
@@ -17,16 +17,25 @@ title: "Xuan ERP Microservice Version Stack"
 | Nacos Server | 3.2.2 | 服务注册、配置中心；要求 Java 17+ |
 | Nacos Client | 由 Spring Cloud Alibaba BOM 管理，当前为 3.1.1 | 不建议手工覆盖 |
 | Sentinel | 由 BOM 管理为 1.8.9 | 单独看 Sentinel 已有 1.8.10，但生产中优先跟随 BOM |
-| Seata | 由 BOM 管理为 2.5.0 | 分布式事务；建议只用于确实需要强一致协调的场景 |
+| Seata | 由 BOM 管理为 2.5.0 | 分布式事务；Console 入口端口 `9021`，事务服务端口默认 `8091`，建议只用于确实需要强一致协调的场景 |
 | RocketMQ Client | 由 BOM 管理为 5.3.1 | 事件驱动、异步消息 |
 | RocketMQ Server | 5.5.0 | 若追求更保守兼容，可用 5.3.4 |
+| Redis Client | 由 Spring Boot BOM 管理 | 缓存、幂等键、短期状态和热点读优化 |
+| Redis Server | 8.x | 生产建议使用独立持久化和密码认证 |
+| Elasticsearch Client | 由 Spring Boot BOM 管理 | 搜索索引、全文检索、日志检索 |
+| Elasticsearch Server | 9.x | 作为正式搜索基础设施纳入规划，首批可先预埋索引和事件链路 |
 | Gateway | Spring Cloud Gateway | 统一入口、路由、认证、限流 |
 | 服务调用 | OpenFeign + Spring Cloud LoadBalancer | 服务间 HTTP 调用 |
 | 客户端负载均衡 | `spring-cloud-starter-loadbalancer` | 服务间调用负载均衡，由 Spring Cloud BOM 管理版本 |
+| OpenAPI | springdoc-openapi | 生成 `/v3/api-docs` 和 Swagger UI，作为机器可读接口契约 |
 | 熔断限流 | Sentinel | 接口限流、熔断、热点参数保护 |
-| 链路追踪 | Micrometer Tracing + OpenTelemetry | TraceId 全链路传递 |
-| 监控 | Prometheus + Grafana | 指标采集与可视化 |
+| 链路追踪 / APM | SkyWalking Java Agent + SkyWalking OAP | 接口耗时、服务拓扑、调用链、慢 SQL span |
+| APM 存储 | Elasticsearch | SkyWalking trace、指标、拓扑和告警数据存储；业务搜索索引需命名隔离 |
+| SQL 统计 | PostgreSQL `pg_stat_statements` | 数据库侧 SQL 调用次数、总耗时、平均耗时和最慢耗时统计 |
+| 监控 | SkyWalking + PostgreSQL `pg_stat_statements` | 应用链路和数据库 SQL 统计联动排查 |
 | 日志 | Loki 或 ELK | 集中日志查询 |
+| 缓存 | Redis | 热点数据缓存、幂等键、短期状态 |
+| 搜索 | Elasticsearch | 商品、客户、单据、审计日志等搜索型读模型 |
 
 ## 2. 保守版本组合
 
@@ -41,8 +50,10 @@ title: "Xuan ERP Microservice Version Stack"
 | Nacos Server | 3.2.2 |
 | Sentinel | 跟随 Spring Cloud Alibaba BOM |
 | Seata | 跟随 Spring Cloud Alibaba BOM |
+| Redis | 7.4.x 或 8.x |
+| Elasticsearch | 跟随 Spring Boot / Spring Data 兼容范围选择 |
 
-对当前准备新拆微服务的 Xuan ERP 项目，默认选择首推组合：Java 21 LTS + Spring Boot 4.0.x + Spring Cloud 2025.1.x + Spring Cloud Alibaba 2025.1.x + Nacos 3.2.x。
+对当前准备新拆微服务的 Xuan ERP 项目，默认选择首推组合：Java 21 LTS + Spring Boot 4.0.x + Spring Cloud 2025.1.x + Spring Cloud Alibaba 2025.1.x + Nacos 3.2.x + Redis + Elasticsearch。
 
 ## 3. Maven BOM 配置
 
@@ -115,6 +126,44 @@ title: "Xuan ERP Microservice Version Stack"
 
 `spring-cloud-starter-loadbalancer` 负责服务间调用的客户端负载均衡，版本由 Spring Cloud BOM 统一管理，业务服务不单独指定版本。
 
+需要使用 Redis 缓存、幂等键或短期状态的服务再引入：
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-redis</artifactId>
+</dependency>
+```
+
+需要维护 Elasticsearch 搜索索引或查询 ES 的服务再引入：
+
+```xml
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-elasticsearch</artifactId>
+</dependency>
+```
+
+需要参与 Seata 全局事务的服务再引入：
+
+```xml
+<dependency>
+    <groupId>com.alibaba.cloud</groupId>
+    <artifactId>spring-cloud-starter-alibaba-seata</artifactId>
+</dependency>
+```
+
+需要生成 OpenAPI / Swagger UI 的 Spring MVC 服务引入：
+
+```xml
+<dependency>
+    <groupId>org.springdoc</groupId>
+    <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+</dependency>
+```
+
+详细规范见：[OpenAPI 与 springdoc-openapi](/backend/openapi-springdoc/)。
+
 ## 5. Gateway 服务依赖
 
 网关服务建议使用 Spring Cloud Gateway，并接入 Sentinel Gateway 适配：
@@ -137,7 +186,7 @@ Nacos 建议同时承担：
 
 - 服务注册与发现。
 - 配置中心。
-- 环境隔离，例如 `dev`、`test`、`prod` namespace。
+- 环境隔离；Xuan ERP 当前使用 `dev`、`prod` namespace。
 - 服务分组，例如 `XUAN_ERP_GROUP`。
 
 示例配置：
@@ -149,11 +198,11 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: nacos:8848
+        server-addr: duaoyunxuan.com:9041
         namespace: prod
         group: XUAN_ERP_GROUP
       config:
-        server-addr: nacos:8848
+        server-addr: duaoyunxuan.com:9041
         namespace: prod
         group: XUAN_ERP_GROUP
         file-extension: yaml
@@ -173,7 +222,21 @@ Sentinel 建议用于：
 
 不建议把 Sentinel 当成业务正确性的兜底工具。库存扣减、应收生成、销售审核这类业务一致性问题，应该通过事务、事件、Outbox、幂等和补偿机制解决。
 
-## 8. 事件与分布式事务建议
+详细接入方式、Nacos 动态规则、Gateway 规则和验证方式见：[Sentinel 准备](/guide/sentinel-setup/)。
+
+## 8. Redis 与 Elasticsearch 建议
+
+Redis 和 Elasticsearch 纳入正式基础设施栈，但职责必须分开：
+
+- Redis 用于权限快照、租户状态、基础档案、幂等键、短期操作锁、首页统计等热点读优化。
+- Elasticsearch 用于商品搜索、客户 / 供应商搜索、单据综合搜索、审计日志检索等搜索型读模型。
+- 二者都不是业务事实来源，核心写入和强一致校验仍然以各业务服务主库为准。
+- `xuan-query` 统一封装读模型、缓存和搜索索引，前端不直接访问 Redis 或 Elasticsearch。
+- ES 从项目初期纳入设计，避免后期再补事件、回填、索引字段和权限过滤造成大面积返工。
+
+详细接入方式、索引命名、Nacos 配置和验证方式见：[Redis 与 Elasticsearch 准备](/guide/cache-search-setup/)。
+
+## 9. 事件与分布式事务建议
 
 当前 Xuan ERP 拆分后，销售、采购、库存、财务之间会出现跨服务一致性问题。建议优先使用：
 
@@ -184,13 +247,15 @@ Sentinel 建议用于：
 - 重试与死信队列。
 - 对账任务。
 
-Seata 只建议用于确实需要同步强一致、链路短、参与服务少的场景。对于销售审核、采购审核这类高频核心业务，更推荐事件驱动 + 最终一致。
+Seata 用于管理微服务之间的同步分布式事务，只建议用于确实需要同步强一致、链路短、参与服务少的场景。当前部署约定中，Seata Namingserver / Console 对外端口统一为 `9021`，地址主机与 Nacos 相同；Seata Server 事务服务端口默认使用 `8091`。对于销售审核、采购审核这类高频核心业务，更推荐事件驱动 + 最终一致。
 
-## 9. 服务上线顺序建议
+详细接入方式、Nacos 注册配置、`tx-service-group` 和 `undo_log` 要求见：[Seata 准备](/guide/seata-setup/)。
+
+## 10. 服务上线顺序建议
 
 涉及权限、菜单、配置、数据库迁移时，推荐上线顺序：
 
-1. 部署基础设施：Nacos、Sentinel Dashboard、RocketMQ、监控、日志。
+1. 部署基础设施：Nacos、Seata Namingserver、Seata Server、Sentinel Dashboard、RocketMQ、Redis、Elasticsearch、SkyWalking、PostgreSQL `pg_stat_statements`、日志。
 2. 部署 `xuan-iam`，执行 IAM 权限和菜单 migration。
 3. 部署 `xuan-gateway`。
 4. 部署基础业务服务：product、party、warehouse。
@@ -200,7 +265,7 @@ Seata 只建议用于确实需要同步强一致、链路短、参与服务少�
 
 权限和菜单必须先进入 IAM，再上线依赖这些权限的业务服务与前端页面。
 
-## 10. 版本来源
+## 11. 版本来源
 
 版本对应关系主要参考：
 
@@ -209,6 +274,8 @@ Seata 只建议用于确实需要同步强一致、链路短、参与服务少�
 - Spring Cloud Alibaba Maven Central BOM: https://central.sonatype.com/artifact/com.alibaba.cloud/spring-cloud-alibaba-dependencies
 - Nacos release history: https://nacos-group.github.io/en/download/release-history/
 - RocketMQ download: https://rocketmq.apache.org/download/
+- Redis downloads: https://redis.io/downloads/
+- Elasticsearch downloads: https://www.elastic.co/downloads/elasticsearch
 
 
 

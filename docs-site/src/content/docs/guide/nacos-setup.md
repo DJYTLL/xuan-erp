@@ -48,13 +48,27 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: 127.0.0.1:8848
+        server-addr: duaoyunxuan.com:9041
         namespace: dev
         group: XUAN_ERP_GROUP
         enabled: true
 ```
 
 启动后，`xuan-product` 会注册到 Nacos 的 `dev` namespace 和 `XUAN_ERP_GROUP` group 下。
+
+`duaoyunxuan.com` 服务器对外端口约定中，Nacos 控制台是 `9020`，Nacos API / 客户端连接端口是 `9041`，Nacos gRPC 通信端口是 `9848`。这是 `duaoyunxuan.com` 这一台服务器的端口映射，不覆盖 NAS 或其它远程服务器。服务配置里应使用目标服务器对应的 API 端口，例如：
+
+```yaml
+spring:
+  cloud:
+    nacos:
+      discovery:
+        server-addr: duaoyunxuan.com:9041
+      config:
+        server-addr: duaoyunxuan.com:9041
+```
+
+不要把 `9020` 控制台端口写成业务服务的 Nacos 连接地址。
 
 ### 2. 启动类开启注册发现
 
@@ -113,7 +127,7 @@ public interface ProductClient {
 
 | 项 | 预期 |
 | --- | --- |
-| namespace | `dev` / `test` / `prod` |
+| namespace | `dev` / `prod` |
 | group | `XUAN_ERP_GROUP` |
 | service name | `xuan-product` |
 | 实例数 | 至少 1 个健康实例 |
@@ -400,7 +414,7 @@ spring:
   cloud:
     nacos:
       config:
-        server-addr: 127.0.0.1:8848
+        server-addr: duaoyunxuan.com:9041
         namespace: dev
         group: XUAN_ERP_GROUP
         file-extension: yaml
@@ -412,7 +426,7 @@ spring:
 | --- | --- |
 | `optional:nacos:xuan-common.yaml` | 公共配置，不存在时不阻断启动 |
 | `optional:nacos:xuan-product.yaml` | 当前服务配置 |
-| `namespace` | 区分环境，例如 `dev`、`test`、`prod` |
+| `namespace` | 区分环境；Xuan ERP 当前只使用 `dev`、`prod` |
 | `group` | 区分项目或服务组，例如 `XUAN_ERP_GROUP` |
 | `dataId` | 区分配置文件，例如 `xuan-product.yaml` |
 
@@ -581,13 +595,21 @@ Nacos 适合存放“不同环境不同、需要集中管理、可能需要灰�
 | 服务注册发现                  | Nacos `namespace`、`group`、服务注册开关        | 用于区分环境和服务分组           |
 | 数据源连接信息                 | 数据库 host、port、database、连接池参数            | 可以放连接位置和池参数，密码不建议明文放入 |
 | Redis 配置                | Redis host、port、database、timeout        | 运行环境相关的缓存连接配置         |
+| Elasticsearch 配置        | ES uris、索引前缀、连接超时、刷新策略              | 搜索索引和读模型检索配置           |
 | RocketMQ 配置             | name server、consumer group、topic 前缀     | 消息中间件地址和消费组配置         |
 | Sentinel 配置             | 限流阈值、熔断规则、热点参数规则                        | 可按环境和灰度策略调整           |
+| Seata 配置                | `tx-service-group`、事务分组映射、Seata Server 注册配置 | 同步分布式事务治理参数；Console 入口端口为 `9021`，事务端口默认 `8091` |
 | Feign / LoadBalancer 配置 | 超时时间、重试策略、负载均衡策略                        | 服务间调用治理参数             |
 | 日志级别                    | `logging.level.com.xuan.erp=INFO`       | 开发、测试、生产环境可以不同        |
 | 功能开关                    | 是否启用导入、导出、打印、异步任务                       | 用于灰度发布或临时关闭某能力        |
 | 外部服务地址                  | 短信、邮件、文件存储、打印服务地址                       | 不同环境的 endpoint 不同     |
 | 业务可调参数                  | 导出最大行数、上传大小限制、任务批量大小                    | 不改变代码逻辑，只调整运行阈值       |
+
+Sentinel 规则可以通过 Nacos 动态加载，但建议使用独立 dataId，例如 `xuan-product-sentinel-flow-rules.json`，不要混在 `xuan-product.yaml` 这类服务配置文件里。详细规则见：[Sentinel 准备](/guide/sentinel-setup/)。
+
+Redis 和 Elasticsearch 的连接位置、索引前缀、超时时间、缓存 TTL 可以放入 Nacos；密码、证书、访问密钥不建议明文放入 Nacos。详细规则见：[Redis 与 Elasticsearch 准备](/guide/cache-search-setup/)。
+
+如果项目采用 Nacos 作为 Seata 的注册中心和配置中心，建议使用独立 dataId，例如 `seataServer.properties`。当前 Xuan ERP 部署约定中，Seata Namingserver / Console 地址主机与 Nacos 相同，对外端口为 `9021`，例如 `duaoyunxuan.com:9021`；Seata Server 事务端口默认使用 `8091`。详细规则见：[Seata 准备](/guide/seata-setup/)。
 
 ## 不适合放入 Nacos 的配置
 
@@ -595,7 +617,7 @@ Nacos 不应成为“所有东西都往里塞”的配置仓库。下面这些�
 
 | 内容             | 原因                 | 推荐做法                                                 |
 | -------------- | ------------------ | ---------------------------------------------------- |
-| 数据库密码、Redis 密码 | 明文泄露风险高            | 使用 Kubernetes Secret、云厂商 Secret Manager 或 Nacos 加密能力 |
+| 数据库密码、Redis 密码、ES 密码 | 明文泄露风险高            | 使用 Kubernetes Secret、云厂商 Secret Manager 或 Nacos 加密能力 |
 | JWT 私钥、签名密钥    | 泄露后会影响认证安全         | 使用专门的密钥管理系统，支持轮换和审计                                  |
 | TLS 证书、私钥      | 文件体积大且安全敏感         | 使用证书管理系统或部署平台挂载                                      |
 | 固定代码常量         | 不应该运行时变化           | 写入代码、枚举或公共模块                                         |
@@ -607,13 +629,11 @@ Nacos 不应成为“所有东西都往里塞”的配置仓库。下面这些�
 
 ## Xuan ERP 推荐配置示例
 
-Xuan ERP 按市场常用模型落地：namespace 按环境分，group 按项目分，dataId 按公共配置和服务配置分。
+Xuan ERP 按市场常用模型落地：namespace 按环境分，group 按项目分，dataId 按公共配置和服务配置分。当前项目只启用 `dev` 和 `prod` 两个 namespace，暂不创建 `test`、`pre`。
 
 | 项              | 推荐值                 | 说明                                       |
 | -------------- | ------------------- | ---------------------------------------- |
 | dev namespace  | `dev`               | 本地和开发环境                                  |
-| test namespace | `test`              | 测试环境                                     |
-| pre namespace  | `pre`               | 预发或 staging 环境                           |
 | prod namespace | `prod`              | 生产环境                                     |
 | group          | `XUAN_ERP_GROUP`    | Xuan ERP 后端统一分组                          |
 | 公共配置 dataId    | `xuan-common.yaml`  | 跨服务共享的非敏感公共配置                            |
@@ -623,22 +643,6 @@ Xuan ERP 按市场常用模型落地：namespace 按环境分，group 按项目�
 
 ```text
 dev
-  XUAN_ERP_GROUP
-    xuan-common.yaml
-    xuan-gateway.yaml
-    xuan-iam.yaml
-    xuan-product.yaml
-    xuan-sales.yaml
-
-test
-  XUAN_ERP_GROUP
-    xuan-common.yaml
-    xuan-gateway.yaml
-    xuan-iam.yaml
-    xuan-product.yaml
-    xuan-sales.yaml
-
-pre
   XUAN_ERP_GROUP
     xuan-common.yaml
     xuan-gateway.yaml
@@ -674,6 +678,53 @@ prod
 
 对于当前阶段，`XUAN_ERP_GROUP` 统一承载 `xuan-gateway`、`xuan-iam`、`xuan-product`、`xuan-sales`、`xuan-inventory` 等服务更合适。
 
+### duaoyunxuan.com 初始化结果
+
+2026-06-23 已完成 `duaoyunxuan.com` 服务器上的 Nacos 初始化。控制台端口为 `9020`，API / 客户端端口为 `9041`。
+
+当前 namespace：
+
+| namespace | 用途 | 配置数量 |
+| --- | --- | --- |
+| `dev` | 开发环境 | 56 |
+| `prod` | 生产环境 | 56 |
+
+`public` 是 Nacos 默认 namespace，不作为 Xuan ERP 项目配置区。项目配置统一放在 `dev` 或 `prod` 的 `XUAN_ERP_GROUP` 下。
+
+已初始化服务配置 dataId：
+
+```text
+xuan-common.yaml
+xuan-gateway.yaml
+xuan-iam.yaml
+xuan-product.yaml
+xuan-party.yaml
+xuan-sales.yaml
+xuan-procurement.yaml
+xuan-inventory.yaml
+xuan-manufacturing.yaml
+xuan-finance.yaml
+xuan-document.yaml
+xuan-audit.yaml
+xuan-query.yaml
+xuan-warehouse.yaml
+xuan-tenant.yaml
+```
+
+初始化内容只包含非敏感运行配置和 datasource 骨架。数据库密码、Redis 密码、ES 密码、JWT 密钥、证书和 Nacos 服务身份密钥不写入 Nacos 配置正文，也不写入仓库文档。
+
+已初始化 Sentinel 规则 dataId：
+
+```text
+xuan-{service}-sentinel-flow-rules.json
+xuan-{service}-sentinel-degrade-rules.json
+xuan-{service}-sentinel-param-flow-rules.json
+xuan-gateway-sentinel-gw-flow-rules.json
+xuan-gateway-sentinel-gw-api-group-rules.json
+```
+
+其中 `{service}` 覆盖 `iam`、`tenant`、`product`、`party`、`warehouse`、`inventory`、`sales`、`procurement`、`finance`、`document`、`manufacturing`、`audit`、`query`。这些规则 dataId 初始内容均为 `[]`。后续需要在服务配置 dataId 中加入 `spring.cloud.sentinel.datasource` 后，服务才会真正动态加载这些规则。
+
 示例：
 
 ```yaml
@@ -683,11 +734,11 @@ spring:
   cloud:
     nacos:
       discovery:
-        server-addr: nacos:8848
+        server-addr: duaoyunxuan.com:9041
         namespace: dev
         group: XUAN_ERP_GROUP
       config:
-        server-addr: nacos:8848
+        server-addr: duaoyunxuan.com:9041
         namespace: dev
         group: XUAN_ERP_GROUP
         file-extension: yaml
@@ -708,6 +759,51 @@ xuan:
 ```
 
 生产环境中，数据库密码、JWT 密钥、证书等敏感信息不直接明文写入 Nacos。确需由 Nacos 承载时，必须使用加密能力，并在发布流程中保留变更记录和操作人。
+
+## 服务 datasource 配置
+
+每个业务服务使用独立 PostgreSQL 数据库。Nacos 中的服务配置 dataId 应配置本服务自己的 datasource，不要多个服务共用旧单体库。
+
+示例：
+
+```yaml
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/xuan_product
+    username: nacos
+    password: ${XUAN_DB_PASSWORD}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+```
+
+业务服务如果和 PostgreSQL 运行在同一个 Docker network 内，datasource 建议使用容器内地址 `postgres:5432`。本地开发机或外部客户端访问远端 PostgreSQL 时，才使用 `duaoyunxuan.com:9042`。早期对接中曾使用过 `duaoyunxuan.synology.me:5433`，新的 Xuan ERP 远端服务配置不再使用该地址。
+
+推荐 dataId 与数据库对应关系：
+
+| dataId | 数据库 |
+| --- | --- |
+| `xuan-gateway.yaml` | `xuan_gateway` |
+| `xuan-tenant.yaml` | `xuan_tenant` |
+| `xuan-iam.yaml` | `xuan_iam` |
+| `xuan-audit.yaml` | `xuan_audit` |
+| `xuan-product.yaml` | `xuan_product` |
+| `xuan-party.yaml` | `xuan_party` |
+| `xuan-warehouse.yaml` | `xuan_warehouse` |
+| `xuan-inventory.yaml` | `xuan_inventory` |
+| `xuan-sales.yaml` | `xuan_sales` |
+| `xuan-procurement.yaml` | `xuan_procurement` |
+| `xuan-finance.yaml` | `xuan_finance` |
+| `xuan-document.yaml` | `xuan_document` |
+| `xuan-manufacturing.yaml` | `xuan_manufacturing` |
+| `xuan-query.yaml` | `xuan_query` |
+
+配置检查：
+
+- `spring.datasource.url` 指向本服务独立库。
+- `spring.flyway.locations` 使用 `classpath:db/migration`。
+- 密码不明文提交到 Git。
+- 表结构和初始化数据不放入 Nacos，仍由 Flyway 管理。
 
 ## 待补充
 

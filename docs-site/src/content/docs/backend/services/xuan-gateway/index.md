@@ -11,7 +11,7 @@ xuan-gateway 是 Xuan ERP 的网关服务，主要负责：统一入口、认证
 | 服务名 | `xuan-gateway` |
 | 职责 | 统一入口、认证入口、动态路由、入口限流、灰度路由、请求上下文注入 |
 | 权限前缀 | `gateway` |
-| 数据库/Schema | `无业务库，必要时使用 xuan_gateway` |
+| 数据库 | `无业务库，必要时使用 xuan_gateway` |
 | 事件 Topic | `无默认领域事件` |
 | Java 包名 | `com.xuan.erp.gateway` |
 
@@ -29,7 +29,7 @@ xuan-gateway 是 Xuan ERP 的网关服务，主要负责：统一入口、认证
 
 ## 数据所有权
 
-本服务只直接读写 `无业务库，必要时使用 xuan_gateway` 下属于自身的数据表。跨服务需要的数据通过接口、领域事件或 `xuan-query` 读模型获取，不直接跨库 Join。
+本服务当前无业务表；如后续确需持久化运行数据，连接并只直接读写独立数据库 `xuan_gateway`。跨服务需要的数据通过接口、领域事件或 `xuan-query` 读模型获取，不直接跨库 Join。
 
 详细数据库结构见：[数据库结构](./database/)。
 

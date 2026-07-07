@@ -29,8 +29,10 @@ title: "项目介绍"
 | Seata | 跟随 Spring Cloud Alibaba BOM，当前为 2.5.0 |
 | RocketMQ Client | 跟随 Spring Cloud Alibaba BOM，当前为 5.3.1 |
 | RocketMQ Server | 5.5.0 |
+| Redis | Server 使用 8.x，Client 跟随 Spring Boot BOM |
+| Elasticsearch | Server 使用 9.x，Client 跟随 Spring Boot BOM |
 
-所有后端微服务的 Maven 父工程应统一声明 `java.version=21`，业务服务不单独覆盖 Spring Boot、Spring Cloud、Nacos、LoadBalancer、Sentinel、Seata、RocketMQ 等核心版本。
+所有后端微服务的 Maven 父工程应统一声明 `java.version=21`，业务服务不单独覆盖 Spring Boot、Spring Cloud、Nacos、LoadBalancer、Sentinel、Seata、RocketMQ、Redis、Elasticsearch 等核心版本。
 
 
 

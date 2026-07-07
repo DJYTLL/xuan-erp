@@ -11,7 +11,7 @@ xuan-procurement 是 Xuan ERP 的采购服务，主要负责：采购单、采�
 | 服务名 | `xuan-procurement` |
 | 职责 | 采购单、采购退货、草稿、审核、红冲、采购历史 |
 | 权限前缀 | `procurement` |
-| 数据库/Schema | `xuan_procurement` |
+| 数据库 | `xuan_procurement` |
 | 事件 Topic | `xuan-procurement-event` |
 | Java 包名 | `com.xuan.erp.procurement` |
 
@@ -29,7 +29,7 @@ xuan-procurement 是 Xuan ERP 的采购服务，主要负责：采购单、采�
 
 ## 数据所有权
 
-本服务只直接读写 `xuan_procurement` 下属于自身的数据表。跨服务需要的数据通过接口、领域事件或 `xuan-query` 读模型获取，不直接跨库 Join。
+本服务连接并只直接读写独立数据库 `xuan_procurement` 中属于自身的数据表。跨服务需要的数据通过接口、领域事件或 `xuan-query` 读模型获取，不直接跨库 Join。
 
 详细数据库结构见：[数据库结构](./database/)。
 
