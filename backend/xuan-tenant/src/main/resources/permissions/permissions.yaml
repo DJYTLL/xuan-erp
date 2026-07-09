@@ -1,0 +1,38 @@
+service: xuan-tenant
+draft: true
+permissions:
+  - code: tenant:view
+    resource: tenant
+    action: view
+    templateAction: view
+    note: 查询租户列表、详情和生命周期摘要
+  - code: tenant:create
+    resource: tenant
+    action: create
+    templateAction: create
+    note: 创建租户并触发初始化流程
+  - code: tenant:update
+    resource: tenant
+    action: update
+    templateAction: update
+    note: 修改租户基础信息
+  - code: tenant:delete
+    resource: tenant
+    action: delete
+    templateAction: delete
+    note: 删除租户且必须填写删除原因
+  - code: tenant:lifecycle
+    resource: tenant
+    action: lifecycle
+    templateAction: enable-disable
+    note: V1 聚合启用与停用能力，后续如需细分再演进为 tenant:enable 和 tenant:disable
+  - code: tenant-config:view
+    resource: tenant-config
+    action: view
+    templateAction: view
+    note: 查看租户配置和公开配置
+  - code: tenant-config:manage
+    resource: tenant-config
+    action: manage
+    templateAction: edit
+    note: 当前聚合租户配置创建、编辑和删除，后续可按统一模板受控细分

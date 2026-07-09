@@ -1,0 +1,7 @@
+service: xuan-tenant
+draft: true
+menus:
+  - code: system:tenant
+    pageKey: tenant
+    permissionCode: tenant:view
+    note: 租户管理入口菜单，真实前端路由和 titleKey 在页面接入时补齐并保持同源

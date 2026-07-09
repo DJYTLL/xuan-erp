@@ -10,5 +10,12 @@ public interface IamTenantBootstrapGateway {
      *
      * @return 本次实际新增的租户菜单授权数量，重复调用通常返回 0
      */
-    Integer bootstrapTenant(Long tenantId, String requestedBy);
+    Integer bootstrapTenant(
+            Long tenantId,
+            String adminUsername,
+            String adminPasswordHash,
+            String adminDisplayName,
+            String adminEmail,
+            String adminPhone,
+            String requestedBy);
 }

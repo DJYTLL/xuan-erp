@@ -36,4 +36,157 @@ public record Tenant(
     public boolean active() {
         return deletedAt == null;
     }
+
+    public Tenant updateProfile(String newName, String newContactName, String newContactPhone, String newRemark, String operator, OffsetDateTime now) {
+        ensureActive();
+        return new Tenant(
+                id,
+                code,
+                normalizedCode,
+                requiredText(newName, "tenant name must not be blank"),
+                status,
+                newContactName,
+                newContactPhone,
+                provisionedAt,
+                enabledAt,
+                disabledAt,
+                disabledReason,
+                newRemark,
+                createdBy,
+                createdAt,
+                operator,
+                now,
+                deletedBy,
+                deleteReason,
+                deletedAt
+        );
+    }
+
+    public Tenant markProvisioned(String reason, String operator, OffsetDateTime now) {
+        ensureActive();
+        if (status != TenantStatus.PROVISIONING) {
+            throw new IllegalStateException("tenant is not provisioning");
+        }
+        return new Tenant(
+                id,
+                code,
+                normalizedCode,
+                name,
+                TenantStatus.PROVISIONED,
+                contactName,
+                contactPhone,
+                now,
+                enabledAt,
+                disabledAt,
+                disabledReason,
+                remark,
+                createdBy,
+                createdAt,
+                operator,
+                now,
+                deletedBy,
+                deleteReason,
+                deletedAt
+        );
+    }
+
+    public Tenant enable(String reason, String operator, OffsetDateTime now) {
+        ensureActive();
+        if (status == TenantStatus.ENABLED) {
+            throw new IllegalStateException("tenant already enabled");
+        }
+        if (status != TenantStatus.PROVISIONED && provisionedAt == null) {
+            throw new IllegalStateException("tenant must be provisioned before enabling");
+        }
+        return new Tenant(
+                id,
+                code,
+                normalizedCode,
+                name,
+                TenantStatus.ENABLED,
+                contactName,
+                contactPhone,
+                provisionedAt,
+                now,
+                null,
+                null,
+                remark,
+                createdBy,
+                createdAt,
+                operator,
+                now,
+                deletedBy,
+                deleteReason,
+                deletedAt
+        );
+    }
+
+    public Tenant disable(String reason, String operator, OffsetDateTime now) {
+        ensureActive();
+        if (status == TenantStatus.DISABLED) {
+            throw new IllegalStateException("tenant already disabled");
+        }
+        return new Tenant(
+                id,
+                code,
+                normalizedCode,
+                name,
+                TenantStatus.DISABLED,
+                contactName,
+                contactPhone,
+                provisionedAt,
+                enabledAt,
+                now,
+                requiredText(reason, "disable reason must not be blank"),
+                remark,
+                createdBy,
+                createdAt,
+                operator,
+                now,
+                deletedBy,
+                deleteReason,
+                deletedAt
+        );
+    }
+
+    public Tenant markDeleted(String reason, String operator, OffsetDateTime now) {
+        ensureActive();
+        if (status == TenantStatus.ENABLED) {
+            throw new IllegalStateException("enabled tenant cannot be deleted");
+        }
+        return new Tenant(
+                id,
+                code,
+                normalizedCode,
+                name,
+                status,
+                contactName,
+                contactPhone,
+                provisionedAt,
+                enabledAt,
+                disabledAt,
+                disabledReason,
+                remark,
+                createdBy,
+                createdAt,
+                operator,
+                now,
+                operator,
+                requiredText(reason, "delete reason must not be blank"),
+                now
+        );
+    }
+
+    private void ensureActive() {
+        if (!active()) {
+            throw new IllegalStateException("tenant already deleted");
+        }
+    }
+
+    private static String requiredText(String value, String message) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(message);
+        }
+        return value.trim();
+    }
 }

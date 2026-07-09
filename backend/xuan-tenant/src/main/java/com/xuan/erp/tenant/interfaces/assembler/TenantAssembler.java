@@ -17,19 +17,30 @@ public final class TenantAssembler {
     }
 
     public static CreateTenantCommand toCommand(CreateTenantRequest request) {
-        return new CreateTenantCommand(request.code(), request.name(), request.contactName(), request.contactPhone(), request.remark());
+        return new CreateTenantCommand(
+                request.code(),
+                request.name(),
+                request.contactName(),
+                request.contactPhone(),
+                request.remark(),
+                request.idempotencyKey(),
+                request.adminUsername(),
+                request.adminPassword(),
+                request.adminDisplayName(),
+                request.adminEmail(),
+                request.adminPhone());
     }
 
     public static UpdateTenantCommand toCommand(UpdateTenantRequest request) {
-        return new UpdateTenantCommand(request.name(), request.contactName(), request.contactPhone(), request.remark());
+        return new UpdateTenantCommand(request.name(), request.contactName(), request.contactPhone(), request.remark(), request.idempotencyKey());
     }
 
     public static ChangeTenantStatusCommand toCommand(ChangeTenantStatusRequest request) {
-        return new ChangeTenantStatusCommand(request.reason(), request.operator());
+        return new ChangeTenantStatusCommand(request.reason(), request.operator(), request.idempotencyKey());
     }
 
     public static DeleteTenantCommand toCommand(DeleteRequest request) {
-        return new DeleteTenantCommand(request.reason(), request.operator());
+        return new DeleteTenantCommand(request.reason(), request.operator(), request.idempotencyKey());
     }
 
     public static TenantResponse toResponse(TenantDetailView view) {
@@ -42,7 +53,15 @@ public final class TenantAssembler {
                 view.contactPhone(),
                 view.provisionedAt(),
                 view.enabledAt(),
-                view.remark()
+                view.remark(),
+                view.currentPlanId(),
+                view.currentPlanCode(),
+                view.currentPlanName(),
+                view.primaryDomainId(),
+                view.primaryDomain(),
+                view.statusHistoryCount(),
+                view.latestStatusChangeType(),
+                view.latestStatusChangedAt()
         );
     }
 }

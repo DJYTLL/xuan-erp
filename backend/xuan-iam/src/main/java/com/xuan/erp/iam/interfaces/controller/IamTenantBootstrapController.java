@@ -2,12 +2,14 @@ package com.xuan.erp.iam.interfaces.controller;
 
 import com.xuan.erp.common.api.ApiResponse;
 import com.xuan.erp.iam.application.service.IamTenantBootstrapApplicationService;
+import com.xuan.erp.iam.interfaces.dto.IamTenantBootstrapRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -32,8 +34,12 @@ public class IamTenantBootstrapController {
     public ApiResponse<Integer> bootstrapTenant(
             @Parameter(description = "租户 ID")
             @PathVariable("tenantId") Long tenantId,
+            @RequestBody(required = false) IamTenantBootstrapRequest request,
             @Parameter(description = "触发 IAM 初始化的服务或操作人")
             @RequestParam(value = "requestedBy", required = false) String requestedBy) {
-        return ApiResponse.success(tenantBootstrapApplicationService.bootstrapTenant(tenantId, requestedBy));
+        return ApiResponse.success(tenantBootstrapApplicationService.bootstrapTenant(
+                tenantId,
+                request == null ? null : request.toCommand(),
+                requestedBy));
     }
 }

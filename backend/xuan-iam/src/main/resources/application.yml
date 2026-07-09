@@ -49,6 +49,16 @@ feign:
   sentinel:
     enabled: true
 
+xuan:
+  rocketmq:
+    enabled: ${XUAN_ROCKETMQ_ENABLED:false}
+    name-server: ${XUAN_ROCKETMQ_NAME_SERVER:duaoyunxuan.com:9047}
+    producer:
+      group: ${XUAN_ROCKETMQ_PRODUCER_GROUP:${spring.application.name}-producer}
+    topics:
+      tenant-events: ${XUAN_ROCKETMQ_TENANT_TOPIC:xuan-tenant-event}
+      iam-events: ${XUAN_ROCKETMQ_IAM_TOPIC:xuan-iam-event}
+
 seata:
   enabled: true
   application-id: ${spring.application.name}
@@ -78,3 +88,6 @@ springdoc:
     path: /swagger-ui.html
   packages-to-scan:
     - com.xuan.erp.iam.interfaces.controller
+
+mybatis:
+  mapper-locations: classpath*:mapper/**/*.xml

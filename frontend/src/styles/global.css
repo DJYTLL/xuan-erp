@@ -1,0 +1,41 @@
+:root {
+  --xuan-primary: #1677ff;
+  --xuan-primary-foreground: #ffffff;
+  --xuan-bg: #f5f7fb;
+  --xuan-panel: #ffffff;
+  --xuan-border: #e5e7eb;
+  --xuan-text: #111827;
+  --xuan-muted: #6b7280;
+  --xuan-sidebar: #f7f9fc;
+  --xuan-active: #dcecff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  color: var(--xuan-text);
+  background: var(--xuan-bg);
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}

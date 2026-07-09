@@ -13,6 +13,7 @@ title: "接口契约规范"
 - 服务间调用必须通过服务间鉴权传递调用身份。
 - Controller 只做协议适配，不写业务逻辑。
 - Controller 必须加 `@PreAuthorize`。
+- 所有微服务基础读写接口默认绑定统一权限模板：`<domain>:view`、`<domain>:create`、`<domain>:update`、`<domain>:delete`；生命周期和配置类接口在此基础上按规范扩展。
 - Controller 入参应转换为应用层 Command 或 Query，再交给 ApplicationService 处理。
 - 所有写接口必须记录操作者、租户、TraceId 和业务审计信息。
 - 分页、排序、筛选参数保持统一命名。

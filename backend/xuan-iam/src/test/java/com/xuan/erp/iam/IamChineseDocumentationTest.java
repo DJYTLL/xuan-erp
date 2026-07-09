@@ -3,6 +3,9 @@ package com.xuan.erp.iam;
 import com.xuan.erp.iam.interfaces.dto.CreateIamUserRequest;
 import com.xuan.erp.iam.interfaces.dto.DisableIamUserRequest;
 import com.xuan.erp.iam.interfaces.dto.IamAuthorizationSnapshotResponse;
+import com.xuan.erp.iam.interfaces.dto.IamCurrentUserResponse;
+import com.xuan.erp.iam.interfaces.dto.IamLoginRequest;
+import com.xuan.erp.iam.interfaces.dto.IamLoginResponse;
 import com.xuan.erp.iam.interfaces.dto.IamUserResponse;
 import com.xuan.erp.iam.interfaces.dto.RebuildAuthorizationSnapshotRequest;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -55,6 +58,9 @@ class IamChineseDocumentationTest {
                 CreateIamUserRequest.class,
                 DisableIamUserRequest.class,
                 RebuildAuthorizationSnapshotRequest.class,
+                IamLoginRequest.class,
+                IamLoginResponse.class,
+                IamCurrentUserResponse.class,
                 IamUserResponse.class,
                 IamAuthorizationSnapshotResponse.class
         );
@@ -134,6 +140,7 @@ class IamChineseDocumentationTest {
     private List<Class<?>> controllerClasses() {
         return List.of(
                 com.xuan.erp.iam.interfaces.controller.IamAuthorizationController.class,
+                com.xuan.erp.iam.interfaces.controller.IamAuthenticationController.class,
                 com.xuan.erp.iam.interfaces.controller.IamMenuController.class,
                 com.xuan.erp.iam.interfaces.controller.IamPermissionController.class,
                 com.xuan.erp.iam.interfaces.controller.IamRoleController.class,

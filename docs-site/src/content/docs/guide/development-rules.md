@@ -41,6 +41,9 @@ title: "开发规范总览"
 ## 3. 权限设计规范
 
 - 权限码统一使用 `资源:动作`，例如 `warehouse:view`、`erp-sale-draft:add`。
+- 所有微服务的基础操作默认使用统一模板：`<domain>:view`、`<domain>:create`、`<domain>:update`、`<domain>:delete`。
+- 启用、停用等生命周期动作默认使用 `<domain>:enable`、`<domain>:disable`；如果 V1 为兼容暂时聚合成一个权限，也必须在服务文档中明确映射关系。
+- 配置类资源默认使用 `<domain>-config:view` 和 `<domain>-config:manage`；后续如平台统一细分为 `edit`，必须通过受控演进统一改名，不能各服务自行发散。
 - 后端 Spring Security 内部使用 `PERM_` 前缀，JWT 和前端使用原始权限码。
 - 前端按钮统一使用 `v-permission` 控制。
 - 路由 `meta.permission` 必须与后端权限码一致。

@@ -1,15 +1,25 @@
 package com.xuan.erp.tenant;
 
 import com.xuan.erp.common.exception.BusinessException;
+import com.xuan.erp.common.api.PageResult;
 import com.xuan.erp.tenant.application.service.TenantApplicationService;
+import com.xuan.erp.tenant.application.service.TenantProvisionApplicationService;
 import com.xuan.erp.tenant.application.command.ChangeTenantStatusCommand;
 import com.xuan.erp.tenant.application.command.CreateTenantCommand;
 import com.xuan.erp.tenant.application.command.DeleteTenantCommand;
 import com.xuan.erp.tenant.application.command.UpdateTenantCommand;
 import com.xuan.erp.tenant.application.query.TenantDetailView;
 import com.xuan.erp.tenant.domain.model.Tenant;
+import com.xuan.erp.tenant.domain.model.TenantDetailSupplement;
+import com.xuan.erp.tenant.domain.model.TenantProvisionTask;
+import com.xuan.erp.tenant.domain.model.TenantProvisionTaskStep;
 import com.xuan.erp.tenant.domain.model.TenantStatusHistory;
+import com.xuan.erp.tenant.domain.model.type.ProvisionTaskStatus;
+import com.xuan.erp.tenant.domain.model.type.ProvisionTaskStepStatus;
 import com.xuan.erp.tenant.domain.repository.TenantRepository;
+import com.xuan.erp.tenant.domain.repository.TenantOutboxEventRepository;
+import com.xuan.erp.tenant.domain.repository.TenantProvisionTaskRepository;
+import com.xuan.erp.tenant.domain.repository.TenantProvisionTaskStepRepository;
 import com.xuan.erp.tenant.domain.repository.TenantStatusHistoryRepository;
 import com.xuan.erp.tenant.domain.model.type.TenantStatus;
 import java.time.OffsetDateTime;
@@ -22,6 +32,8 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -31,7 +43,11 @@ class TenantApplicationServiceCrudTest {
     void createsTenantWithNormalizedCodeAndInitialStatusHistory() {
         InMemoryTenantRepository tenantRepository = new InMemoryTenantRepository();
         InMemoryTenantStatusHistoryRepository historyRepository = new InMemoryTenantStatusHistoryRepository();
-        TenantApplicationService service = new TenantApplicationService(tenantRepository, historyRepository);
+        InMemoryTenantProvisionTaskRepository taskRepository = new InMemoryTenantProvisionTaskRepository();
+        InMemoryTenantProvisionTaskStepRepository stepRepository = new InMemoryTenantProvisionTaskStepRepository();
+        TenantProvisionApplicationService provisionService =
+                new TenantProvisionApplicationService(taskRepository, stepRepository, new NoOpTenantOutboxEventRepository());
+        TenantApplicationService service = new TenantApplicationService(tenantRepository, historyRepository, null, provisionService);
 
         TenantDetailView view = service.createTenant(new CreateTenantCommand(" Acme ", "玄云", "张三", "13800000000", "首个租户"));
 
@@ -40,6 +56,15 @@ class TenantApplicationServiceCrudTest {
         assertEquals("acme", tenantRepository.findById(view.id()).orElseThrow().normalizedCode());
         assertEquals(1, historyRepository.saved.size());
         assertEquals(TenantStatus.PROVISIONING, historyRepository.saved.getFirst().toStatus());
+        assertEquals(1, taskRepository.store.size());
+        assertEquals("TENANT_PROVISION", taskRepository.store.values().iterator().next().taskType());
+        assertEquals(1, stepRepository.saved.size());
+        assertEquals(ProvisionTaskStepStatus.PENDING, stepRepository.saved.getFirst().status());
+        String iamBootstrapPayload = stepRepository.saved.getFirst().requestPayloadJson();
+        assertTrue(iamBootstrapPayload.contains("\"adminUsername\":\"admin\""));
+        assertTrue(iamBootstrapPayload.contains("\"adminPasswordHash\""));
+        assertFalse(iamBootstrapPayload.contains("\"adminPassword\""));
+        assertFalse(iamBootstrapPayload.contains("123456"));
     }
 
     @Test
@@ -75,6 +100,9 @@ class TenantApplicationServiceCrudTest {
         TenantApplicationService service = new TenantApplicationService(tenantRepository, historyRepository);
         Long tenantId = service.createTenant(new CreateTenantCommand("acme", "玄云", null, null, null)).id();
 
+        Tenant created = tenantRepository.store.get(tenantId);
+        tenantRepository.store.put(tenantId, created.markProvisioned("初始化完成", "system", OffsetDateTime.now()));
+
         service.disableTenant(tenantId, new ChangeTenantStatusCommand("欠费停用", "admin"));
         Tenant disabled = tenantRepository.findById(tenantId).orElseThrow();
         assertEquals(TenantStatus.DISABLED, disabled.status());
@@ -83,12 +111,72 @@ class TenantApplicationServiceCrudTest {
         service.enableTenant(tenantId, new ChangeTenantStatusCommand("续费恢复", "admin"));
         assertEquals(TenantStatus.ENABLED, tenantRepository.findById(tenantId).orElseThrow().status());
 
+        service.disableTenant(tenantId, new ChangeTenantStatusCommand("手动下线", "admin"));
         service.deleteTenant(tenantId, new DeleteTenantCommand("测试数据清理", "admin"));
         Tenant deleted = tenantRepository.store.get(tenantId);
         assertEquals("测试数据清理", deleted.deleteReason());
         assertTrue(deleted.deletedAt() != null);
         assertEquals(Optional.empty(), tenantRepository.findById(tenantId));
-        assertEquals(4, historyRepository.saved.stream().filter(item -> item.tenantId().equals(tenantId)).count());
+        assertEquals(5, historyRepository.saved.stream().filter(item -> item.tenantId().equals(tenantId)).count());
+    }
+
+    @Test
+    void rejectsDeletingEnabledTenant() {
+        InMemoryTenantRepository tenantRepository = new InMemoryTenantRepository();
+        InMemoryTenantStatusHistoryRepository historyRepository = new InMemoryTenantStatusHistoryRepository();
+        TenantApplicationService service = new TenantApplicationService(tenantRepository, historyRepository);
+        Long tenantId = service.createTenant(new CreateTenantCommand("acme", "玄云", null, null, null)).id();
+
+        Tenant created = tenantRepository.store.get(tenantId);
+        tenantRepository.store.put(tenantId, created.markProvisioned("初始化完成", "system", OffsetDateTime.now()));
+
+        service.enableTenant(tenantId, new ChangeTenantStatusCommand("开通完成", "admin"));
+
+        BusinessException error = assertThrows(BusinessException.class,
+                () -> service.deleteTenant(tenantId, new DeleteTenantCommand("误操作清理", "admin")));
+
+        assertEquals("TENANT_DELETE_FORBIDDEN", error.code());
+    }
+
+    @Test
+    void supportsProvisionedStatusWithoutMixingItIntoEnableSemantics() {
+        OffsetDateTime now = OffsetDateTime.parse("2026-07-08T08:00:00Z");
+        Tenant tenant = new Tenant(
+                1L,
+                "acme",
+                "acme",
+                "玄云",
+                TenantStatus.PROVISIONING,
+                "张三",
+                "138",
+                null,
+                null,
+                null,
+                null,
+                null,
+                "system",
+                now,
+                "system",
+                now,
+                null,
+                null,
+                null
+        );
+
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> tenant.enable("越级启用", "system", now.plusMinutes(1)));
+        assertEquals("tenant must be provisioned before enabling", error.getMessage());
+
+        Tenant provisioned = tenant.markProvisioned("初始化完成", "system", now.plusMinutes(5));
+        Tenant enabled = provisioned.enable("手动启用", "system", now.plusMinutes(10));
+
+        assertEquals(TenantStatus.PROVISIONED, provisioned.status());
+        assertEquals(now.plusMinutes(5), provisioned.provisionedAt());
+        assertNull(provisioned.disabledReason());
+        assertEquals(TenantStatus.ENABLED, enabled.status());
+        assertEquals(now.plusMinutes(5), enabled.provisionedAt());
+        assertEquals(now.plusMinutes(10), enabled.enabledAt());
+        assertNull(enabled.disabledReason());
     }
 
     @Test
@@ -105,8 +193,69 @@ class TenantApplicationServiceCrudTest {
         assertEquals("b", tenants.getFirst().code());
     }
 
+    @Test
+    void paginatesActiveTenants() {
+        InMemoryTenantRepository tenantRepository = new InMemoryTenantRepository();
+        TenantApplicationService service = new TenantApplicationService(tenantRepository, new InMemoryTenantStatusHistoryRepository());
+        service.createTenant(new CreateTenantCommand("a", "A", null, null, null));
+        service.createTenant(new CreateTenantCommand("b", "B", null, null, null));
+        service.createTenant(new CreateTenantCommand("c", "C", null, null, null));
+        service.createTenant(new CreateTenantCommand("d", "D", null, null, null));
+        service.createTenant(new CreateTenantCommand("e", "E", null, null, null));
+
+        PageResult<TenantDetailView> page = service.listTenants(2, 2);
+
+        assertEquals(5, page.total());
+        assertEquals(2, page.pageNum());
+        assertEquals(2, page.pageSize());
+        assertEquals(List.of("c", "d"), page.records().stream().map(TenantDetailView::code).toList());
+    }
+
+    @Test
+    void returnsAggregatedTenantDetailSummary() {
+        InMemoryTenantRepository tenantRepository = new InMemoryTenantRepository();
+        TenantApplicationService service = new TenantApplicationService(tenantRepository, new InMemoryTenantStatusHistoryRepository());
+        Long tenantId = service.createTenant(new CreateTenantCommand("acme", "玄云", "张三", "138", null)).id();
+        tenantRepository.detailSupplements.put(tenantId, new TenantDetailSupplement(
+                9L,
+                "pro",
+                "专业版",
+                5L,
+                "acme.example.com",
+                3L,
+                "DISABLE",
+                OffsetDateTime.parse("2026-07-07T08:00:00Z")
+        ));
+
+        TenantDetailView detail = service.getTenant(tenantId);
+
+        assertEquals("pro", detail.currentPlanCode());
+        assertEquals("专业版", detail.currentPlanName());
+        assertEquals("acme.example.com", detail.primaryDomain());
+        assertEquals(3L, detail.statusHistoryCount());
+        assertEquals("DISABLE", detail.latestStatusChangeType());
+    }
+
+    @Test
+    void reusesSucceededIdempotencyKeyForCreateTenant() {
+        InMemoryTenantRepository tenantRepository = new InMemoryTenantRepository();
+        InMemoryTenantStatusHistoryRepository historyRepository = new InMemoryTenantStatusHistoryRepository();
+        InMemoryTenantProvisionTaskRepository provisionTaskRepository = new InMemoryTenantProvisionTaskRepository();
+        TenantApplicationService service = new TenantApplicationService(tenantRepository, historyRepository, provisionTaskRepository);
+
+        TenantDetailView first = service.createTenant(new CreateTenantCommand("acme", "玄云", "张三", "13800000000", "首个租户", "idem-create-1"));
+        TenantDetailView second = service.createTenant(new CreateTenantCommand("acme", "玄云", "张三", "13800000000", "首个租户", "idem-create-1"));
+
+        assertEquals(first.id(), second.id());
+        assertEquals(1, tenantRepository.store.size());
+        assertEquals(1, historyRepository.saved.size());
+        assertEquals(1, provisionTaskRepository.store.size());
+        assertEquals(ProvisionTaskStatus.SUCCEEDED, provisionTaskRepository.store.values().iterator().next().status());
+    }
+
     private static final class InMemoryTenantRepository implements TenantRepository {
         private final Map<Long, Tenant> store = new LinkedHashMap<>();
+        private final Map<Long, TenantDetailSupplement> detailSupplements = new LinkedHashMap<>();
         private long nextId = 1;
 
         @Override
@@ -128,6 +277,24 @@ class TenantApplicationServiceCrudTest {
                     .filter(Tenant::active)
                     .sorted(Comparator.comparing(Tenant::id))
                     .toList();
+        }
+
+        @Override
+        public List<Tenant> findActiveTenants(long offset, long limit) {
+            return findActiveTenants().stream()
+                    .skip(offset)
+                    .limit(limit)
+                    .toList();
+        }
+
+        @Override
+        public long countActiveTenants() {
+            return store.values().stream().filter(Tenant::active).count();
+        }
+
+        @Override
+        public TenantDetailSupplement getDetailSupplement(Long tenantId) {
+            return detailSupplements.getOrDefault(tenantId, TenantDetailSupplement.empty());
         }
 
         @Override
@@ -181,6 +348,141 @@ class TenantApplicationServiceCrudTest {
             );
             saved.add(savedHistory);
             return savedHistory;
+        }
+    }
+
+    private static final class InMemoryTenantProvisionTaskRepository implements TenantProvisionTaskRepository {
+        private final Map<Long, TenantProvisionTask> store = new LinkedHashMap<>();
+        private long nextId = 1;
+
+        @Override
+        public Optional<TenantProvisionTask> findById(Long taskId) {
+            return Optional.ofNullable(store.get(taskId));
+        }
+
+        @Override
+        public List<TenantProvisionTask> findActiveByTenantId(Long tenantId) {
+            return store.values().stream()
+                    .filter(item -> item.tenantId().equals(tenantId))
+                    .filter(item -> item.deletedAt() == null)
+                    .toList();
+        }
+
+        @Override
+        public Optional<TenantProvisionTask> findActiveByTenantIdAndTaskKey(Long tenantId, String taskKey) {
+            return store.values().stream()
+                    .filter(item -> item.tenantId().equals(tenantId))
+                    .filter(item -> item.taskKey().equals(taskKey))
+                    .filter(item -> item.deletedAt() == null)
+                    .findFirst();
+        }
+
+        @Override
+        public Optional<TenantProvisionTask> findActiveByTaskKeyAndIdempotencyKey(String taskKey, String idempotencyKey) {
+            return store.values().stream()
+                    .filter(item -> item.taskKey().equals(taskKey))
+                    .filter(item -> item.idempotencyKey().equals(idempotencyKey))
+                    .filter(item -> item.deletedAt() == null)
+                    .findFirst();
+        }
+
+        @Override
+        public TenantProvisionTask save(TenantProvisionTask task) {
+            Long id = task.id() == null ? nextId++ : task.id();
+            TenantProvisionTask saved = new TenantProvisionTask(
+                    id,
+                    task.tenantId(),
+                    task.taskKey(),
+                    task.taskType(),
+                    task.status(),
+                    task.idempotencyKey(),
+                    task.stepName(),
+                    task.requestPayloadJson(),
+                    task.resultPayloadJson(),
+                    task.retryCount(),
+                    task.maxRetryCount(),
+                    task.lastErrorCode(),
+                    task.lastErrorMessage(),
+                    task.startedAt(),
+                    task.finishedAt(),
+                    task.createdBy(),
+                    task.createdAt(),
+                    task.updatedBy(),
+                    task.updatedAt(),
+                    task.deletedBy(),
+                    task.deleteReason(),
+                    task.deletedAt()
+            );
+            store.put(id, saved);
+            return saved;
+        }
+    }
+
+    private static final class InMemoryTenantProvisionTaskStepRepository implements TenantProvisionTaskStepRepository {
+        private final List<TenantProvisionTaskStep> saved = new ArrayList<>();
+
+        @Override
+        public List<TenantProvisionTaskStep> findByTaskId(Long taskId) {
+            return saved.stream()
+                    .filter(item -> item.provisionTaskId().equals(taskId))
+                    .toList();
+        }
+
+        @Override
+        public Optional<TenantProvisionTaskStep> findActiveByTaskIdAndStepKey(Long taskId, String stepKey) {
+            return saved.stream()
+                    .filter(item -> item.provisionTaskId().equals(taskId))
+                    .filter(item -> item.stepKey().equals(stepKey))
+                    .filter(item -> item.deletedAt() == null)
+                    .findFirst();
+        }
+
+        @Override
+        public TenantProvisionTaskStep save(TenantProvisionTaskStep step) {
+            TenantProvisionTaskStep savedStep = new TenantProvisionTaskStep(
+                    (long) saved.size() + 1,
+                    step.tenantId(),
+                    step.provisionTaskId(),
+                    step.stepKey(),
+                    step.stepName(),
+                    step.status(),
+                    step.sequenceNo(),
+                    step.idempotencyKey(),
+                    step.requestPayloadJson(),
+                    step.resultPayloadJson(),
+                    step.retryCount(),
+                    step.maxRetryCount(),
+                    step.lastErrorCode(),
+                    step.lastErrorMessage(),
+                    step.startedAt(),
+                    step.finishedAt(),
+                    step.createdBy(),
+                    step.createdAt(),
+                    step.updatedBy(),
+                    step.updatedAt(),
+                    step.deletedBy(),
+                    step.deleteReason(),
+                    step.deletedAt()
+            );
+            saved.add(savedStep);
+            return savedStep;
+        }
+    }
+
+    private static final class NoOpTenantOutboxEventRepository implements TenantOutboxEventRepository {
+        @Override
+        public Optional<com.xuan.erp.tenant.domain.model.TenantOutboxEvent> findById(Long eventId) {
+            return Optional.empty();
+        }
+
+        @Override
+        public com.xuan.erp.tenant.domain.model.TenantOutboxEvent save(com.xuan.erp.tenant.domain.model.TenantOutboxEvent event) {
+            return event;
+        }
+
+        @Override
+        public com.xuan.erp.tenant.domain.model.TenantOutboxEvent append(com.xuan.erp.tenant.domain.model.TenantOutboxEvent event) {
+            return event;
         }
     }
 }

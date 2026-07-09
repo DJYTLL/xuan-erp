@@ -9,10 +9,9 @@ title: "xuan-tenant 事件文档"
 | 事件 | Topic | 触发时机 | 主要消费者 | 说明 |
 | --- | --- | --- | --- | --- |
 | TenantCreated | `xuan-tenant-event` | 租户主档创建成功 | IAM、Audit、Query | 携带 `tenantId`、`code`、`normalizedCode`、初始状态 |
-| TenantProvisioningStarted | `xuan-tenant-event` | 租户初始化任务创建并开始执行 | IAM、业务服务、Query | 驱动跨服务初始化 |
-| TenantProvisionStepCompleted | `xuan-tenant-event` | 单个初始化步骤完成 | Tenant、Audit、Query | 用于追踪初始化进度 |
-| TenantProvisionStepFailed | `xuan-tenant-event` | 单个初始化步骤失败 | Tenant、Audit、告警服务 | 携带错误码、错误信息和重试次数 |
-| TenantProvisioned | `xuan-tenant-event` | 租户全部初始化完成 | Gateway、IAM、业务服务 | 租户可进入 ENABLED 流程 |
+| TenantProvisioningStarted | `xuan-tenant-event` | `POST /api/tenants` 创建租户并落初始化任务后立即发布 | IAM、Query、Audit | 表示编排已异步启动；事件必须带 `provisionStep = IAM_BOOTSTRAP`，接口返回状态保持 `PROVISIONING` |
+| TenantIamBootstrapRequested | `xuan-tenant-event` | 编排进入首个 IAM 初始化步骤时发布 | IAM、Audit | 首期只允许请求 `IAM_BOOTSTRAP` 步骤，驱动 IAM 完成租户菜单、角色、权限基础数据准备 |
+| TenantProvisioned | `xuan-tenant-event` | 收到 `TenantIamProvisionStepCompleted` 成功回执并确认 `IAM_BOOTSTRAP` 完成后发布 | Gateway、IAM、业务服务 | `TenantIamProvisionStepCompleted` 是推进编排的唯一权威成功回执；首期只有 `IAM_BOOTSTRAP` 一个步骤，因此该事件表示当前编排链路全部完成，可进入 ENABLED 流程 |
 | TenantEnabled | `xuan-tenant-event` | 租户启用或恢复启用 | Gateway、IAM、业务服务 | 触发缓存刷新和访问放行 |
 | TenantSuspended | `xuan-tenant-event` | 租户因欠费、风控等原因暂停 | Gateway、IAM、业务服务 | 触发登录和业务访问拦截 |
 | TenantDisabled | `xuan-tenant-event` | 租户被人工停用或关闭 | Gateway、IAM、业务服务 | 触发访问拦截和后台任务停止 |
@@ -27,14 +26,15 @@ title: "xuan-tenant 事件文档"
 
 | 来源服务 | 事件 | 处理目的 | 幂等键 |
 | --- | --- | --- | --- |
-| IAM | TenantIamProvisionStepCompleted | 标记 IAM 初始化步骤完成 | `eventId` |
-| IAM | TenantIamProvisionStepFailed | 标记 IAM 初始化步骤失败并触发重试或人工处理 | `eventId` |
-| 业务服务 | TenantServiceProvisionStepCompleted | 标记指定业务服务初始化步骤完成 | `eventId` |
-| 业务服务 | TenantServiceProvisionStepFailed | 标记指定业务服务初始化步骤失败 | `eventId` |
+| IAM | IamTenantBootstrapped | 记录 IAM 自己的领域事实，用于审计、读模型或跨域消费，不直接推进租户编排状态 | `eventId` |
+| IAM | TenantIamProvisionStepCompleted | 记录 `IAM_BOOTSTRAP` 的编排成功回执，作为推进 `TenantProvisioned` 的唯一权威成功回执 | `eventId` |
+| IAM | TenantIamProvisionStepFailed | 记录 `IAM_BOOTSTRAP` 的编排失败回执，触发重试或人工处理 | `eventId` |
 
 ## 事件要求
 
 - 每个事件必须包含 `eventId`、`tenantId`、`occurredAt`、`traceId`、`sourceService`。
+- 编排事件必须补充 `provisionStep`，首期固定为 `IAM_BOOTSTRAP`。
+- `IamTenantBootstrapped` 是 IAM 自己的领域事实事件；`TenantIamProvisionStepCompleted` / `TenantIamProvisionStepFailed` 才是面向 `xuan-tenant` 的编排回执事件。
 - 事件发布使用 Outbox Pattern，避免本地事务成功但消息丢失。
 - 消费端必须按 `eventId` 做幂等。
 - 失败事件进入重试和死信队列，并提供人工补偿入口。

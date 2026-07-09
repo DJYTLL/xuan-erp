@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xuan.erp.tenant.infrastructure.persistence.mapper.TenantOutboxEventPersistenceMapper">
+
+    <resultMap id="TenantOutboxEventRecordMap" type="com.xuan.erp.tenant.infrastructure.persistence.entity.TenantOutboxEventRecord">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="event_id" property="eventId"/>
+        <result column="aggregate_type" property="aggregateType"/>
+        <result column="aggregate_id" property="aggregateId"/>
+        <result column="event_type" property="eventType"/>
+        <result column="topic" property="topic"/>
+        <result column="payload" property="payloadJson"/>
+        <result column="headers" property="headersJson"/>
+        <result column="status" property="status"/>
+        <result column="retry_count" property="retryCount"/>
+        <result column="max_retry_count" property="maxRetryCount"/>
+        <result column="locked_by" property="lockedBy"/>
+        <result column="locked_at" property="lockedAt"/>
+        <result column="lock_expires_at" property="lockExpiresAt"/>
+        <result column="next_retry_at" property="nextRetryAt"/>
+        <result column="published_at" property="publishedAt"/>
+        <result column="last_error_code" property="lastErrorCode"/>
+        <result column="last_error_message" property="lastErrorMessage"/>
+        <result column="first_failed_at" property="firstFailedAt"/>
+        <result column="dead_letter_at" property="deadLetterAt"/>
+        <result column="created_by" property="createdBy"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_by" property="updatedBy"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="findById" resultMap="TenantOutboxEventRecordMap">
+        SELECT * FROM tenant_outbox_event WHERE id = #{id}
+    </select>
+
+    <select id="findLatestByEventId" resultMap="TenantOutboxEventRecordMap">
+        SELECT * FROM tenant_outbox_event
+        WHERE event_id = #{eventId}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <insert id="insert">
+        INSERT INTO tenant_outbox_event (
+            tenant_id, event_id, aggregate_type, aggregate_id, event_type, topic,
+            payload, headers, status, retry_count, max_retry_count,
+            locked_by, locked_at, lock_expires_at, next_retry_at, published_at,
+            last_error_code, last_error_message, first_failed_at, dead_letter_at,
+            created_by, created_at, updated_by, updated_at
+        ) VALUES (
+            #{tenantId}, #{eventId}, #{aggregateType}, #{aggregateId}, #{eventType}, #{topic},
+            CAST(#{payloadJson} AS jsonb), CAST(#{headersJson} AS jsonb), #{status}, #{retryCount}, #{maxRetryCount},
+            #{lockedBy}, #{lockedAt}, #{lockExpiresAt}, #{nextRetryAt}, #{publishedAt},
+            #{lastErrorCode}, #{lastErrorMessage}, #{firstFailedAt}, #{deadLetterAt},
+            #{createdBy}, #{createdAt}, #{updatedBy}, #{updatedAt}
+        )
+    </insert>
+
+    <update id="update">
+        UPDATE tenant_outbox_event
+        SET tenant_id = #{tenantId},
+            event_id = #{eventId},
+            aggregate_type = #{aggregateType},
+            aggregate_id = #{aggregateId},
+            event_type = #{eventType},
+            topic = #{topic},
+            payload = CAST(#{payloadJson} AS jsonb),
+            headers = CAST(#{headersJson} AS jsonb),
+            status = #{status},
+            retry_count = #{retryCount},
+            max_retry_count = #{maxRetryCount},
+            locked_by = #{lockedBy},
+            locked_at = #{lockedAt},
+            lock_expires_at = #{lockExpiresAt},
+            next_retry_at = #{nextRetryAt},
+            published_at = #{publishedAt},
+            last_error_code = #{lastErrorCode},
+            last_error_message = #{lastErrorMessage},
+            first_failed_at = #{firstFailedAt},
+            dead_letter_at = #{deadLetterAt},
+            created_by = #{createdBy},
+            created_at = #{createdAt},
+            updated_by = #{updatedBy},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+</mapper>

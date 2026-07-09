@@ -4,13 +4,15 @@ title: "xuan-tenant 接口文档"
 
 本文记录 `xuan-tenant` 的前端接口、内部服务接口和管理接口。实际开发时，每个接口必须继续补齐请求参数、响应结构、错误码、幂等规则和审计要求。
 
+当前 `xuan-tenant` 沿用已落地的 V1 权限码：租户主资源使用 `tenant:view/create/update/delete`，启用和停用统一收敛到 `tenant:lifecycle`，配置写操作统一使用 `tenant-config:manage`。这组旧码受平台统一权限模板约束，后续如需拆分为更细粒度动作，必须走受控演进。
+
 ## 前端接口清单
 
 | 方法 | 路径 | 调用方 | 权限码 | 说明 |
 | --- | --- | --- | --- | --- |
 | GET | /api/tenants | Vue 管理端 | `tenant:view` | 租户列表查询 |
 | GET | /api/tenants/{id} | Vue 管理端 | `tenant:view` | 租户详情，包含当前套餐、主域名和生命周期摘要 |
-| POST | /api/tenants | Vue 管理端 | `tenant:create` | 创建租户并提交初始化任务，必须带幂等键 |
+| POST | /api/tenants | Vue 管理端 | `tenant:create` | 异步启动租户开通编排，创建成功后立即返回 `PROVISIONING`；首期只接 `IAM_BOOTSTRAP`，必须带幂等键 |
 | PUT | /api/tenants/{id} | Vue 管理端 | `tenant:update` | 更新租户基础信息，编码规范化和重复校验由应用层完成 |
 | POST | /api/tenants/{id}/enable | Vue 管理端 | `tenant:lifecycle` | 启用租户，写入生命周期历史并发布事件 |
 | POST | /api/tenants/{id}/suspend | Vue 管理端 | `tenant:lifecycle` | 暂停租户，必须填写原因 |
@@ -49,7 +51,11 @@ title: "xuan-tenant 接口文档"
 ## 接口要求
 
 - Controller 只做协议适配和 DTO 转换。
+- Controller 必须补 `@PreAuthorize`，并与文档中的权限码保持一致。
 - 写接口必须说明幂等键、重复提交处理和事务边界。
+- `POST /api/tenants` 是异步启动入口：创建租户主档和初始化任务成功后立即返回 `PROVISIONING`，不等待 IAM 实际完成。
+- `POST /api/tenants` 只要求 `tenant:create`，它负责“创建租户并异步启动首期编排”；查看任务、步骤和失败原因使用 `tenant-provision:view`，重试、死信和人工补偿使用 `tenant-provision:manage`。
+- 当前编排首期只接 `IAM_BOOTSTRAP`，后续如扩展更多步骤必须先更新事件契约、权限说明和回调接口文档。
 - 需要租户上下文的接口必须校验 `tenantId`。
 - 每个前端接口必须绑定权限码，super admin 只能旁路鉴权，不能省略权限定义。
 - 内部接口必须使用服务间 token、来源服务白名单和 TraceId。

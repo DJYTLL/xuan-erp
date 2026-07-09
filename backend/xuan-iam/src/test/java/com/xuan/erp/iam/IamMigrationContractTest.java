@@ -36,4 +36,21 @@ class IamMigrationContractTest {
         assertTrue(v2.contains("iam.tenant.bootstrapped"));
         assertTrue(v2.contains("ON CONFLICT (event_id) DO NOTHING"));
     }
+
+    @Test
+    void v3ExtendsBootstrapWithTenantAdminAndPlatformSuperAdmin() throws IOException {
+        Path v3Path = MIGRATION_DIR.resolve("V3__extend_iam_tenant_bootstrap_admin_account.sql");
+        assertTrue(Files.exists(v3Path), "必须通过 V3 新增登录账号初始化，不能改写 V1/V2 历史迁移");
+
+        String v3 = Files.readString(v3Path);
+
+        assertTrue(v3.contains("p_admin_username"));
+        assertTrue(v3.contains("p_admin_password_hash"));
+        assertTrue(v3.contains("'tenant_admin'"));
+        assertTrue(v3.contains("'super_admin'"));
+        assertTrue(v3.contains("tenant_id, username"));
+        assertTrue(v3.contains("iam_authorization_snapshot"));
+        assertTrue(v3.contains("PLATFORM_ADMIN"));
+        assertTrue(v3.contains("tenant_id = 0"));
+    }
 }

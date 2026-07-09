@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xuan.erp.tenant.infrastructure.persistence.mapper.TenantPersistenceMapper">
+
+    <resultMap id="TenantRecordMap" type="com.xuan.erp.tenant.infrastructure.persistence.entity.TenantRecord">
+        <id column="id" property="id"/>
+        <result column="code" property="code"/>
+        <result column="normalized_code" property="normalizedCode"/>
+        <result column="name" property="name"/>
+        <result column="status" property="status"/>
+        <result column="contact_name" property="contactName"/>
+        <result column="contact_phone" property="contactPhone"/>
+        <result column="provisioned_at" property="provisionedAt"/>
+        <result column="enabled_at" property="enabledAt"/>
+        <result column="disabled_at" property="disabledAt"/>
+        <result column="disabled_reason" property="disabledReason"/>
+        <result column="remark" property="remark"/>
+        <result column="created_by" property="createdBy"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_by" property="updatedBy"/>
+        <result column="updated_at" property="updatedAt"/>
+        <result column="deleted_by" property="deletedBy"/>
+        <result column="delete_reason" property="deleteReason"/>
+        <result column="deleted_at" property="deletedAt"/>
+    </resultMap>
+
+    <select id="findById" resultMap="TenantRecordMap">
+        SELECT * FROM tenant WHERE id = #{id} AND deleted_at IS NULL
+    </select>
+
+    <select id="findByIdIncludingDeleted" resultMap="TenantRecordMap">
+        SELECT * FROM tenant WHERE id = #{id}
+    </select>
+
+    <select id="findActiveByNormalizedCode" resultMap="TenantRecordMap">
+        SELECT * FROM tenant
+        WHERE normalized_code = #{normalizedCode}
+          AND deleted_at IS NULL
+        ORDER BY id
+        LIMIT 1
+    </select>
+
+    <select id="findPage" resultMap="TenantRecordMap">
+        SELECT * FROM tenant
+        WHERE deleted_at IS NULL
+        ORDER BY id
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countActive" resultType="long">
+        SELECT COUNT(*) FROM tenant WHERE deleted_at IS NULL
+    </select>
+
+    <select id="findDetailSupplement" resultType="com.xuan.erp.tenant.infrastructure.persistence.entity.TenantDetailSupplementRecord">
+        SELECT
+            plan_summary.current_plan_id AS currentPlanId,
+            plan_summary.current_plan_code AS currentPlanCode,
+            plan_summary.current_plan_name AS currentPlanName,
+            domain_summary.primary_domain_id AS primaryDomainId,
+            domain_summary.primary_domain AS primaryDomain,
+            COALESCE(history_summary.status_history_count, 0) AS statusHistoryCount,
+            history_summary.latest_status_change_type AS latestStatusChangeType,
+            history_summary.latest_status_changed_at AS latestStatusChangedAt
+        FROM tenant tenant_root
+        LEFT JOIN LATERAL (
+            SELECT
+                tenant_plan.id AS current_plan_id,
+                tenant_plan.code AS current_plan_code,
+                tenant_plan.name AS current_plan_name
+            FROM tenant_plan_assignment assignment
+            JOIN tenant_plan tenant_plan ON tenant_plan.id = assignment.plan_id
+            WHERE assignment.tenant_id = #{tenantId}
+              AND assignment.deleted_at IS NULL
+              AND tenant_plan.deleted_at IS NULL
+            ORDER BY assignment.assigned_at DESC NULLS LAST, assignment.id DESC
+            LIMIT 1
+        ) plan_summary ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT
+                tenant_domain.id AS primary_domain_id,
+                tenant_domain.domain AS primary_domain
+            FROM tenant_domain tenant_domain
+            WHERE tenant_domain.tenant_id = #{tenantId}
+              AND tenant_domain.deleted_at IS NULL
+            ORDER BY CASE WHEN tenant_domain.is_primary THEN 0 ELSE 1 END, tenant_domain.id
+            LIMIT 1
+        ) domain_summary ON TRUE
+        LEFT JOIN LATERAL (
+            SELECT
+                COUNT(*) AS status_history_count,
+                (
+                    ARRAY_AGG(status_history.change_type ORDER BY status_history.changed_at DESC NULLS LAST, status_history.id DESC)
+                )[1] AS latest_status_change_type,
+                MAX(status_history.changed_at) AS latest_status_changed_at
+            FROM tenant_status_history status_history
+            WHERE status_history.tenant_id = #{tenantId}
+        ) history_summary ON TRUE
+        WHERE tenant_root.id = #{tenantId}
+          AND tenant_root.deleted_at IS NULL
+    </select>
+
+    <insert id="insert">
+        INSERT INTO tenant (
+            code, normalized_code, name, status, contact_name, contact_phone,
+            provisioned_at, enabled_at, disabled_at, disabled_reason, remark,
+            created_by, created_at, updated_by, updated_at, deleted_by, delete_reason, deleted_at
+        ) VALUES (
+            #{code}, #{normalizedCode}, #{name}, #{status}, #{contactName}, #{contactPhone},
+            #{provisionedAt}, #{enabledAt}, #{disabledAt}, #{disabledReason}, #{remark},
+            #{createdBy}, #{createdAt}, #{updatedBy}, #{updatedAt}, #{deletedBy}, #{deleteReason}, #{deletedAt}
+        )
+    </insert>
+
+    <update id="update">
+        UPDATE tenant
+        SET code = #{code},
+            normalized_code = #{normalizedCode},
+            name = #{name},
+            status = #{status},
+            contact_name = #{contactName},
+            contact_phone = #{contactPhone},
+            provisioned_at = #{provisionedAt},
+            enabled_at = #{enabledAt},
+            disabled_at = #{disabledAt},
+            disabled_reason = #{disabledReason},
+            remark = #{remark},
+            created_by = #{createdBy},
+            created_at = #{createdAt},
+            updated_by = #{updatedBy},
+            updated_at = #{updatedAt},
+            deleted_by = #{deletedBy},
+            delete_reason = #{deleteReason},
+            deleted_at = #{deletedAt}
+        WHERE id = #{id}
+    </update>
+</mapper>

@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xuan.erp.iam.infrastructure.persistence.mapper.IamUserPersistenceMapper">
+
+    <resultMap id="IamUserRecordMap" type="com.xuan.erp.iam.infrastructure.persistence.entity.IamUserRecord">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.Long"/>
+            <arg column="username" javaType="java.lang.String"/>
+            <arg column="password_hash" javaType="java.lang.String"/>
+            <arg column="display_name" javaType="java.lang.String"/>
+            <arg column="email" javaType="java.lang.String"/>
+            <arg column="phone" javaType="java.lang.String"/>
+            <arg column="avatar_url" javaType="java.lang.String"/>
+            <arg column="is_enabled" javaType="java.lang.Boolean"/>
+            <arg column="account_non_expired" javaType="java.lang.Boolean"/>
+            <arg column="account_non_locked" javaType="java.lang.Boolean"/>
+            <arg column="credentials_non_expired" javaType="java.lang.Boolean"/>
+            <arg column="last_login_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="password_changed_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="failed_login_count" javaType="java.lang.Integer"/>
+            <arg column="last_failed_login_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="locked_until" javaType="java.time.OffsetDateTime"/>
+            <arg column="mfa_enabled" javaType="java.lang.Boolean"/>
+            <arg column="auth_version" javaType="java.lang.Long"/>
+            <arg column="remark" javaType="java.lang.String"/>
+            <arg column="created_by" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="updated_by" javaType="java.lang.String"/>
+            <arg column="updated_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="deleted_by" javaType="java.lang.String"/>
+            <arg column="delete_reason" javaType="java.lang.String"/>
+            <arg column="deleted_at" javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="IamUserColumns">
+        id, tenant_id, username, password_hash, display_name, email, phone, avatar_url,
+        is_enabled, account_non_expired, account_non_locked, credentials_non_expired,
+        last_login_at, password_changed_at, failed_login_count, last_failed_login_at,
+        locked_until, mfa_enabled, auth_version, remark,
+        created_by, created_at, updated_by, updated_at, deleted_by, delete_reason, deleted_at
+    </sql>
+
+    <select id="findById" resultMap="IamUserRecordMap">
+        SELECT <include refid="IamUserColumns"/>
+        FROM iam_user
+        WHERE id = #{id}
+          AND deleted_at IS NULL
+    </select>
+
+    <select id="findByIdIncludingDeleted" resultMap="IamUserRecordMap">
+        SELECT <include refid="IamUserColumns"/>
+        FROM iam_user
+        WHERE id = #{id}
+    </select>
+
+    <select id="findActiveByTenantIdAndUsername" resultMap="IamUserRecordMap">
+        SELECT <include refid="IamUserColumns"/>
+        FROM iam_user
+        WHERE tenant_id = #{tenantId}
+          AND username = #{username}
+          AND deleted_at IS NULL
+        ORDER BY id
+        LIMIT 1
+    </select>
+
+    <select id="findActiveUsers" resultMap="IamUserRecordMap">
+        SELECT <include refid="IamUserColumns"/>
+        FROM iam_user
+        WHERE tenant_id = #{tenantId}
+          AND deleted_at IS NULL
+        ORDER BY id
+    </select>
+
+    <insert id="insert">
+        INSERT INTO iam_user (
+            tenant_id, username, password_hash, display_name, email, phone, avatar_url,
+            is_enabled, account_non_expired, account_non_locked, credentials_non_expired,
+            last_login_at, password_changed_at, failed_login_count, last_failed_login_at,
+            locked_until, mfa_enabled, auth_version, remark,
+            created_by, created_at, updated_by, updated_at, deleted_by, delete_reason, deleted_at
+        ) VALUES (
+            #{tenantId}, #{username}, #{passwordHash}, #{displayName}, #{email}, #{phone}, #{avatarUrl},
+            #{enabled}, #{accountNonExpired}, #{accountNonLocked}, #{credentialsNonExpired},
+            #{lastLoginAt}, #{passwordChangedAt}, #{failedLoginCount}, #{lastFailedLoginAt},
+            #{lockedUntil}, #{mfaEnabled}, #{authVersion}, #{remark},
+            #{createdBy}, #{createdAt}, #{updatedBy}, #{updatedAt}, #{deletedBy}, #{deleteReason}, #{deletedAt}
+        )
+    </insert>
+
+    <update id="update">
+        UPDATE iam_user
+        SET tenant_id = #{tenantId},
+            username = #{username},
+            password_hash = #{passwordHash},
+            display_name = #{displayName},
+            email = #{email},
+            phone = #{phone},
+            avatar_url = #{avatarUrl},
+            is_enabled = #{enabled},
+            account_non_expired = #{accountNonExpired},
+            account_non_locked = #{accountNonLocked},
+            credentials_non_expired = #{credentialsNonExpired},
+            last_login_at = #{lastLoginAt},
+            password_changed_at = #{passwordChangedAt},
+            failed_login_count = #{failedLoginCount},
+            last_failed_login_at = #{lastFailedLoginAt},
+            locked_until = #{lockedUntil},
+            mfa_enabled = #{mfaEnabled},
+            auth_version = #{authVersion},
+            remark = #{remark},
+            created_by = #{createdBy},
+            created_at = #{createdAt},
+            updated_by = #{updatedBy},
+            updated_at = #{updatedAt},
+            deleted_by = #{deletedBy},
+            delete_reason = #{deleteReason},
+            deleted_at = #{deletedAt}
+        WHERE id = #{id}
+    </update>
+</mapper>

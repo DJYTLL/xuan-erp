@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xuan.erp.iam.infrastructure.persistence.mapper.IamPermissionPersistenceMapper">
+
+    <resultMap id="IamPermissionRecordMap" type="com.xuan.erp.iam.infrastructure.persistence.entity.IamPermissionRecord">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="code" javaType="java.lang.String"/>
+            <arg column="name" javaType="java.lang.String"/>
+            <arg column="service_name" javaType="java.lang.String"/>
+            <arg column="menu_code" javaType="java.lang.String"/>
+            <arg column="description" javaType="java.lang.String"/>
+            <arg column="is_enabled" javaType="java.lang.Boolean"/>
+            <arg column="created_by" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="updated_by" javaType="java.lang.String"/>
+            <arg column="updated_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="deleted_by" javaType="java.lang.String"/>
+            <arg column="delete_reason" javaType="java.lang.String"/>
+            <arg column="deleted_at" javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findByCode" resultMap="IamPermissionRecordMap">
+        SELECT id, code, name, service_name, menu_code, description, is_enabled,
+               created_by, created_at, updated_by, updated_at, deleted_by, delete_reason, deleted_at
+        FROM iam_permission
+        WHERE code = #{code}
+          AND deleted_at IS NULL
+        LIMIT 1
+    </select>
+
+    <select id="findActivePermissions" resultMap="IamPermissionRecordMap">
+        SELECT id, code, name, service_name, menu_code, description, is_enabled,
+               created_by, created_at, updated_by, updated_at, deleted_by, delete_reason, deleted_at
+        FROM iam_permission
+        WHERE deleted_at IS NULL
+        ORDER BY id
+    </select>
+</mapper>

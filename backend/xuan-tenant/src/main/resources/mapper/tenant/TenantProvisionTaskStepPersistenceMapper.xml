@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xuan.erp.tenant.infrastructure.persistence.mapper.TenantProvisionTaskStepPersistenceMapper">
+
+    <resultMap id="TenantProvisionTaskStepRecordMap" type="com.xuan.erp.tenant.infrastructure.persistence.entity.TenantProvisionTaskStepRecord">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="provision_task_id" property="provisionTaskId"/>
+        <result column="step_key" property="stepKey"/>
+        <result column="step_name" property="stepName"/>
+        <result column="status" property="status"/>
+        <result column="sequence_no" property="sequenceNo"/>
+        <result column="idempotency_key" property="idempotencyKey"/>
+        <result column="request_payload" property="requestPayloadJson"/>
+        <result column="result_payload" property="resultPayloadJson"/>
+        <result column="retry_count" property="retryCount"/>
+        <result column="max_retry_count" property="maxRetryCount"/>
+        <result column="last_error_code" property="lastErrorCode"/>
+        <result column="last_error_message" property="lastErrorMessage"/>
+        <result column="started_at" property="startedAt"/>
+        <result column="finished_at" property="finishedAt"/>
+        <result column="created_by" property="createdBy"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_by" property="updatedBy"/>
+        <result column="updated_at" property="updatedAt"/>
+        <result column="deleted_by" property="deletedBy"/>
+        <result column="delete_reason" property="deleteReason"/>
+        <result column="deleted_at" property="deletedAt"/>
+    </resultMap>
+
+    <select id="findByTaskId" resultMap="TenantProvisionTaskStepRecordMap">
+        SELECT * FROM tenant_provision_task_step
+        WHERE provision_task_id = #{taskId}
+          AND deleted_at IS NULL
+        ORDER BY sequence_no, id
+    </select>
+
+    <select id="findActiveByTaskIdAndStepKey" resultMap="TenantProvisionTaskStepRecordMap">
+        SELECT * FROM tenant_provision_task_step
+        WHERE provision_task_id = #{taskId}
+          AND step_key = #{stepKey}
+          AND deleted_at IS NULL
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <insert id="insert">
+        INSERT INTO tenant_provision_task_step (
+            tenant_id, provision_task_id, step_key, step_name, status, sequence_no,
+            idempotency_key, request_payload, result_payload, retry_count, max_retry_count,
+            last_error_code, last_error_message, started_at, finished_at,
+            created_by, created_at, updated_by, updated_at, deleted_by, delete_reason, deleted_at
+        ) VALUES (
+            #{tenantId}, #{provisionTaskId}, #{stepKey}, #{stepName}, #{status}, #{sequenceNo},
+            #{idempotencyKey}, CAST(#{requestPayloadJson} AS jsonb), CAST(#{resultPayloadJson} AS jsonb), #{retryCount}, #{maxRetryCount},
+            #{lastErrorCode}, #{lastErrorMessage}, #{startedAt}, #{finishedAt},
+            #{createdBy}, #{createdAt}, #{updatedBy}, #{updatedAt}, #{deletedBy}, #{deleteReason}, #{deletedAt}
+        )
+    </insert>
+
+    <update id="update">
+        UPDATE tenant_provision_task_step
+        SET tenant_id = #{tenantId},
+            provision_task_id = #{provisionTaskId},
+            step_key = #{stepKey},
+            step_name = #{stepName},
+            status = #{status},
+            sequence_no = #{sequenceNo},
+            idempotency_key = #{idempotencyKey},
+            request_payload = CAST(#{requestPayloadJson} AS jsonb),
+            result_payload = CAST(#{resultPayloadJson} AS jsonb),
+            retry_count = #{retryCount},
+            max_retry_count = #{maxRetryCount},
+            last_error_code = #{lastErrorCode},
+            last_error_message = #{lastErrorMessage},
+            started_at = #{startedAt},
+            finished_at = #{finishedAt},
+            created_by = #{createdBy},
+            created_at = #{createdAt},
+            updated_by = #{updatedBy},
+            updated_at = #{updatedAt},
+            deleted_by = #{deletedBy},
+            delete_reason = #{deleteReason},
+            deleted_at = #{deletedAt}
+        WHERE id = #{id}
+    </update>
+</mapper>

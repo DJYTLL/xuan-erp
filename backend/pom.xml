@@ -17,6 +17,7 @@
         <module>xuan-common-web</module>
         <module>xuan-common-security</module>
         <module>xuan-common-mybatis</module>
+        <module>xuan-common-mq</module>
         <module>xuan-gateway</module>
         <module>xuan-iam</module>
         <module>xuan-tenant</module>

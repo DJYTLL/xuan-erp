@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xuan.erp.iam.infrastructure.persistence.mapper.IamAuthorizationSnapshotPersistenceMapper">
+
+    <resultMap id="IamAuthorizationSnapshotRecordMap" type="com.xuan.erp.iam.infrastructure.persistence.entity.IamAuthorizationSnapshotRecord">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.Long"/>
+            <arg column="user_id" javaType="java.lang.Long"/>
+            <arg column="auth_version" javaType="java.lang.Long"/>
+            <arg column="role_ids_json" javaType="java.lang.String"/>
+            <arg column="permission_codes_json" javaType="java.lang.String"/>
+            <arg column="menu_codes_json" javaType="java.lang.String"/>
+            <arg column="column_settings_json" javaType="java.lang.String"/>
+            <arg column="snapshot_hash" javaType="java.lang.String"/>
+            <arg column="expires_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="built_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="created_by" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="updated_by" javaType="java.lang.String"/>
+            <arg column="updated_at" javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findByTenantIdAndUserId" resultMap="IamAuthorizationSnapshotRecordMap">
+        SELECT id,
+               tenant_id,
+               user_id,
+               auth_version,
+               role_ids::text AS role_ids_json,
+               permission_codes::text AS permission_codes_json,
+               menu_codes::text AS menu_codes_json,
+               column_settings::text AS column_settings_json,
+               snapshot_hash,
+               expires_at,
+               built_at,
+               created_by,
+               created_at,
+               updated_by,
+               updated_at
+        FROM iam_authorization_snapshot
+        WHERE tenant_id = #{tenantId}
+          AND user_id = #{userId}
+    </select>
+
+    <insert id="insert">
+        INSERT INTO iam_authorization_snapshot (
+            tenant_id, user_id, auth_version, role_ids, permission_codes, menu_codes, column_settings,
+            snapshot_hash, expires_at, built_at, created_by, created_at, updated_by, updated_at
+        ) VALUES (
+            #{tenantId}, #{userId}, #{authVersion},
+            CAST(#{roleIdsJson} AS jsonb),
+            CAST(#{permissionCodesJson} AS jsonb),
+            CAST(#{menuCodesJson} AS jsonb),
+            CAST(#{columnSettingsJson} AS jsonb),
+            #{snapshotHash}, #{expiresAt}, #{builtAt}, #{createdBy}, #{createdAt}, #{updatedBy}, #{updatedAt}
+        )
+    </insert>
+
+    <update id="update">
+        UPDATE iam_authorization_snapshot
+        SET auth_version = #{authVersion},
+            role_ids = CAST(#{roleIdsJson} AS jsonb),
+            permission_codes = CAST(#{permissionCodesJson} AS jsonb),
+            menu_codes = CAST(#{menuCodesJson} AS jsonb),
+            column_settings = CAST(#{columnSettingsJson} AS jsonb),
+            snapshot_hash = #{snapshotHash},
+            expires_at = #{expiresAt},
+            built_at = #{builtAt},
+            created_by = #{createdBy},
+            created_at = #{createdAt},
+            updated_by = #{updatedBy},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+</mapper>

@@ -45,3 +45,22 @@ mvn clean compile
 
 如果在 IntelliJ IDEA 中打开 `D:\xuan-erp`，请刷新根目录 Maven 项目。根目录 `pom.xml` 只用于让 IDE 识别 `backend` 后端工程，不会把 `docs-site` 当成 Maven 模块。
 
+## 前端工程
+
+前端工程位于：
+
+```text
+D:\xuan-erp\frontend
+```
+
+常用命令：
+
+```powershell
+cd D:\xuan-erp\frontend
+npm install
+npm run dev
+npm run build
+```
+
+默认开发接口地址通过 `VITE_API_BASE_URL` 配置，参考 `frontend\.env.example`。当前登录接口按后端 IAM 契约调用 `POST /api/iam/auth/login`，请求体为 `tenantId + username + password`。
+

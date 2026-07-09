@@ -26,6 +26,8 @@ IAM 是 Xuan ERP 的统一权限中心，集中管理用户、角色、权限、
 
 业务服务不能保存“某个角色拥有哪些权限”这类授权关系。业务服务只维护自己的权限清单，例如 `xuan-sales` 维护 `sales:view`、`sales:create`、`sales:audit` 等定义，最终由受控流程同步进 IAM。
 
+所有微服务的基础操作权限也要遵守统一模板：主资源默认使用 `view/create/update/delete`，生命周期默认使用 `enable/disable`，配置类资源默认使用 `<domain>-config:view` 和 `<domain>-config:manage`。如果某个服务为了兼容 V1 暂时保留旧权限码，必须在本服务文档和 seed 草稿里明确映射关系。
+
 ## 权限清单与授权关系
 
 这两个概念必须分开：
@@ -107,6 +109,21 @@ IAM 不应该承载所有业务判断。比如销售单能不能审核，是 `xu
 ```text
 前端路由权限 -> Gateway 认证 -> 业务服务接口权限 -> 业务资源权限 -> 列权限过滤 -> 审计日志
 ```
+
+## 固定 JWK 与轮换
+
+IAM 使用 RSA 私钥签发访问令牌，并通过 `/.well-known/jwks.json` 对外发布对应公钥。Gateway 和各业务服务不持有私钥，它们只消费公钥并执行验签。
+
+开发环境如果没有配置 `xuan.iam.jwt.signing-jwk-json`，IAM 会退回到本地临时 JWK。这能支撑本地联调，但服务一旦重启，旧 token 会因为签名 key 变化而全部失效，所以不适合作为正式环境方案。
+
+生产和稳定测试环境应在 Nacos 的 `xuan-iam.yaml` 中固定 `xuan.iam.jwt.signing-jwk-json`，并让 `kid` 与公开 JWK 保持一致。该配置放在顶层 `xuan.iam.jwt` 节点下，不放在 `spring` 节点内。仓库只保留配置模板，不提交真实私钥内容；如果必须由 Nacos 存放真实值，应配合加密能力和变更审计。
+
+JWK 轮换建议按下面顺序执行：
+
+1. 生成新 RSA key，并为它分配新的 `kid`。
+2. 先让验签侧能同时看到新旧两个公钥。
+3. 再切换 IAM 使用新的私钥签发 token。
+4. 等旧 token 过期后，移除旧公钥和旧私钥配置。
 
 
 

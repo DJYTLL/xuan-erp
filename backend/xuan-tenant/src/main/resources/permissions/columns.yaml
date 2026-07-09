@@ -1,0 +1,17 @@
+service: xuan-tenant
+draft: true
+columns:
+  - pageKey: tenant
+    fields:
+      - contactName
+      - contactPhone
+      - contactEmail
+      - disableReason
+      - sensitiveConfigSummary
+    note: 默认脱敏，授权后按页面列权限展示
+  - pageKey: tenant-config
+    fields:
+      - configValue
+      - sensitive
+      - encrypted
+    note: 敏感配置和加密配置默认不返回明文

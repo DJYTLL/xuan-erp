@@ -7,6 +7,7 @@ import com.xuan.erp.tenant.interfaces.controller.TenantDomainController;
 import com.xuan.erp.tenant.interfaces.controller.TenantPlanController;
 import com.xuan.erp.tenant.interfaces.controller.TenantPlanAssignmentController;
 import com.xuan.erp.tenant.interfaces.controller.TenantResourceController;
+import com.xuan.erp.tenant.interfaces.controller.TenantScopedConfigController;
 import com.xuan.erp.tenant.interfaces.dto.CreateTenantPlanRequest;
 import com.xuan.erp.tenant.interfaces.dto.CreateTenantRequest;
 import com.xuan.erp.tenant.interfaces.dto.TenantPlanResponse;
@@ -37,14 +38,15 @@ class TenantOpenApiDocumentationTest {
             TenantPlanAssignmentController.class,
             TenantContactController.class,
             TenantDomainController.class,
-            TenantConfigController.class);
+            TenantConfigController.class,
+            TenantScopedConfigController.class);
 
     @Test
     void tenantControllersExposeOpenApiTagsAndOperations() throws NoSuchMethodException {
         assertNotNull(TenantController.class.getAnnotation(Tag.class));
         assertNotNull(TenantPlanController.class.getAnnotation(Tag.class));
 
-        Method listTenants = TenantController.class.getDeclaredMethod("listTenants");
+        Method listTenants = TenantController.class.getDeclaredMethod("listTenants", long.class, long.class);
         Method createPlan = TenantPlanController.class.getDeclaredMethod("createPlan", CreateTenantPlanRequest.class);
 
         assertNotNull(listTenants.getAnnotation(Operation.class));
@@ -98,6 +100,11 @@ class TenantOpenApiDocumentationTest {
     @Test
     void tenantDtosExposeSchemaDescriptions() throws NoSuchFieldException {
         assertNotNull(CreateTenantRequest.class.getDeclaredField("code").getAnnotation(Schema.class));
+        assertNotNull(CreateTenantRequest.class.getDeclaredField("adminUsername").getAnnotation(Schema.class));
+        assertNotNull(CreateTenantRequest.class.getDeclaredField("adminPassword").getAnnotation(Schema.class));
+        assertNotNull(CreateTenantRequest.class.getDeclaredField("adminDisplayName").getAnnotation(Schema.class));
+        assertNotNull(CreateTenantRequest.class.getDeclaredField("adminEmail").getAnnotation(Schema.class));
+        assertNotNull(CreateTenantRequest.class.getDeclaredField("adminPhone").getAnnotation(Schema.class));
         assertNotNull(TenantPlanResponse.class.getDeclaredField("code").getAnnotation(Schema.class));
     }
 

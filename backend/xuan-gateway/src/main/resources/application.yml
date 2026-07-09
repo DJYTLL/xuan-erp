@@ -13,9 +13,22 @@ spring:
           discovery:
             locator:
               enabled: false
+          routes:
+            - id: xuan-iam
+              uri: lb://xuan-iam
+              predicates:
+                - Path=/api/iam/**,/.well-known/jwks.json
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info
+
+xuan:
+  gateway:
+    security:
+      enabled: true
+      issuer: xuan-iam
+      audience: xuan-gateway
+      iam-service-name: xuan-iam

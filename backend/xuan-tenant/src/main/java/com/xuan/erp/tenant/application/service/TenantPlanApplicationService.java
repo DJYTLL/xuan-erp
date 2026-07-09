@@ -14,26 +14,40 @@ import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.springframework.stereotype.Service;
-
+/**
+ * 租户套餐应用服务，负责套餐的查询、创建、更新、启停用与删除。
+ */
 @Service
 public class TenantPlanApplicationService {
 
     private final TenantPlanRepository tenantPlanRepository;
 
+    /**
+     * 注入租户套餐仓储。
+     */
     public TenantPlanApplicationService(TenantPlanRepository tenantPlanRepository) {
         this.tenantPlanRepository = tenantPlanRepository;
     }
 
+    /**
+     * 查询全部有效套餐，并转换为详情视图返回。
+     */
     public List<TenantPlanDetailView> listPlans() {
         return tenantPlanRepository.findActivePlans().stream()
                 .map(this::toDetailView)
                 .toList();
     }
 
+    /**
+     * 按套餐 ID 查询套餐详情。
+     */
     public TenantPlanDetailView getPlan(Long planId) {
         return toDetailView(requirePlan(planId));
     }
 
+    /**
+     * 创建新套餐，并补齐默认计费周期、价格、币种和功能标记等默认值。
+     */
     public TenantPlanDetailView createPlan(CreateTenantPlanCommand command) {
         String code = requireText(command.code(), "套餐编码不能为空").toLowerCase();
         tenantPlanRepository.findActiveByCode(code)
@@ -66,6 +80,9 @@ public class TenantPlanApplicationService {
         return toDetailView(saved);
     }
 
+    /**
+     * 更新套餐基础信息，未传入的可选字段继续沿用原值。
+     */
     public TenantPlanDetailView updatePlan(Long planId, UpdateTenantPlanCommand command) {
         TenantPlan plan = requirePlan(planId);
         OffsetDateTime now = OffsetDateTime.now();
@@ -94,17 +111,26 @@ public class TenantPlanApplicationService {
         return toDetailView(saved);
     }
 
+    /**
+     * 将指定套餐启用。
+     */
     public TenantPlanDetailView enablePlan(Long planId, ChangeTenantPlanStatusCommand command) {
         TenantPlan plan = requirePlan(planId);
         return changeStatus(plan, TenantPlanStatus.ENABLED, command);
     }
 
+    /**
+     * 将指定套餐停用，并要求必须提供停用原因。
+     */
     public TenantPlanDetailView disablePlan(Long planId, ChangeTenantPlanStatusCommand command) {
         requireText(command.reason(), "停用原因不能为空");
         TenantPlan plan = requirePlan(planId);
         return changeStatus(plan, TenantPlanStatus.DISABLED, command);
     }
 
+    /**
+     * 逻辑删除套餐，写入删除原因、删除人和删除时间。
+     */
     public void deletePlan(Long planId, DeleteTenantCommand command) {
         TenantPlan plan = requirePlan(planId);
         String reason = requireText(command.reason(), "删除原因不能为空");
@@ -133,6 +159,9 @@ public class TenantPlanApplicationService {
         ));
     }
 
+    /**
+     * 统一处理套餐状态切换，并刷新修改审计字段。
+     */
     private TenantPlanDetailView changeStatus(TenantPlan plan, TenantPlanStatus status, ChangeTenantPlanStatusCommand command) {
         OffsetDateTime now = OffsetDateTime.now();
         TenantPlan saved = tenantPlanRepository.save(new TenantPlan(
@@ -160,11 +189,17 @@ public class TenantPlanApplicationService {
         return toDetailView(saved);
     }
 
+    /**
+     * 确保套餐存在；若不存在则抛出套餐不存在异常。
+     */
     private TenantPlan requirePlan(Long planId) {
         return tenantPlanRepository.findById(planId)
                 .orElseThrow(() -> new BusinessException("TENANT_PLAN_NOT_FOUND", "租户套餐不存在"));
     }
 
+    /**
+     * 将套餐领域对象转换为应用层详情视图。
+     */
     private TenantPlanDetailView toDetailView(TenantPlan plan) {
         return new TenantPlanDetailView(
                 plan.id(),
@@ -183,6 +218,9 @@ public class TenantPlanApplicationService {
         );
     }
 
+    /**
+     * 校验必填文本字段；为空时抛出业务异常。
+     */
     private String requireText(String value, String message) {
         if (value == null || value.isBlank()) {
             throw new BusinessException("TENANT_PLAN_INVALID_ARGUMENT", message);
@@ -190,10 +228,16 @@ public class TenantPlanApplicationService {
         return value.trim();
     }
 
+    /**
+     * 为可选文本字段提供默认值，并去除首尾空白。
+     */
     private String defaultText(String value, String defaultValue) {
         return value == null || value.isBlank() ? defaultValue : value.trim();
     }
 
+    /**
+     * 规范化操作人字段，未传值时统一使用 system。
+     */
     private String operator(String operator) {
         return operator == null || operator.isBlank() ? "system" : operator.trim();
     }

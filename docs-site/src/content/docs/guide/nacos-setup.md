@@ -713,6 +713,117 @@ xuan-tenant.yaml
 
 初始化内容只包含非敏感运行配置和 datasource 骨架。数据库密码、Redis 密码、ES 密码、JWT 密钥、证书和 Nacos 服务身份密钥不写入 Nacos 配置正文，也不写入仓库文档。
 
+### `xuan-iam.yaml` 固定 JWK 配置模板
+
+IAM 当前会从 `xuan-iam.yaml` 读取 `xuan.iam.jwt.signing-jwk-json`。如果这项为空，服务会在启动时本地生成临时 JWK；这种模式只适合开发调试，服务重启后，之前签发的旧 token 会立即失效。
+
+下面这份模板基于当前 `xuan-iam` 的完整运行配置骨架整理，可直接作为 Nacos 中 `xuan-iam.yaml` 的参考版本。示例里已经把固定 JWK 放进 `xuan.iam.jwt`，并把密码、私钥等敏感值改成占位形式：
+
+```yaml
+# xuan-iam runtime configuration
+# Namespace: dev
+
+server:
+  port: 8101
+
+spring:
+  application:
+    name: xuan-iam
+
+  cloud:
+    nacos:
+      discovery:
+        namespace: dev
+        group: XUAN_ERP_GROUP
+      config:
+        namespace: dev
+        group: XUAN_ERP_GROUP
+        file-extension: yaml
+
+    sentinel:
+      transport:
+        dashboard: ${xuan.infra.sentinel.dashboard}
+        port: 8721
+        client-ip: ${XUAN_SENTINEL_CLIENT_IP:127.0.0.1}
+      eager: true
+      datasource:
+        flow:
+          nacos:
+            server-addr: ${spring.cloud.nacos.config.server-addr}
+            namespace: ${spring.cloud.nacos.config.namespace}
+            username: ${spring.cloud.nacos.username:nacos}
+            password: ${spring.cloud.nacos.password:nacos}
+            group-id: XUAN_ERP_GROUP
+            data-id: xuan-iam-sentinel-flow-rules.json
+            data-type: json
+            rule-type: flow
+        degrade:
+          nacos:
+            server-addr: ${spring.cloud.nacos.config.server-addr}
+            namespace: ${spring.cloud.nacos.config.namespace}
+            username: ${spring.cloud.nacos.username:nacos}
+            password: ${spring.cloud.nacos.password:nacos}
+            group-id: XUAN_ERP_GROUP
+            data-id: xuan-iam-sentinel-degrade-rules.json
+            data-type: json
+            rule-type: degrade
+        param-flow:
+          nacos:
+            server-addr: ${spring.cloud.nacos.config.server-addr}
+            namespace: ${spring.cloud.nacos.config.namespace}
+            username: ${spring.cloud.nacos.username:nacos}
+            password: ${spring.cloud.nacos.password:nacos}
+            group-id: XUAN_ERP_GROUP
+            data-id: xuan-iam-sentinel-param-flow-rules.json
+            data-type: json
+            rule-type: param-flow
+
+  datasource:
+    url: jdbc:postgresql://${xuan.infra.postgresql.host}:${xuan.infra.postgresql.port}/xuan_iam
+    username: ${XUAN_DB_USERNAME:postgres}
+    password: ${XUAN_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+feign:
+  sentinel:
+    enabled: true
+
+seata:
+  enabled: true
+  application-id: ${spring.application.name}
+  tx-service-group: xuan-erp-tx-group
+  registry:
+    type: file
+  config:
+    type: file
+  service:
+    vgroup-mapping:
+      xuan-erp-tx-group: default
+    grouplist:
+      default: ${xuan.infra.seata.tc-address}
+
+xuan:
+  iam:
+    jwt:
+      issuer: xuan-iam
+      audience: xuan-gateway
+      key-id: xuan-iam-dev-202607
+      access-token-ttl: 2h
+      signing-jwk-json: '{"kty":"RSA","kid":"xuan-iam-dev-202607","n":"<base64url-n>","e":"AQAB","d":"<base64url-d>","p":"<base64url-p>","q":"<base64url-q>","dp":"<base64url-dp>","dq":"<base64url-dq>","qi":"<base64url-qi>"}'
+```
+
+使用这份模板时要注意：
+
+- `xuan.iam.jwt` 要保留在顶层 `xuan` 节点下，不要写进 `spring` 节点里。
+- 仓库文档只放模板，不放真实私钥，也不放真实数据库密码。
+- `kid` 要与 IAM 对外发布的 `/.well-known/jwks.json` 保持一致。
+- 真实值如果由 Nacos 承载，建议启用 Nacos 加密能力，或改用外部密钥管理系统。
+- 轮换密钥时，先发布新公钥并保留旧公钥一段时间，待旧 token 自然过期后再移除旧 key。
+
 已初始化 Sentinel 规则 dataId：
 
 ```text

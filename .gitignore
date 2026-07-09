@@ -18,9 +18,11 @@ docs-site/.logs/
 node_modules/
 dist/
 .astro/
+.npm-cache/
 docs-site/node_modules/
 docs-site/dist/
 docs-site/.astro/
+frontend/.npm-cache/
 
 # Java / Maven
 target/

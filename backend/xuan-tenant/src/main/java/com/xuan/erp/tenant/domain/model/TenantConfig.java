@@ -21,4 +21,19 @@ public record TenantConfig(
         String deleteReason,
         OffsetDateTime deletedAt
 ) {
+
+    public boolean publicReadable() {
+        return publicConfig && !sensitive && deletedAt == null;
+    }
+
+    public String displayValue() {
+        return sensitive ? "******" : configValue;
+    }
+
+    public TenantConfig validateBoundary() {
+        if (publicConfig && sensitive) {
+            throw new IllegalStateException("public config cannot be sensitive");
+        }
+        return this;
+    }
 }
