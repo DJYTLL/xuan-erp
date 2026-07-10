@@ -7,10 +7,13 @@ import com.xuan.erp.iam.application.command.RebuildAuthorizationSnapshotCommand;
 import com.xuan.erp.iam.application.port.IamAccessTokenIssuer;
 import com.xuan.erp.iam.application.port.IamIssuedAccessToken;
 import com.xuan.erp.iam.application.query.IamAuthorizationSnapshotView;
+import com.xuan.erp.iam.application.query.IamCurrentMenuNodeView;
+import com.xuan.erp.iam.application.query.IamCurrentPermissionSnapshotView;
 import com.xuan.erp.iam.application.query.IamLoginView;
 import com.xuan.erp.iam.application.query.IamUserDetailView;
 import com.xuan.erp.iam.application.service.IamAuthenticationApplicationService;
 import com.xuan.erp.iam.application.service.IamAuthorizationApplicationService;
+import com.xuan.erp.iam.application.service.IamCurrentAuthorizationApplicationService;
 import com.xuan.erp.iam.application.service.IamMenuApplicationService;
 import com.xuan.erp.iam.application.service.IamPermissionApplicationService;
 import com.xuan.erp.iam.application.service.IamRoleApplicationService;
@@ -62,6 +65,7 @@ import com.xuan.erp.iam.infrastructure.persistence.repository.IamUserRepositoryA
 import com.xuan.erp.iam.infrastructure.security.IamBearerTokenAuthenticationFilter;
 import com.xuan.erp.iam.interfaces.assembler.IamAuthorizationAssembler;
 import com.xuan.erp.iam.interfaces.assembler.IamAuthenticationAssembler;
+import com.xuan.erp.iam.interfaces.assembler.IamCurrentAuthorizationAssembler;
 import com.xuan.erp.iam.interfaces.assembler.IamUserAssembler;
 import com.xuan.erp.iam.interfaces.controller.IamAuthorizationController;
 import com.xuan.erp.iam.interfaces.controller.IamAuthenticationController;
@@ -72,6 +76,8 @@ import com.xuan.erp.iam.interfaces.controller.IamTenantBootstrapController;
 import com.xuan.erp.iam.interfaces.controller.IamUserController;
 import com.xuan.erp.iam.interfaces.dto.CreateIamUserRequest;
 import com.xuan.erp.iam.interfaces.dto.IamAuthorizationSnapshotResponse;
+import com.xuan.erp.iam.interfaces.dto.IamCurrentMenuNodeResponse;
+import com.xuan.erp.iam.interfaces.dto.IamCurrentPermissionSnapshotResponse;
 import com.xuan.erp.iam.interfaces.dto.IamCurrentUserResponse;
 import com.xuan.erp.iam.interfaces.dto.IamLoginRequest;
 import com.xuan.erp.iam.interfaces.dto.IamLoginResponse;
@@ -124,6 +130,7 @@ class IamDddSkeletonTest {
                 IamRoleApplicationService.class,
                 IamPermissionApplicationService.class,
                 IamMenuApplicationService.class,
+                IamCurrentAuthorizationApplicationService.class,
                 IamAuthorizationApplicationService.class,
                 IamTenantBootstrapApplicationService.class,
                 CreateIamUserCommand.class,
@@ -134,6 +141,8 @@ class IamDddSkeletonTest {
                 IamIssuedAccessToken.class,
                 IamUserDetailView.class,
                 IamLoginView.class,
+                IamCurrentMenuNodeView.class,
+                IamCurrentPermissionSnapshotView.class,
                 IamAuthorizationSnapshotView.class,
                 IamUserRecord.class,
                 IamRoleRecord.class,
@@ -166,16 +175,19 @@ class IamDddSkeletonTest {
                 IamTenantBootstrapController.class,
                 IamUserAssembler.class,
                 IamAuthenticationAssembler.class,
+                IamCurrentAuthorizationAssembler.class,
                 IamAuthorizationAssembler.class,
                 CreateIamUserRequest.class,
                 IamLoginRequest.class,
                 IamLoginResponse.class,
+                IamCurrentMenuNodeResponse.class,
+                IamCurrentPermissionSnapshotResponse.class,
                 IamCurrentUserResponse.class,
                 IamUserResponse.class,
                 IamAuthorizationSnapshotResponse.class,
                 IamBearerTokenAuthenticationFilter.class
         );
 
-        assertEquals(60, ports.size());
+        assertEquals(66, ports.size());
     }
 }

@@ -20,6 +20,37 @@ title: "权限接入规范"
 - 提供权限管理、角色管理、列权限管理接口。
 - 接收受控的权限清单同步。
 
+## 第一阶段接口边界
+
+当前第一阶段先解决“前端能拿到真实菜单树和权限快照”这个最小闭环，直接使用：
+
+- `GET /api/iam/menus/current`
+- `GET /api/iam/permissions/current`
+
+第一阶段只复用现有表：
+
+- `iam_menu`
+- `iam_permission`
+- `iam_authorization_snapshot`
+
+当前本地 `backend/xuan-iam/src/main/resources/db/migration/` 已扫描到最新版本为 `V3__extend_iam_tenant_bootstrap_admin_account.sql`。第一阶段不新增 Flyway migration，不修改 `V1`、`V2`、`V3` 历史文件，只做读路径接口和结果组装。
+
+第一阶段权限快照重点给前端使用的字段是：
+
+- `menus`
+- `routePermissions`
+- `buttonPermissions`
+- `columnPermissions`
+- `authVersion`
+
+下面三个字段目前只是契约占位，第一阶段返回空结构：
+
+- `fieldPermissions`
+- `dataScopes`
+- `stateActionRules`
+
+所以第一阶段目标不是“所有细颗粒权限都已配置完成”，而是“前端和 Gateway 之后的业务服务有了统一可消费的当前用户授权快照入口”。
+
 ## 权限码命名
 
 ```text

@@ -3,6 +3,8 @@ package com.xuan.erp.iam;
 import com.xuan.erp.iam.interfaces.dto.CreateIamUserRequest;
 import com.xuan.erp.iam.interfaces.dto.DisableIamUserRequest;
 import com.xuan.erp.iam.interfaces.dto.IamAuthorizationSnapshotResponse;
+import com.xuan.erp.iam.interfaces.dto.IamCurrentMenuNodeResponse;
+import com.xuan.erp.iam.interfaces.dto.IamCurrentPermissionSnapshotResponse;
 import com.xuan.erp.iam.interfaces.dto.IamCurrentUserResponse;
 import com.xuan.erp.iam.interfaces.dto.IamLoginRequest;
 import com.xuan.erp.iam.interfaces.dto.IamLoginResponse;
@@ -60,6 +62,8 @@ class IamChineseDocumentationTest {
                 RebuildAuthorizationSnapshotRequest.class,
                 IamLoginRequest.class,
                 IamLoginResponse.class,
+                IamCurrentMenuNodeResponse.class,
+                IamCurrentPermissionSnapshotResponse.class,
                 IamCurrentUserResponse.class,
                 IamUserResponse.class,
                 IamAuthorizationSnapshotResponse.class

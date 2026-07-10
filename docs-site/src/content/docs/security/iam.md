@@ -125,5 +125,47 @@ JWK 轮换建议按下面顺序执行：
 3. 再切换 IAM 使用新的私钥签发 token。
 4. 等旧 token 过期后，移除旧公钥和旧私钥配置。
 
+## 第一阶段当前用户授权接口
+
+前端在第一阶段直接对接下面两个真实接口：
+
+- `GET /api/iam/menus/current`
+- `GET /api/iam/permissions/current`
+
+这两个接口都由 `xuan-iam` 提供，目标是先把“当前用户能看到什么菜单、当前用户拥有哪些前端控制权限”稳定输出给前端，而不是先把细颗粒权限建模一次性做完。
+
+第一阶段权限快照响应包含：
+
+- `menus`
+- `routePermissions`
+- `buttonPermissions`
+- `columnPermissions`
+- `fieldPermissions`
+- `dataScopes`
+- `stateActionRules`
+- `authVersion`
+
+其中第一阶段真正有值并可直接用于前端接入的是：
+
+- `menus`
+- `routePermissions`
+- `buttonPermissions`
+- `columnPermissions`
+- `authVersion`
+
+下面三个字段在第一阶段只返回空结构，用来给后续细颗粒权限扩展预留契约：
+
+- `fieldPermissions` 返回空 `Map`
+- `dataScopes` 返回空 `List`
+- `stateActionRules` 返回空 `Map`
+
+第一阶段实现只复用现有 IAM 表：
+
+- `iam_menu`
+- `iam_permission`
+- `iam_authorization_snapshot`
+
+这一阶段不新增 Flyway migration，也不改历史迁移文件。前端先按现有契约完成动态菜单、路由权限和按钮权限接入，字段权限、数据范围和状态动作权限放到下一阶段继续落地。
+
 
 

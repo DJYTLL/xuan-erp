@@ -592,6 +592,69 @@
   gap: 8px;
 }
 
+.dynamic-form-number,
+.dynamic-form-control {
+  width: 100%;
+}
+
+.detail-drawer .el-descriptions {
+  margin-bottom: 16px;
+}
+
+.confirm-summary {
+  border: 1px solid var(--xuan-border);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  background: #f8fafc;
+}
+
+.confirm-summary strong {
+  color: var(--xuan-text);
+}
+
+.confirm-summary span {
+  color: var(--xuan-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.confirm-summary-primary {
+  border-color: color-mix(in srgb, var(--xuan-primary) 24%, var(--xuan-border));
+  background: color-mix(in srgb, var(--xuan-primary) 8%, #fff);
+}
+
+.confirm-summary-success {
+  border-color: #b7ebc6;
+  background: #f0fdf4;
+}
+
+.confirm-summary-warning {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.confirm-summary-danger {
+  border-color: #fecaca;
+  background: #fff1f2;
+}
+
+.confirm-form {
+  margin-top: 4px;
+}
+
+.batch-item-list {
+  display: grid;
+  gap: 6px;
+  max-height: 160px;
+  margin: 0 0 16px;
+  padding-left: 18px;
+  color: var(--xuan-muted);
+  font-size: 13px;
+}
+
 @media (max-width: 1040px) {
   .app-shell {
     grid-template-columns: 76px minmax(0, 1fr);

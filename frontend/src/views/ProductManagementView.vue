@@ -20,7 +20,7 @@
           <el-button type="primary" @click="search">搜索</el-button>
           <el-button>导入</el-button>
           <el-button>导入结果</el-button>
-          <PermissionButton type="primary" permission="product:create">新增</PermissionButton>
+          <PermissionButton type="primary" permission="product:create" @click="openCreateProduct">新增</PermissionButton>
         </template>
       </QueryToolbar>
     </template>
@@ -44,6 +44,7 @@
           </template>
         </el-dropdown>
         <el-button text @click="exportRows">导出</el-button>
+        <el-button text type="danger" :disabled="!selectedRows.length" @click="openDeleteProducts(selectedRows)">批量删除</el-button>
       </template>
 
       <el-table :data="pagedProducts" :size="tableDensity" height="520" border @selection-change="selectedRows = $event">
@@ -69,10 +70,11 @@
         <el-table-column v-if="visibleColumns.position" prop="position" label="默认库位" width="120" />
         <el-table-column v-if="visibleColumns.price" prop="price" label="价格" width="90" />
         <el-table-column v-if="visibleColumns.cost" prop="cost" label="成本" width="90" />
-        <el-table-column label="操作" fixed="right" width="120">
-          <template #default>
-            <el-button link type="primary">编辑</el-button>
-            <el-button link type="danger">删除</el-button>
+        <el-table-column label="操作" fixed="right" width="180">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openProductDetail(row)">查看</el-button>
+            <el-button link type="primary" @click="openEditProduct(row)">编辑</el-button>
+            <el-button link type="danger" @click="openDeleteProducts([row])">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -88,6 +90,30 @@
         />
       </template>
     </DataTableShell>
+
+    <DynamicFormDialog
+      v-model="formVisible"
+      :title="formMode === 'create' ? '新增商品' : '编辑商品'"
+      :fields="productFields"
+      :model="productForm"
+      @submit="submitProductForm"
+    />
+    <DetailDrawer
+      v-model="detailVisible"
+      title="商品详情"
+      :items="productDetailItems"
+      :record="productDetailRecord"
+      width="560px"
+    />
+    <BatchConfirmDialog
+      v-model="batchVisible"
+      title="删除商品确认"
+      action-name="确认删除"
+      :selected-count="batchRows.length"
+      :items="batchRows.map((row) => `${row.code} ${row.name}`)"
+      confirm-keyword="DELETE"
+      @confirm="confirmProductDelete"
+    />
   </ListPageShell>
 </template>
 
@@ -98,7 +124,11 @@ import { useI18n } from 'vue-i18n';
 import { ElMessage } from 'element-plus';
 import { RefreshCw, SlidersHorizontal } from 'lucide-vue-next';
 import AppState from '@/components/business/AppState.vue';
+import BatchConfirmDialog from '@/components/business/BatchConfirmDialog.vue';
 import DataTableShell from '@/components/business/DataTableShell.vue';
+import DetailDrawer from '@/components/business/DetailDrawer.vue';
+import DynamicFormDialog from '@/components/business/DynamicFormDialog.vue';
+import type { DynamicFormField } from '@/components/business/DynamicFormDialog.vue';
 import ListPageShell from '@/components/business/ListPageShell.vue';
 import PermissionButton from '@/components/business/PermissionButton.vue';
 import QueryToolbar from '@/components/business/QueryToolbar.vue';
@@ -161,6 +191,56 @@ const selectedRows = ref<ProductRow[]>([]);
 const tableDensity = ref(String(route.query.density || 'default'));
 const currentPage = ref(Number(route.query.page || 1));
 const pageSize = ref(Number(route.query.pageSize || 10));
+const formVisible = ref(false);
+const detailVisible = ref(false);
+const batchVisible = ref(false);
+const formMode = ref<'create' | 'edit'>('create');
+const activeProduct = ref<ProductRow | null>(null);
+const batchRows = ref<ProductRow[]>([]);
+
+const productForm = reactive<Record<string, unknown>>({
+  code: '',
+  name: '',
+  category: '',
+  unit: '',
+  warehouse: '',
+  price: 0,
+  remark: '',
+});
+
+const productFields: DynamicFormField[] = [
+  { key: 'code', label: '编码', required: true, placeholder: '请输入商品编码' },
+  { key: 'name', label: '名称', required: true, placeholder: '请输入商品名称' },
+  {
+    key: 'category',
+    label: '分类',
+    component: 'select',
+    required: true,
+    options: [
+      { label: '分类1', value: '分类1' },
+      { label: '分类2', value: '分类2' },
+    ],
+  },
+  { key: 'unit', label: '单位', required: true, placeholder: '请输入单位' },
+  { key: 'warehouse', label: '默认仓库', placeholder: '请输入默认仓库' },
+  { key: 'price', label: '价格', component: 'number', min: 0 },
+  { key: 'remark', label: '备注', component: 'textarea', span: 24 },
+];
+
+const productDetailItems = [
+  { key: 'code', label: '编码' },
+  { key: 'name', label: '名称' },
+  { key: 'factoryCode', label: '厂家编码' },
+  { key: 'factoryModel', label: '厂家型号' },
+  { key: 'factoryName', label: '厂家名称' },
+  { key: 'supplier', label: '来源供应商' },
+  { key: 'category', label: '分类' },
+  { key: 'unit', label: '单位' },
+  { key: 'warehouse', label: '默认仓库' },
+  { key: 'position', label: '默认库位' },
+  { key: 'price', label: '价格' },
+  { key: 'cost', label: '成本' },
+];
 
 const products: ProductRow[] = Array.from({ length: 31 }, (_, index) => {
   const number = index + 1;
@@ -184,6 +264,10 @@ const products: ProductRow[] = Array.from({ length: 31 }, (_, index) => {
 const pagedProducts = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value;
   return products.slice(start, start + pageSize.value);
+});
+
+const productDetailRecord = computed<Record<string, unknown>>(() => {
+  return activeProduct.value ? { ...activeProduct.value } : {};
 });
 
 watch([currentPage, pageSize, tableDensity], () => {
@@ -216,5 +300,63 @@ function search() {
 function exportRows() {
   const rows = selectedRows.value.length ? selectedRows.value : products;
   ElMessage.success(`已准备导出 ${rows.length} 条商品数据`);
+}
+
+function openCreateProduct() {
+  formMode.value = 'create';
+  activeProduct.value = null;
+  Object.assign(productForm, {
+    code: '',
+    name: '',
+    category: '',
+    unit: '',
+    warehouse: '',
+    price: 0,
+    remark: '',
+  });
+  formVisible.value = true;
+}
+
+function openEditProduct(row: ProductRow) {
+  formMode.value = 'edit';
+  activeProduct.value = row;
+  Object.assign(productForm, {
+    code: row.code,
+    name: row.name,
+    category: row.category,
+    unit: row.unit,
+    warehouse: row.warehouse === '-' ? '' : row.warehouse,
+    price: row.price,
+    remark: '',
+  });
+  formVisible.value = true;
+}
+
+function openProductDetail(row: ProductRow) {
+  activeProduct.value = row;
+  detailVisible.value = true;
+}
+
+function openDeleteProducts(rows: ProductRow[]) {
+  if (!rows.length) {
+    ElMessage.warning('请先选择商品');
+    return;
+  }
+  batchRows.value = rows;
+  batchVisible.value = true;
+}
+
+function submitProductForm(value: Record<string, unknown>) {
+  Object.assign(productForm, value);
+  formVisible.value = false;
+  ElMessage.success(formMode.value === 'create' ? '新增商品已保存' : '商品编辑已保存');
+}
+
+function confirmProductDelete() {
+  const count = batchRows.value.length;
+  batchVisible.value = false;
+  selectedRows.value = [];
+  batchRows.value = [];
+  ElMessage.success(`已确认删除 ${count} 条商品`);
 }
 </script>
