@@ -62,5 +62,5 @@ npm run dev
 npm run build
 ```
 
-默认开发接口地址通过 `VITE_API_BASE_URL` 配置，参考 `frontend\.env.example`。当前登录接口按后端 IAM 契约调用 `POST /api/iam/auth/login`，请求体为 `tenantId + username + password`。
+本地开发默认使用 Vite 同源代理访问后端：前端请求 `/api/**`，代理目标通过 `VITE_DEV_PROXY_TARGET` 配置，参考 `frontend\.env.example`。当前登录接口按后端 IAM 契约调用 `POST /api/iam/auth/login`，请求体为 `tenantId + username + password`。如部署到独立前端域名，可设置 `VITE_API_BASE_URL` 为网关地址，并在网关侧放通 CORS。
 

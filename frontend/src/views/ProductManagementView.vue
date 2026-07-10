@@ -1,54 +1,74 @@
 <template>
-  <section>
-    <h1 class="page-title">{{ t('nav.products') }}</h1>
+  <ListPageShell :title="t('nav.products')">
+    <template #query>
+      <QueryToolbar>
+        <el-input v-model="filters.name" class="query-input" placeholder="名称" clearable />
+        <el-input v-model="filters.code" class="query-input" placeholder="编码" clearable />
+        <el-input v-model="filters.shortName" class="query-input" placeholder="简称" clearable />
+        <el-input v-model="filters.barcode" class="query-input" placeholder="条码" clearable />
+        <el-select v-model="filters.category" class="query-input" placeholder="分类" clearable>
+          <el-option label="分类1" value="分类1" />
+          <el-option label="分类2" value="分类2" />
+        </el-select>
+        <el-select v-model="filters.status" class="query-input" placeholder="全部" clearable>
+          <el-option label="全部" value="all" />
+          <el-option label="启用" value="enabled" />
+        </el-select>
 
-    <QueryToolbar>
-      <el-input v-model="filters.name" class="query-input" placeholder="名称" clearable />
-      <el-input v-model="filters.code" class="query-input" placeholder="编码" clearable />
-      <el-input v-model="filters.shortName" class="query-input" placeholder="简称" clearable />
-      <el-input v-model="filters.barcode" class="query-input" placeholder="条码" clearable />
-      <el-select v-model="filters.category" class="query-input" placeholder="分类" clearable>
-        <el-option label="分类1" value="分类1" />
-        <el-option label="分类2" value="分类2" />
-      </el-select>
-      <el-select v-model="filters.status" class="query-input" placeholder="全部" clearable>
-        <el-option label="全部" value="all" />
-        <el-option label="启用" value="enabled" />
-      </el-select>
-
-      <template #actions>
-        <el-button :icon="RefreshCw" circle @click="resetFilters" />
-        <el-button type="primary" @click="search">搜索</el-button>
-        <el-button>导入</el-button>
-        <el-button>导入结果</el-button>
-        <PermissionButton type="primary" permission="product:create">新增</PermissionButton>
-      </template>
-    </QueryToolbar>
+        <template #actions>
+          <el-button :icon="RefreshCw" circle @click="resetFilters" />
+          <el-button type="primary" @click="search">搜索</el-button>
+          <el-button>导入</el-button>
+          <el-button>导入结果</el-button>
+          <PermissionButton type="primary" permission="product:create">新增</PermissionButton>
+        </template>
+      </QueryToolbar>
+    </template>
 
     <DataTableShell>
       <template #toolbar>
-        <el-button text :icon="SlidersHorizontal">列设置</el-button>
+        <span v-if="selectedRows.length" class="table-selected-count">已选 {{ selectedRows.length }} 项</span>
+        <el-select v-model="tableDensity" class="table-density-select" size="small" placeholder="密度">
+          <el-option label="默认" value="default" />
+          <el-option label="紧凑" value="small" />
+          <el-option label="宽松" value="large" />
+        </el-select>
+        <el-dropdown trigger="click">
+          <el-button text :icon="SlidersHorizontal">列设置</el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item v-for="column in columnOptions" :key="column.key">
+                <el-checkbox v-model="visibleColumns[column.key]">{{ column.label }}</el-checkbox>
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <el-button text @click="exportRows">导出</el-button>
       </template>
 
-      <el-table :data="products" height="520" border>
-        <el-table-column prop="index" label="序号" width="70" />
-        <el-table-column prop="code" label="编码" width="120" />
-        <el-table-column prop="name" label="名称" width="120" />
-        <el-table-column prop="factoryCode" label="厂家编码" width="140" />
-        <el-table-column prop="factoryModel" label="厂家型号" width="140" />
-        <el-table-column prop="factoryName" label="厂家名称" width="140" />
-        <el-table-column prop="supplier" label="来源供应商" width="150" />
-        <el-table-column label="商品类型" width="120">
+      <el-table :data="pagedProducts" :size="tableDensity" height="520" border @selection-change="selectedRows = $event">
+        <template #empty>
+          <AppState type="empty" title="暂无商品" description="当前筛选条件下没有商品数据。" />
+        </template>
+        <el-table-column type="selection" width="46" />
+        <el-table-column v-if="visibleColumns.index" prop="index" label="序号" width="70" />
+        <el-table-column v-if="visibleColumns.code" prop="code" label="编码" width="120" />
+        <el-table-column v-if="visibleColumns.name" prop="name" label="名称" width="120" />
+        <el-table-column v-if="visibleColumns.factoryCode" prop="factoryCode" label="厂家编码" width="140" />
+        <el-table-column v-if="visibleColumns.factoryModel" prop="factoryModel" label="厂家型号" width="140" />
+        <el-table-column v-if="visibleColumns.factoryName" prop="factoryName" label="厂家名称" width="140" />
+        <el-table-column v-if="visibleColumns.supplier" prop="supplier" label="来源供应商" width="150" />
+        <el-table-column v-if="visibleColumns.type" label="商品类型" width="120">
           <template #default>
             <el-tag size="small">普通商品</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="category" label="分类" width="100" />
-        <el-table-column prop="unit" label="单位" width="90" />
-        <el-table-column prop="warehouse" label="默认仓库" width="120" />
-        <el-table-column prop="position" label="默认库位" width="120" />
-        <el-table-column prop="price" label="价格" width="90" />
-        <el-table-column prop="cost" label="成本" width="90" />
+        <el-table-column v-if="visibleColumns.category" prop="category" label="分类" width="100" />
+        <el-table-column v-if="visibleColumns.unit" prop="unit" label="单位" width="90" />
+        <el-table-column v-if="visibleColumns.warehouse" prop="warehouse" label="默认仓库" width="120" />
+        <el-table-column v-if="visibleColumns.position" prop="position" label="默认库位" width="120" />
+        <el-table-column v-if="visibleColumns.price" prop="price" label="价格" width="90" />
+        <el-table-column v-if="visibleColumns.cost" prop="cost" label="成本" width="90" />
         <el-table-column label="操作" fixed="right" width="120">
           <template #default>
             <el-button link type="primary">编辑</el-button>
@@ -58,22 +78,54 @@
       </el-table>
 
       <template #pagination>
-        <span>共 31 条</span>
-        <el-pagination layout="sizes, prev, pager, next, jumper" :total="31" :page-size="10" />
+        <span>共 {{ products.length }} 条</span>
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          layout="sizes, prev, pager, next, jumper"
+          :total="products.length"
+          :page-sizes="[10, 20, 50]"
+        />
       </template>
     </DataTableShell>
-  </section>
+  </ListPageShell>
 </template>
 
 <script setup lang="ts">
-import { reactive } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
+import { ElMessage } from 'element-plus';
 import { RefreshCw, SlidersHorizontal } from 'lucide-vue-next';
+import AppState from '@/components/business/AppState.vue';
 import DataTableShell from '@/components/business/DataTableShell.vue';
+import ListPageShell from '@/components/business/ListPageShell.vue';
 import PermissionButton from '@/components/business/PermissionButton.vue';
 import QueryToolbar from '@/components/business/QueryToolbar.vue';
 
+defineOptions({ name: 'ProductManagementView' });
+
+type ProductRow = {
+  index: number;
+  code: string;
+  name: string;
+  factoryCode: string;
+  factoryModel: string;
+  factoryName: string;
+  supplier: string;
+  category: string;
+  unit: string;
+  warehouse: string;
+  position: string;
+  price: number;
+  cost: string;
+};
+
+type ColumnKey = 'index' | 'code' | 'name' | 'factoryCode' | 'factoryModel' | 'factoryName' | 'supplier' | 'type' | 'category' | 'unit' | 'warehouse' | 'position' | 'price' | 'cost';
+
 const { t } = useI18n();
+const route = useRoute();
+const router = useRouter();
 
 const filters = reactive({
   name: '',
@@ -84,23 +136,65 @@ const filters = reactive({
   status: '',
 });
 
-const products = Array.from({ length: 12 }, (_, index) => {
+const columnOptions: Array<{ key: ColumnKey; label: string }> = [
+  { key: 'index', label: '序号' },
+  { key: 'code', label: '编码' },
+  { key: 'name', label: '名称' },
+  { key: 'factoryCode', label: '厂家编码' },
+  { key: 'factoryModel', label: '厂家型号' },
+  { key: 'factoryName', label: '厂家名称' },
+  { key: 'supplier', label: '来源供应商' },
+  { key: 'type', label: '商品类型' },
+  { key: 'category', label: '分类' },
+  { key: 'unit', label: '单位' },
+  { key: 'warehouse', label: '默认仓库' },
+  { key: 'position', label: '默认库位' },
+  { key: 'price', label: '价格' },
+  { key: 'cost', label: '成本' },
+];
+
+const visibleColumns = reactive<Record<ColumnKey, boolean>>(Object.fromEntries(
+  columnOptions.map((column) => [column.key, true]),
+) as Record<ColumnKey, boolean>);
+
+const selectedRows = ref<ProductRow[]>([]);
+const tableDensity = ref(String(route.query.density || 'default'));
+const currentPage = ref(Number(route.query.page || 1));
+const pageSize = ref(Number(route.query.pageSize || 10));
+
+const products: ProductRow[] = Array.from({ length: 31 }, (_, index) => {
   const number = index + 1;
   return {
     index: number,
-    code: `PROD-${String(31 - number).padStart(4, '0')}`,
-    name: `商品${31 - number}`,
+    code: `PROD-${String(32 - number).padStart(4, '0')}`,
+    name: `商品${32 - number}`,
     factoryCode: '',
     factoryModel: '',
     factoryName: '',
     supplier: '-',
-    category: number < 7 ? '分类1' : '分类2',
-    unit: number < 7 ? '件' : '箱',
+    category: number < 16 ? '分类1' : '分类2',
+    unit: number < 16 ? '件' : '箱',
     warehouse: number % 3 === 0 ? '仓库1' : '-',
     position: number % 3 === 0 ? '库位1' : '-',
     price: 42 - number,
     cost: (38 - number).toFixed(2),
   };
+});
+
+const pagedProducts = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value;
+  return products.slice(start, start + pageSize.value);
+});
+
+watch([currentPage, pageSize, tableDensity], () => {
+  router.replace({
+    query: {
+      ...route.query,
+      page: String(currentPage.value),
+      pageSize: String(pageSize.value),
+      density: tableDensity.value,
+    },
+  });
 });
 
 function resetFilters() {
@@ -115,6 +209,12 @@ function resetFilters() {
 }
 
 function search() {
+  currentPage.value = 1;
   return filters;
+}
+
+function exportRows() {
+  const rows = selectedRows.value.length ? selectedRows.value : products;
+  ElMessage.success(`已准备导出 ${rows.length} 条商品数据`);
 }
 </script>

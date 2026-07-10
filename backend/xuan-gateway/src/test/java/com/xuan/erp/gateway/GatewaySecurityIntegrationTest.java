@@ -17,6 +17,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cloud.gateway.route.RouteDefinition;
 import org.springframework.cloud.gateway.route.RouteDefinitionLocator;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -154,6 +156,36 @@ class GatewaySecurityIntegrationTest {
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(String.class).isEqualTo("jwks-entry");
+    }
+
+    // 测试前端登录预检请求不会被网关安全链路拦截，并返回浏览器需要的 CORS 响应头。
+    @Test
+    void allowsFrontendCorsPreflightForIamLogin() {
+        webTestClient.options()
+                .uri("/api/iam/auth/login")
+                .header(HttpHeaders.ORIGIN, "http://127.0.0.1:5173")
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpMethod.POST.name())
+                .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "content-type,authorization")
+                .exchange()
+                .expectStatus().is2xxSuccessful()
+                .expectHeader().valueEquals(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://127.0.0.1:5173")
+                .expectHeader().value(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS,
+                        value -> assertTrue(value.contains(HttpMethod.POST.name())));
+    }
+
+    // 测试真实跨域访问在认证成功后也会带回 CORS 响应头，避免浏览器丢弃响应。
+    @Test
+    void addsCorsHeadersForAuthenticatedFrontendRequest() throws Exception {
+        when(jwkProvider.jwkSetForKid("kid-1")).thenReturn(Mono.just(new JWKSet(rsaKey.toPublicJWK())));
+
+        webTestClient.get()
+                .uri("/api/test/secured")
+                .header(HttpHeaders.ORIGIN, "http://127.0.0.1:5173")
+                .header("Authorization", "Bearer " + signedToken(rsaKey, "kid-1", Instant.parse("2030-01-01T00:05:00Z")))
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().valueEquals(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://127.0.0.1:5173")
+                .expectBody(String.class).isEqualTo("secured");
     }
 
     // 测试 Gateway 明确配置 IAM 路由，保证匿名登录请求放行后可以继续转发到 xuan-iam。

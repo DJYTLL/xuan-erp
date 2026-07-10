@@ -17,6 +17,17 @@ export const useAuthStore = defineStore('auth', {
     isAuthenticated: (state) => Boolean(state.token),
     username: (state) => state.currentUser?.username || 'A',
     tenantId: (state) => state.currentUser?.tenantId ?? 0,
+    hasPermission: (state) => (permission?: string | string[]) => {
+      if (!permission) {
+        return true;
+      }
+      const permissions = state.currentUser?.permissions || [];
+      if (permissions.includes('*') || permissions.includes('admin:*')) {
+        return true;
+      }
+      const required = Array.isArray(permission) ? permission : [permission];
+      return required.every((item) => permissions.includes(item));
+    },
   },
   actions: {
     async login(request: LoginRequest) {

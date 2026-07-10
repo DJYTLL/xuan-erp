@@ -7,7 +7,11 @@
       </RouterLink>
 
       <div class="login-people-wrap">
-        <AnimatedPeople />
+        <AnimatedPeople
+          :is-typing="isTyping"
+          :show-password="showPassword"
+          :password-length="form.password.length"
+        />
       </div>
 
       <div class="login-legal">
@@ -36,6 +40,8 @@
               inputmode="numeric"
               autocomplete="off"
               :placeholder="t('login.tenantPlaceholder')"
+              @focus="startTyping"
+              @blur="stopTyping"
             />
           </label>
 
@@ -45,6 +51,8 @@
               v-model.trim="form.username"
               autocomplete="username"
               :placeholder="t('login.usernamePlaceholder')"
+              @focus="startTyping"
+              @blur="stopTyping"
             />
           </label>
 
@@ -57,9 +65,12 @@
                 :type="showPassword ? 'text' : 'password'"
                 autocomplete="current-password"
                 placeholder="••••••••"
+                @focus="startTyping"
+                @blur="stopTyping"
               />
               <button class="password-toggle" type="button" aria-label="toggle password" @click="showPassword = !showPassword">
-                <Eye :size="22" />
+                <EyeOff v-if="showPassword" :size="22" />
+                <Eye v-else :size="22" />
               </button>
             </span>
           </label>
@@ -101,7 +112,7 @@ import { reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { ElMessage } from 'element-plus';
-import { ArrowRight, Eye } from 'lucide-vue-next';
+import { ArrowRight, Eye, EyeOff } from 'lucide-vue-next';
 import AnimatedPeople from '@/components/login/AnimatedPeople.vue';
 import { useAuthStore } from '@/stores/auth';
 
@@ -112,12 +123,21 @@ const authStore = useAuthStore();
 
 const loading = ref(false);
 const showPassword = ref(false);
+const isTyping = ref(false);
 const rememberTenant = ref(localStorage.getItem('xuan-remember-tenant') === 'true');
 const form = reactive({
   tenantId: localStorage.getItem('xuan-login-tenant-id') || '',
   username: localStorage.getItem('xuan-login-username') || '',
   password: '',
 });
+
+function startTyping() {
+  isTyping.value = true;
+}
+
+function stopTyping() {
+  isTyping.value = false;
+}
 
 async function submitLogin() {
   const tenantId = Number(form.tenantId);

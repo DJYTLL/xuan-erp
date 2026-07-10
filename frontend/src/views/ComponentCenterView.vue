@@ -38,6 +38,8 @@ import LanguageSwitcher from '@/components/app/LanguageSwitcher.vue';
 import ThemeSwitcher from '@/components/app/ThemeSwitcher.vue';
 import PermissionButton from '@/components/business/PermissionButton.vue';
 
+defineOptions({ name: 'ComponentCenterView' });
+
 const { t } = useI18n();
 
 const cards = [

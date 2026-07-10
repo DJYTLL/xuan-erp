@@ -2,6 +2,8 @@ package com.xuan.erp.gateway.infrastructure.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.util.List;
+
 /**
  * 网关 JWT / JWKS 安全配置属性。
  *
@@ -40,6 +42,14 @@ public class GatewaySecurityProperties {
      * 然后拉取 `/.well-known/jwks.json` 公钥集合。</p>
      */
     private String iamServiceName = "xuan-iam";
+
+    /**
+     * 网关入口 CORS 配置。
+     *
+     * <p>该配置会接入 WebFlux Security 链路，确保浏览器预检请求和实际
+     * API 请求都能在认证前得到正确的跨域响应头。</p>
+     */
+    private Cors cors = new Cors();
 
     /**
      * 返回是否启用网关认证。
@@ -111,5 +121,107 @@ public class GatewaySecurityProperties {
      */
     public void setIamServiceName(String iamServiceName) {
         this.iamServiceName = iamServiceName;
+    }
+
+    /**
+     * 返回网关 CORS 配置。
+     *
+     * @return CORS 配置
+     */
+    public Cors getCors() {
+        return cors;
+    }
+
+    /**
+     * 设置网关 CORS 配置。
+     *
+     * @param cors CORS 配置
+     */
+    public void setCors(Cors cors) {
+        this.cors = cors;
+    }
+
+    /**
+     * 网关入口 CORS 配置项。
+     */
+    public static class Cors {
+
+        /**
+         * 允许访问网关的前端 Origin。
+         */
+        private List<String> allowedOrigins = List.of("http://127.0.0.1:5173", "http://localhost:5173");
+
+        /**
+         * 允许的 HTTP 方法。
+         */
+        private List<String> allowedMethods = List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS");
+
+        /**
+         * 允许的请求头。
+         */
+        private List<String> allowedHeaders = List.of("*");
+
+        /**
+         * 允许浏览器读取的响应头。
+         */
+        private List<String> exposedHeaders = List.of("Authorization", "Content-Disposition");
+
+        /**
+         * 是否允许跨域请求携带凭证。
+         */
+        private boolean allowCredentials = true;
+
+        /**
+         * 预检请求缓存秒数。
+         */
+        private long maxAge = 1800;
+
+        public List<String> getAllowedOrigins() {
+            return allowedOrigins;
+        }
+
+        public void setAllowedOrigins(List<String> allowedOrigins) {
+            this.allowedOrigins = allowedOrigins;
+        }
+
+        public List<String> getAllowedMethods() {
+            return allowedMethods;
+        }
+
+        public void setAllowedMethods(List<String> allowedMethods) {
+            this.allowedMethods = allowedMethods;
+        }
+
+        public List<String> getAllowedHeaders() {
+            return allowedHeaders;
+        }
+
+        public void setAllowedHeaders(List<String> allowedHeaders) {
+            this.allowedHeaders = allowedHeaders;
+        }
+
+        public List<String> getExposedHeaders() {
+            return exposedHeaders;
+        }
+
+        public void setExposedHeaders(List<String> exposedHeaders) {
+            this.exposedHeaders = exposedHeaders;
+        }
+
+        public boolean isAllowCredentials() {
+            return allowCredentials;
+        }
+
+        public void setAllowCredentials(boolean allowCredentials) {
+            this.allowCredentials = allowCredentials;
+        }
+
+        public long getMaxAge() {
+            return maxAge;
+        }
+
+        public void setMaxAge(long maxAge) {
+            this.maxAge = maxAge;
+        }
     }
 }

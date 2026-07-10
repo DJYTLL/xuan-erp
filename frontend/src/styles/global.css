@@ -8,6 +8,30 @@
   --xuan-muted: #6b7280;
   --xuan-sidebar: #f7f9fc;
   --xuan-active: #dcecff;
+  --xuan-font-size: 14px;
+  --xuan-density-scale: 1;
+}
+
+:root.xuan-dark {
+  --xuan-bg: #111827;
+  --xuan-panel: #182233;
+  --xuan-border: #2c3a4f;
+  --xuan-text: #e5e7eb;
+  --xuan-muted: #94a3b8;
+  --xuan-sidebar: #151f2f;
+  --xuan-active: color-mix(in srgb, var(--xuan-primary) 24%, #111827);
+}
+
+:root.xuan-compact {
+  --xuan-density-scale: 0.86;
+}
+
+:root[data-xuan-font-size="small"] {
+  --xuan-font-size: 13px;
+}
+
+:root[data-xuan-font-size="large"] {
+  --xuan-font-size: 15px;
 }
 
 * {
@@ -25,6 +49,7 @@ body,
 body {
   color: var(--xuan-text);
   background: var(--xuan-bg);
+  font-size: var(--xuan-font-size);
   font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 

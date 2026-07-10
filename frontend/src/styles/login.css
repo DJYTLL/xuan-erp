@@ -67,142 +67,6 @@
   height: 500px;
 }
 
-.login-people {
-  position: relative;
-  width: 550px;
-  height: 400px;
-  --pupil-x: 0px;
-  --pupil-y: 0px;
-  --face-x: 0px;
-  --face-y: 0px;
-}
-
-.login-person {
-  position: absolute;
-  bottom: 0;
-  transform-origin: bottom center;
-}
-
-.person-purple {
-  left: 70px;
-  width: 180px;
-  height: 400px;
-  z-index: 1;
-  border-radius: 10px 10px 0 0;
-  background: #6c3ff5;
-}
-
-.person-dark {
-  left: 240px;
-  width: 120px;
-  height: 310px;
-  z-index: 2;
-  border-radius: 8px 8px 0 0;
-  background: #2d2d2d;
-}
-
-.person-orange {
-  left: 0;
-  width: 240px;
-  height: 200px;
-  z-index: 3;
-  border-radius: 120px 120px 0 0;
-  background: #ff9b6b;
-}
-
-.person-yellow {
-  left: 310px;
-  width: 140px;
-  height: 230px;
-  z-index: 4;
-  border-radius: 70px 70px 0 0;
-  background: #e8d754;
-}
-
-.person-eyes {
-  position: absolute;
-  display: flex;
-  transition: transform 180ms ease-out;
-  transform: translate(var(--face-x), var(--face-y));
-}
-
-.person-purple .person-eyes {
-  left: 45px;
-  top: 40px;
-  gap: 28px;
-}
-
-.person-dark .person-eyes {
-  left: 26px;
-  top: 32px;
-  gap: 22px;
-}
-
-.person-orange .person-eyes {
-  left: 82px;
-  top: 90px;
-  gap: 28px;
-}
-
-.person-yellow .person-eyes {
-  left: 52px;
-  top: 40px;
-  gap: 22px;
-}
-
-.eye {
-  position: relative;
-  border-radius: 999px;
-  background: #fff;
-  overflow: hidden;
-}
-
-.person-purple .eye {
-  width: 18px;
-  height: 18px;
-}
-
-.person-dark .eye {
-  width: 16px;
-  height: 16px;
-}
-
-.person-orange .eye,
-.person-yellow .eye {
-  width: 12px;
-  height: 12px;
-  background: #2d2d2d;
-}
-
-.pupil {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: #2d2d2d;
-  transform: translate(calc(-50% + var(--pupil-x)), calc(-50% + var(--pupil-y)));
-  transition: transform 100ms ease-out;
-}
-
-.person-dark .pupil {
-  width: 6px;
-  height: 6px;
-}
-
-.mouth {
-  position: absolute;
-  left: 40px;
-  top: 88px;
-  width: 80px;
-  height: 4px;
-  border-radius: 999px;
-  background: #2d2d2d;
-  transition: transform 180ms ease-out;
-  transform: translate(var(--face-x), var(--face-y));
-}
-
 .login-legal {
   display: flex;
   gap: 32px;
@@ -290,6 +154,11 @@
 
 .password-input {
   padding-right: 46px !important;
+}
+
+.password-input::-ms-reveal,
+.password-input::-ms-clear {
+  display: none;
 }
 
 .password-toggle {

@@ -11,6 +11,9 @@ import org.springframework.security.config.annotation.web.reactive.EnableWebFlux
 import org.springframework.security.config.web.server.SecurityWebFiltersOrder;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
 import org.springframework.security.web.server.SecurityWebFilterChain;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.reactive.CorsConfigurationSource;
+import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
 import org.springframework.web.reactive.function.client.WebClient;
 
 /**
@@ -87,6 +90,28 @@ public class GatewaySecurityConfiguration {
     }
 
     /**
+     * 创建网关统一 CORS 配置源。
+     *
+     * @param properties 网关安全配置
+     * @return WebFlux Security 使用的 CORS 配置源
+     */
+    @Bean
+    CorsConfigurationSource gatewayCorsConfigurationSource(GatewaySecurityProperties properties) {
+        GatewaySecurityProperties.Cors corsProperties = properties.getCors();
+        CorsConfiguration configuration = new CorsConfiguration();
+        configuration.setAllowedOrigins(corsProperties.getAllowedOrigins());
+        configuration.setAllowedMethods(corsProperties.getAllowedMethods());
+        configuration.setAllowedHeaders(corsProperties.getAllowedHeaders());
+        configuration.setExposedHeaders(corsProperties.getExposedHeaders());
+        configuration.setAllowCredentials(corsProperties.isAllowCredentials());
+        configuration.setMaxAge(corsProperties.getMaxAge());
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
+    }
+
+    /**
      * 定义网关的 WebFlux Security 规则。
      *
      * <p>健康检查和信息端点允许匿名访问，其余请求默认要求先通过
@@ -101,11 +126,16 @@ public class GatewaySecurityConfiguration {
     SecurityWebFilterChain gatewaySecurityWebFilterChain(
             ServerHttpSecurity http,
             GatewayBearerAuthenticationWebFilter bearerAuthenticationWebFilter,
+            CorsConfigurationSource gatewayCorsConfigurationSource,
             GatewaySecurityProperties properties) {
         if (!properties.isEnabled()) {
-            return http.csrf(ServerHttpSecurity.CsrfSpec::disable).build();
+            return http
+                    .cors(cors -> cors.configurationSource(gatewayCorsConfigurationSource))
+                    .csrf(ServerHttpSecurity.CsrfSpec::disable)
+                    .build();
         }
         return http
+                .cors(cors -> cors.configurationSource(gatewayCorsConfigurationSource))
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
