@@ -1,13 +1,15 @@
 package com.xuan.erp.gateway.infrastructure.security;
-
 import com.nimbusds.jwt.SignedJWT;
 import com.xuan.erp.common.security.CurrentUser;
+import com.xuan.erp.common.security.GatewayIdentityHeaders;
+import com.xuan.erp.common.security.audit.SecurityAuditFailure;
 import com.xuan.erp.common.security.jwt.BearerTokenResolver;
 import com.xuan.erp.common.security.jwt.JwkJwtTokenParser;
 import com.xuan.erp.common.security.jwt.JwtValidationException;
+import com.xuan.erp.common.security.jwt.jwk.CachingJwkKeyProvider;
+import com.xuan.erp.common.security.jwt.jwk.JwkSetUnavailableException;
 import com.xuan.erp.gateway.infrastructure.config.GatewaySecurityProperties;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
@@ -30,14 +32,33 @@ import java.util.Set;
 public class GatewayBearerAuthenticationWebFilter implements WebFilter {
 
     private final BearerTokenResolver bearerTokenResolver = new BearerTokenResolver();
-    private final CachingGatewayJwkProvider jwkProvider;
+    private final CachingJwkKeyProvider jwkProvider;
     private final GatewaySecurityProperties properties;
+    private final GatewaySecurityAuditReporter securityAuditReporter;
+    private final GatewaySecurityErrorResponseWriter securityErrorResponseWriter;
 
     public GatewayBearerAuthenticationWebFilter(
-            CachingGatewayJwkProvider jwkProvider,
+            CachingJwkKeyProvider jwkProvider,
             GatewaySecurityProperties properties) {
+        this(jwkProvider, properties, null, new GatewaySecurityErrorResponseWriter());
+    }
+
+    public GatewayBearerAuthenticationWebFilter(
+            CachingJwkKeyProvider jwkProvider,
+            GatewaySecurityProperties properties,
+            GatewaySecurityAuditReporter securityAuditReporter) {
+        this(jwkProvider, properties, securityAuditReporter, new GatewaySecurityErrorResponseWriter());
+    }
+
+    public GatewayBearerAuthenticationWebFilter(
+            CachingJwkKeyProvider jwkProvider,
+            GatewaySecurityProperties properties,
+            GatewaySecurityAuditReporter securityAuditReporter,
+            GatewaySecurityErrorResponseWriter securityErrorResponseWriter) {
         this.jwkProvider = jwkProvider;
         this.properties = properties;
+        this.securityAuditReporter = securityAuditReporter;
+        this.securityErrorResponseWriter = securityErrorResponseWriter;
     }
 
     /**
@@ -58,10 +79,10 @@ public class GatewayBearerAuthenticationWebFilter implements WebFilter {
             return chain.filter(exchange);
         }
         return authenticate(token)
-                .flatMap(authentication -> chain.filter(exchange)
-                        .contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication)))
-                .onErrorResume(JwtValidationException.class, ex -> unauthorized(exchange))
-                .onErrorResume(IllegalArgumentException.class, ex -> unauthorized(exchange));
+                .flatMap(authentication -> filterAuthenticated(exchange, chain, authentication))
+                .onErrorResume(JwkSetUnavailableException.class, ex -> serviceUnavailable(exchange, ex))
+                .onErrorResume(JwtValidationException.class, ex -> unauthorized(exchange, ex))
+                .onErrorResume(IllegalArgumentException.class, ex -> unauthorized(exchange, ex));
     }
 
     /**
@@ -104,7 +125,7 @@ public class GatewayBearerAuthenticationWebFilter implements WebFilter {
      */
     private UsernamePasswordAuthenticationToken authentication(CurrentUser currentUser) {
         Set<SimpleGrantedAuthority> authorities = new LinkedHashSet<>();
-        for (String permission : currentUser.permissions()) {
+        for (String permission : effectivePermissions(currentUser)) {
             authorities.add(new SimpleGrantedAuthority(permission));
         }
         for (String role : currentUser.roles()) {
@@ -113,14 +134,109 @@ public class GatewayBearerAuthenticationWebFilter implements WebFilter {
         return new UsernamePasswordAuthenticationToken(currentUser, "N/A", authorities);
     }
 
+    private Mono<Void> filterAuthenticated(
+            ServerWebExchange exchange,
+            WebFilterChain chain,
+            UsernamePasswordAuthenticationToken authentication) {
+        CurrentUser currentUser = (CurrentUser) authentication.getPrincipal();
+        Long requestedTenantId;
+        try {
+            requestedTenantId = requestedTenantId(exchange);
+        } catch (IllegalArgumentException ex) {
+            return forbiddenTenantContext(exchange, currentUser, null, ex.getMessage());
+        }
+        if (requestedTenantId != null
+                && !requestedTenantId.equals(currentUser.tenantId())
+                && !isPlatformSuperAdmin(currentUser)) {
+            return forbiddenTenantContext(exchange, currentUser, requestedTenantId, "请求租户与 token 租户不一致");
+        }
+        ServerWebExchange authenticatedExchange = exchange.mutate()
+                .request(request -> request.headers(headers -> {
+                    headers.set(GatewayIdentityHeaders.USER_ID, String.valueOf(currentUser.userId()));
+                    headers.set(GatewayIdentityHeaders.TENANT_ID, String.valueOf(currentUser.tenantId()));
+                    headers.set(GatewayIdentityHeaders.USERNAME, currentUser.username());
+                    headers.set(GatewayIdentityHeaders.ROLES, String.join(",", currentUser.roles()));
+                    headers.set(GatewayIdentityHeaders.AUTH_VERSION, String.valueOf(currentUser.authVersion()));
+                    headers.set(GatewayIdentityHeaders.PERMISSIONS, String.join(",", effectivePermissions(currentUser)));
+                }))
+                .build();
+        return chain.filter(authenticatedExchange)
+                .contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication));
+    }
+
+    private Set<String> effectivePermissions(CurrentUser currentUser) {
+        if (!isPlatformSuperAdmin(currentUser) || currentUser.permissions().contains("*")) {
+            return currentUser.permissions();
+        }
+        Set<String> permissions = new LinkedHashSet<>(currentUser.permissions());
+        permissions.add("*");
+        return Set.copyOf(permissions);
+    }
+
+    private boolean isPlatformSuperAdmin(CurrentUser currentUser) {
+        return currentUser.roles().contains("super_admin")
+                || "super_admin".equals(currentUser.username())
+                || "superadmin".equals(currentUser.username());
+    }
+
+    private Long requestedTenantId(ServerWebExchange exchange) {
+        String tenantId = exchange.getRequest().getHeaders().getFirst(GatewayIdentityHeaders.TENANT_ID);
+        if (tenantId == null || tenantId.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.valueOf(tenantId);
+        } catch (NumberFormatException ex) {
+            throw new IllegalArgumentException("X-Tenant-Id must be a number", ex);
+        }
+    }
+
     /**
      * 将当前请求标记为未认证。
      *
      * @param exchange 当前请求交换对象
      * @return 401 响应完成信号
      */
-    private Mono<Void> unauthorized(ServerWebExchange exchange) {
-        exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
-        return exchange.getResponse().setComplete();
+    private Mono<Void> unauthorized(ServerWebExchange exchange, RuntimeException failure) {
+        return publish(exchange, SecurityAuditFailure.TOKEN_INVALID, null, null, failure.getMessage())
+                .then(securityErrorResponseWriter.write(exchange, SecurityAuditFailure.TOKEN_INVALID));
     }
+
+    /**
+     * 将 IAM JWKS Endpoint 不可用转换为认证基础设施不可用响应。
+     *
+     * @param exchange 当前请求交换对象
+     * @return 503 响应完成信号
+     */
+    private Mono<Void> serviceUnavailable(ServerWebExchange exchange, RuntimeException failure) {
+        return publish(exchange, SecurityAuditFailure.JWKS_UNAVAILABLE, null, null, failure.getMessage())
+                .then(securityErrorResponseWriter.write(exchange, SecurityAuditFailure.JWKS_UNAVAILABLE));
+    }
+
+    private Mono<Void> forbiddenTenantContext(
+            ServerWebExchange exchange,
+            CurrentUser currentUser,
+            Long requestedTenantId,
+            String message) {
+        return publish(
+                exchange,
+                SecurityAuditFailure.TENANT_CONTEXT_INVALID,
+                currentUser,
+                requestedTenantId,
+                message)
+                .then(securityErrorResponseWriter.write(exchange, SecurityAuditFailure.TENANT_CONTEXT_INVALID));
+    }
+
+    private Mono<Void> publish(
+            ServerWebExchange exchange,
+            SecurityAuditFailure failure,
+            CurrentUser currentUser,
+            Long requestedTenantId,
+            String message) {
+        if (securityAuditReporter == null) {
+            return Mono.empty();
+        }
+        return securityAuditReporter.publish(exchange, failure, currentUser, requestedTenantId, message);
+    }
+
 }

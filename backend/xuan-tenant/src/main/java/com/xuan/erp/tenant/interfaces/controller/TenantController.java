@@ -45,7 +45,7 @@ public class TenantController {
      * 分页查询未删除的租户列表。
      */
     @Operation(summary = "分页查询租户列表", description = "分页查询所有未逻辑删除的租户主档")
-    @PreAuthorize("hasAuthority('tenant:view')")
+    @PreAuthorize("@xuanPermission.has('tenant:view')")
     @GetMapping
     public ApiResponse<PageResult<TenantResponse>> listTenants(
             @RequestParam(value = "pageNum", defaultValue = "1") @Min(value = 1, message = "页码必须大于 0") long pageNum,
@@ -63,7 +63,7 @@ public class TenantController {
      * 根据租户 ID 查询单个租户详情。
      */
     @Operation(summary = "查询租户详情", description = "根据租户 ID 查询单个租户主档详情")
-    @PreAuthorize("hasAuthority('tenant:view')")
+    @PreAuthorize("@xuanPermission.has('tenant:view')")
     @GetMapping("/{tenantId}")
     public ApiResponse<TenantResponse> getTenant(@PathVariable("tenantId") Long tenantId) {
         return ApiResponse.success(TenantAssembler.toResponse(tenantApplicationService.getTenant(tenantId)));
@@ -73,7 +73,7 @@ public class TenantController {
      * 创建新租户，并初始化为开通中的租户状态。
      */
     @Operation(summary = "创建租户", description = "创建新租户，并初始化为开通中的租户状态")
-    @PreAuthorize("hasAuthority('tenant:create')")
+    @PreAuthorize("@xuanPermission.has('tenant:create')")
     @PostMapping
     public ApiResponse<TenantResponse> createTenant(@Valid @RequestBody CreateTenantRequest request) {
         return ApiResponse.success(TenantAssembler.toResponse(tenantApplicationService.createTenant(TenantAssembler.toCommand(request))));
@@ -83,7 +83,7 @@ public class TenantController {
      * 修改租户基础信息，例如租户名称、联系人和备注。
      */
     @Operation(summary = "修改租户", description = "修改租户名称、联系人、联系电话和备注")
-    @PreAuthorize("hasAuthority('tenant:update')")
+    @PreAuthorize("@xuanPermission.has('tenant:update')")
     @PutMapping("/{tenantId}")
     public ApiResponse<TenantResponse> updateTenant(@PathVariable("tenantId") Long tenantId, @Valid @RequestBody UpdateTenantRequest request) {
         return ApiResponse.success(TenantAssembler.toResponse(tenantApplicationService.updateTenant(tenantId, TenantAssembler.toCommand(request))));
@@ -93,7 +93,7 @@ public class TenantController {
      * 启用指定租户，并记录状态变更原因和操作人。
      */
     @Operation(summary = "启用租户", description = "启用指定租户，并记录状态变更原因和操作人")
-    @PreAuthorize("hasAuthority('tenant:lifecycle')")
+    @PreAuthorize("@xuanPermission.has('tenant:lifecycle')")
     @PostMapping("/{tenantId}/enable")
     public ApiResponse<TenantResponse> enableTenant(@PathVariable("tenantId") Long tenantId, @Valid @RequestBody ChangeTenantStatusRequest request) {
         return ApiResponse.success(TenantAssembler.toResponse(tenantApplicationService.enableTenant(tenantId, TenantAssembler.toCommand(request))));
@@ -103,7 +103,7 @@ public class TenantController {
      * 停用指定租户，并要求记录停用原因。
      */
     @Operation(summary = "停用租户", description = "停用指定租户，并要求记录停用原因")
-    @PreAuthorize("hasAuthority('tenant:lifecycle')")
+    @PreAuthorize("@xuanPermission.has('tenant:lifecycle')")
     @PostMapping("/{tenantId}/disable")
     public ApiResponse<TenantResponse> disableTenant(@PathVariable("tenantId") Long tenantId, @Valid @RequestBody ChangeTenantStatusRequest request) {
         return ApiResponse.success(TenantAssembler.toResponse(tenantApplicationService.disableTenant(tenantId, TenantAssembler.toCommand(request))));
@@ -113,7 +113,7 @@ public class TenantController {
      * 软删除指定租户，并要求记录删除原因。
      */
     @Operation(summary = "删除租户", description = "软删除指定租户，并要求记录删除原因")
-    @PreAuthorize("hasAuthority('tenant:delete')")
+    @PreAuthorize("@xuanPermission.has('tenant:delete')")
     @DeleteMapping("/{tenantId}")
     public ApiResponse<Void> deleteTenant(@PathVariable("tenantId") Long tenantId, @Valid @RequestBody DeleteRequest request) {
         tenantApplicationService.deleteTenant(tenantId, TenantAssembler.toCommand(request));

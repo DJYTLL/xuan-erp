@@ -9,6 +9,6 @@ public record CurrentUser(Long userId, Long tenantId, String username, Set<Strin
     }
 
     public boolean hasPermission(String permission) {
-        return permissions != null && permissions.contains(permission);
+        return permissions != null && (permissions.contains("*") || permissions.contains(permission));
     }
 }

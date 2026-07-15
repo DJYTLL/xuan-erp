@@ -44,12 +44,31 @@ public class GatewaySecurityProperties {
     private String iamServiceName = "xuan-iam";
 
     /**
+     * 匿名放行路径。
+     *
+     * <p>这些路径会在 Gateway Security 链路中直接 permitAll，适合健康检查、
+     * 登录续期入口、JWKS、Swagger UI 和 OpenAPI 聚合文档等非业务资源。</p>
+     */
+    private List<String> publicPaths = List.of(
+            "/actuator/health",
+            "/actuator/health/**",
+            "/actuator/info",
+            "/api/iam/auth/login",
+            "/api/iam/auth/refresh",
+            "/.well-known/jwks.json");
+
+    /**
      * 网关入口 CORS 配置。
      *
      * <p>该配置会接入 WebFlux Security 链路，确保浏览器预检请求和实际
      * API 请求都能在认证前得到正确的跨域响应头。</p>
      */
     private Cors cors = new Cors();
+
+    /**
+     * 网关侧安全审计配置。
+     */
+    private SecurityAudit securityAudit = new SecurityAudit();
 
     /**
      * 返回是否启用网关认证。
@@ -124,6 +143,24 @@ public class GatewaySecurityProperties {
     }
 
     /**
+     * 返回匿名放行路径。
+     *
+     * @return Gateway Security permitAll 路径
+     */
+    public List<String> getPublicPaths() {
+        return publicPaths;
+    }
+
+    /**
+     * 设置匿名放行路径。
+     *
+     * @param publicPaths Gateway Security permitAll 路径
+     */
+    public void setPublicPaths(List<String> publicPaths) {
+        this.publicPaths = publicPaths == null ? List.of() : publicPaths;
+    }
+
+    /**
      * 返回网关 CORS 配置。
      *
      * @return CORS 配置
@@ -139,6 +176,14 @@ public class GatewaySecurityProperties {
      */
     public void setCors(Cors cors) {
         this.cors = cors;
+    }
+
+    public SecurityAudit getSecurityAudit() {
+        return securityAudit;
+    }
+
+    public void setSecurityAudit(SecurityAudit securityAudit) {
+        this.securityAudit = securityAudit;
     }
 
     /**
@@ -222,6 +267,119 @@ public class GatewaySecurityProperties {
 
         public void setMaxAge(long maxAge) {
             this.maxAge = maxAge;
+        }
+    }
+
+    /**
+     * 网关安全异常审计配置项。
+     */
+    public static class SecurityAudit {
+
+        /**
+         * 是否启用网关侧安全审计。
+         */
+        private boolean enabled = true;
+
+        /**
+         * 审计服务在注册中心中的服务名。
+         */
+        private String auditServiceName = "xuan-audit";
+
+        /**
+         * 审计写入后台线程数。
+         */
+        private int poolSize = 2;
+
+        /**
+         * 审计写入 HTTP 超时时间，单位秒。
+         */
+        private long writeTimeoutSeconds = 2;
+
+        /**
+         * 无法从请求或 token 中解析租户时使用的平台系统租户 ID。
+         */
+        private Long systemTenantId = 0L;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getAuditServiceName() {
+            return auditServiceName;
+        }
+
+        public void setAuditServiceName(String auditServiceName) {
+            this.auditServiceName = auditServiceName;
+        }
+
+        public int getPoolSize() {
+            return poolSize;
+        }
+
+        public void setPoolSize(int poolSize) {
+            this.poolSize = poolSize;
+        }
+
+        public long getWriteTimeoutSeconds() {
+            return writeTimeoutSeconds;
+        }
+
+        public void setWriteTimeoutSeconds(long writeTimeoutSeconds) {
+            this.writeTimeoutSeconds = writeTimeoutSeconds;
+        }
+
+        public Long getSystemTenantId() {
+            return systemTenantId;
+        }
+
+        public void setSystemTenantId(Long systemTenantId) {
+            this.systemTenantId = systemTenantId;
+        }
+    }
+
+    /**
+     * 网关侧权限规则。
+     */
+    private List<PermissionRule> permissionRules = List.of();
+
+    public List<PermissionRule> getPermissionRules() {
+        return permissionRules;
+    }
+
+    public void setPermissionRules(List<PermissionRule> permissionRules) {
+        this.permissionRules = permissionRules == null ? List.of() : permissionRules;
+    }
+
+    public static class PermissionRule {
+
+        /**
+         * 需要保护的路径表达式。
+         */
+        private List<String> paths = List.of();
+
+        /**
+         * 访问这些路径需要的权限码。
+         */
+        private String authority;
+
+        public List<String> getPaths() {
+            return paths;
+        }
+
+        public void setPaths(List<String> paths) {
+            this.paths = paths == null ? List.of() : paths;
+        }
+
+        public String getAuthority() {
+            return authority;
+        }
+
+        public void setAuthority(String authority) {
+            this.authority = authority;
         }
     }
 }

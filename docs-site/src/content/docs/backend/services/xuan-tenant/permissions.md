@@ -39,6 +39,7 @@ title: "xuan-tenant 权限文档"
 | `tenant-config:manage` | 维护配置 | 当前聚合配置创建、修改和删除写操作，语义上对应统一模板里的配置编辑能力 |
 | `tenant-provision:view` | 查询初始化 | 查看租户初始化任务、步骤、失败原因和重试记录 |
 | `tenant-provision:manage` | 管理初始化 | 面向运维动作，只用于重试失败初始化步骤、处理死信 Outbox 事件和人工补偿，不承担创建租户或发起编排入口职责 |
+| `tenant-provision:callback` | 初始化回执 | IAM 和业务服务回写初始化步骤成功或失败结果，不授予普通租户管理员 |
 | `tenant:export` | 导出 | 导出租户、套餐、域名、联系人、配置或初始化记录，按需启用 |
 
 ## 列权限
@@ -57,4 +58,4 @@ title: "xuan-tenant 权限文档"
 - 部署前由受控脚本或 migration 同步到 `xuan-iam`。
 - 服务启动时只允许做本地清单自检和告警，不建议直接写 IAM 生产库。
 - 新增页面必须同时补菜单、路由 meta、接口权限、列权限映射和回归测试。
-- 权限职责必须分层：`tenant:create` 负责创建租户并异步启动首期编排，`tenant-provision:view` 负责查看任务/步骤/失败原因，`tenant-provision:manage` 只负责重试、死信和人工补偿等运维动作。
+- 权限职责必须分层：`tenant:create` 负责创建租户并异步启动首期编排，`tenant-provision:view` 负责查看任务/步骤/失败原因，`tenant-provision:manage` 只负责重试、死信和人工补偿等运维动作，`tenant-provision:callback` 只负责服务回写初始化结果。

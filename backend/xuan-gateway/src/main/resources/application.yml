@@ -17,7 +17,19 @@ spring:
             - id: xuan-iam
               uri: lb://xuan-iam
               predicates:
-                - Path=/api/iam/**,/.well-known/jwks.json
+                - Path=/api/iam/**,/.well-known/jwks.json,/v3/api-docs/iam
+              filters:
+                - RewritePath=/v3/api-docs/iam,/v3/api-docs
+            - id: xuan-audit
+              uri: lb://xuan-audit
+              predicates:
+                - Path=/api/audit/**
+            - id: xuan-tenant
+              uri: lb://xuan-tenant
+              predicates:
+                - Path=/api/tenants,/api/tenants/**,/api/tenant-plans,/api/tenant-plans/**,/api/tenant-plan-assignments,/api/tenant-plan-assignments/**,/api/tenant-provision-tasks/**,/api/tenant-outbox-events/**,/v3/api-docs/tenant
+              filters:
+                - RewritePath=/v3/api-docs/tenant,/v3/api-docs
 
 management:
   endpoints:
@@ -32,6 +44,18 @@ xuan:
       issuer: xuan-iam
       audience: xuan-gateway
       iam-service-name: xuan-iam
+      public-paths:
+        - /actuator/health
+        - /actuator/health/**
+        - /actuator/info
+        - /v3/api-docs
+        - /v3/api-docs/**
+        - /swagger-ui.html
+        - /swagger-ui/**
+        - /webjars/**
+        - /api/iam/auth/login
+        - /api/iam/auth/refresh
+        - /.well-known/jwks.json
       cors:
         allowed-origins:
           - http://127.0.0.1:5173

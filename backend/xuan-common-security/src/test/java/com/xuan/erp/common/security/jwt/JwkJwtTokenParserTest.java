@@ -12,7 +12,10 @@ import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.PlainJWT;
 import com.nimbusds.jwt.SignedJWT;
 import com.xuan.erp.common.security.CurrentUser;
+import com.xuan.erp.common.security.jwt.jwk.CachingJwkKeyProvider;
+import com.xuan.erp.common.security.jwt.jwk.JwkSetFetcher;
 import org.junit.jupiter.api.Test;
+import reactor.core.publisher.Mono;
 
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -182,6 +185,20 @@ class JwkJwtTokenParserTest {
         assertThat(exception.reason()).isEqualTo(JwtValidationException.Reason.SIGNATURE_INVALID);
     }
 
+    // 测试解析器可以通过缓存 Provider 按 kid 动态获取 JWK，业务服务自动配置不需要启动时固定一份 JWK Set。
+    @Test
+    void parsesTokenUsingCachingJwkKeyProvider() throws Exception {
+        RSAKey rsaKey = rsaKey("kid-1");
+        CachingJwkKeyProvider provider = new CachingJwkKeyProvider(new StaticJwkSetFetcher(rsaKey));
+        JwkJwtTokenParser parser = new JwkJwtTokenParser(provider, ISSUER, AUDIENCE, CLOCK);
+
+        CurrentUser currentUser = parser.parseAccessToken(signedToken(rsaKey, JWSAlgorithm.RS256, "kid-1",
+                NOW.plusSeconds(300), ISSUER, List.of(AUDIENCE), TokenType.ACCESS.name()));
+
+        assertThat(currentUser.username()).isEqualTo("zhangsan");
+        assertThat(currentUser.permissions()).contains("sales:view");
+    }
+
     private static JwkJwtTokenParser parser(RSAKey rsaKey) {
         return new JwkJwtTokenParser(new JWKSet(rsaKey.toPublicJWK()), ISSUER, AUDIENCE, CLOCK);
     }
@@ -206,6 +223,14 @@ class JwkJwtTokenParserTest {
     @FunctionalInterface
     private interface ThrowingOperation {
         void run() throws Exception;
+    }
+
+    private record StaticJwkSetFetcher(RSAKey rsaKey) implements JwkSetFetcher {
+
+        @Override
+        public Mono<JWKSet> fetch() {
+            return Mono.just(new JWKSet(rsaKey.toPublicJWK()));
+        }
     }
 
     private static String signedToken(

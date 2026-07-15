@@ -34,6 +34,11 @@ public class XuanRocketMqProperties {
     private final Producer producer = new Producer();
 
     /**
+     * 消费者基础配置。
+     */
+    private final Consumer consumer = new Consumer();
+
+    /**
      * 统一 topic 配置。
      */
     private final Topics topics = new Topics();
@@ -72,6 +77,10 @@ public class XuanRocketMqProperties {
 
     public Producer getProducer() {
         return producer;
+    }
+
+    public Consumer getConsumer() {
+        return consumer;
     }
 
     public Topics getTopics() {
@@ -120,6 +129,25 @@ public class XuanRocketMqProperties {
 
         public void setMaxMessageSize(Integer maxMessageSize) {
             this.maxMessageSize = maxMessageSize;
+        }
+    }
+
+    /**
+     * RocketMQ 消费者公共配置。
+     */
+    public static class Consumer {
+
+        /**
+         * 是否随 Spring 上下文自动启动消费者。
+         */
+        private boolean autoStartup = true;
+
+        public boolean isAutoStartup() {
+            return autoStartup;
+        }
+
+        public void setAutoStartup(boolean autoStartup) {
+            this.autoStartup = autoStartup;
         }
     }
 

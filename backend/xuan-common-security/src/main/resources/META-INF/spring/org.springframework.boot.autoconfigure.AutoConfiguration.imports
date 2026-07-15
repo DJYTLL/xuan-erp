@@ -1,1 +1,3 @@
 com.xuan.erp.common.security.autoconfigure.XuanServletSecurityAutoConfiguration
+com.xuan.erp.common.security.autoconfigure.XuanJwtSecurityAutoConfiguration
+com.xuan.erp.common.security.autoconfigure.XuanPermissionSecurityAutoConfiguration

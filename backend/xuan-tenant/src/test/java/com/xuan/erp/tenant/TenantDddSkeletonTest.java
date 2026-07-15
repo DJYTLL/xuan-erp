@@ -46,11 +46,13 @@ import com.xuan.erp.tenant.interfaces.controller.TenantController;
 import com.xuan.erp.tenant.interfaces.controller.TenantConfigController;
 import com.xuan.erp.tenant.interfaces.controller.TenantContactController;
 import com.xuan.erp.tenant.interfaces.controller.TenantDomainController;
+import com.xuan.erp.tenant.interfaces.controller.TenantInternalStatusController;
 import com.xuan.erp.tenant.interfaces.controller.TenantPlanAssignmentController;
 import com.xuan.erp.tenant.interfaces.controller.TenantPlanController;
 import com.xuan.erp.tenant.interfaces.dto.TenantConfigResponse;
 import com.xuan.erp.tenant.interfaces.dto.TenantContactResponse;
 import com.xuan.erp.tenant.interfaces.dto.TenantDomainResponse;
+import com.xuan.erp.tenant.interfaces.dto.TenantInternalStatusResponse;
 import com.xuan.erp.tenant.interfaces.dto.TenantPlanAssignmentResponse;
 import com.xuan.erp.tenant.interfaces.dto.TenantPlanResponse;
 import com.xuan.erp.tenant.interfaces.dto.TenantResponse;
@@ -120,6 +122,7 @@ class TenantDddSkeletonTest {
                 TenantConfigController.class,
                 TenantContactController.class,
                 TenantDomainController.class,
+                TenantInternalStatusController.class,
                 TenantPlanAssignmentController.class,
                 TenantPlanController.class,
                 TenantAssembler.class,
@@ -130,12 +133,13 @@ class TenantDddSkeletonTest {
                 TenantConfigResponse.class,
                 TenantContactResponse.class,
                 TenantDomainResponse.class,
+                TenantInternalStatusResponse.class,
                 TenantPlanAssignmentResponse.class,
                 TenantPlanResponse.class,
                 TenantResponse.class
         );
 
-        assertEquals(34, ports.size());
+        assertEquals(36, ports.size());
     }
 
     @Test

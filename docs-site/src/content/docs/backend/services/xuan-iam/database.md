@@ -10,15 +10,15 @@ title: "xuan-iam 数据库结构"
 | --- | --- |
 | 数据库 | `xuan_iam` |
 | migration 目录 | `xuan-iam/src/main/resources/db/migration/` |
-| 当前 migration 最新版本 | `V2` |
-| 本次新增 migration | `V2__add_iam_tenant_bootstrapped_outbox.sql` |
+| 当前 migration 最新版本 | `V4` |
+| 本次新增 migration | `V4__align_iam_permissions_with_standard_template.sql` |
 | 数据所有权 | 只允许 `xuan-iam` 直接写入用户、角色、权限、菜单和列权限授权数据 |
 
 ## migration 规则
 
 涉及数据库结构、字段、索引、约束、初始化数据或 Flyway 脚本时，必须先扫描本服务 `db/migration` 目录，确认当前最高版本号，再追加新 migration。禁止跳号、复用版本号、修改历史 migration。
 
-本次扫描结果：修改前本服务最高版本为 `V1__init_iam_database.sql`，新增 `V2__add_iam_tenant_bootstrapped_outbox.sql`，不存在版本冲突。
+本次扫描结果：修改前本服务最高版本为 `V3__extend_iam_tenant_bootstrap_admin_account.sql`，新增 `V4__align_iam_permissions_with_standard_template.sql`，不存在版本冲突。
 
 ## 设计说明
 
@@ -32,6 +32,8 @@ title: "xuan-iam 数据库结构"
 - 用户、角色、用户租户关系和授权快照等租户内数据包含 `tenant_id`；菜单和权限定义是全局定义，不带 `tenant_id`。
 - 生产租户菜单授权由 `xuan-tenant` 开通流程传入真实 `tenantId` 后触发 `bootstrap_iam_tenant(p_tenant_id bigint, p_requested_by varchar)` 完成。V1 不再硬编码 `tenant_id = 1`。
 - V2 新增 `iam_outbox_event`，并扩展 `bootstrap_iam_tenant` 在本地事务内写入 `IamTenantBootstrapped` outbox 事件；重复触发时通过确定性 `event_id` 保持事件幂等。
+- V3 扩展租户初始化入口，支持创建租户管理员账号，并初始化平台 `super_admin`。
+- V4 将旧的 `read/manage` 权限目录对齐到统一的 `view/create/update/delete` 模板，并刷新 `super_admin` 为 `* + 当前全部有效权限`。
 
 ## 核心表清单
 
@@ -58,8 +60,8 @@ title: "xuan-iam 数据库结构"
 
 | 表名 | 初始化条目 | 说明 |
 | --- | --- | --- |
-| `iam_permission` | `tenant:read`, `tenant:manage`, `iam:view`, `iam:create`, `iam:update`, `iam:delete`, `product:read`, `product:manage`, `finance:read` 等基础权限 | 全局权限清单，业务服务后续可通过同步机制继续补充。 |
-| `iam_menu` | `workbench`, `product`, `party`, `warehouse`, `inventory`, `sales`, `procurement`, `finance`, `report`, `system` | 全局一级菜单，权限和租户授权可在此基础上扩展。 |
+| `iam_permission` | `tenant:view/create/update/delete/lifecycle`, `tenant-config:view/manage`, `iam:view/create/update/delete`, `product:view/create/update/delete`, `procurement:view/create/update/delete` 等标准权限 | 全局权限清单，业务服务后续可通过同步机制继续补充。V4 后主资源默认使用统一 `view/create/update/delete` 模板。 |
+| `iam_menu` | `workbench`, `product`, `party`, `warehouse`, `inventory`, `sales`, `procurement`, `finance`, `report`, `system` | 全局一级菜单，权限和租户授权可在此基础上扩展。V4 后菜单入口权限使用对应服务的 `*:view`。 |
 | `iam_tenant_menu` | V1 提供 `bootstrap_iam_tenant(p_tenant_id bigint, p_requested_by varchar)` | 生产租户菜单授权由 `xuan-tenant` 开通流程传入真实 `tenantId` 后幂等初始化。 |
 | `iam_tenant_bootstrap_task` | `iam:tenant:{tenantId}:bootstrap:v1` | 记录租户 IAM 初始化结果，支持重复触发时按幂等键识别。 |
 | `iam_outbox_event` | `IamTenantBootstrapped` | V2 由 `bootstrap_iam_tenant` 写入，事件 Topic 为 `iam.tenant.bootstrapped`。 |

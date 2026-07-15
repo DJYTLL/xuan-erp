@@ -16,6 +16,11 @@
     <dependencies>
         <dependency>
             <groupId>com.xuan.erp</groupId>
+            <artifactId>xuan-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.xuan.erp</groupId>
             <artifactId>xuan-common-web</artifactId>
             <version>${project.version}</version>
         </dependency>

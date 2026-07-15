@@ -4,18 +4,26 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xuan.erp.common.api.PageResult;
 import com.xuan.erp.common.exception.BusinessException;
+import com.xuan.erp.common.security.CurrentUserHolder;
 import com.xuan.erp.tenant.application.command.ChangeTenantStatusCommand;
 import com.xuan.erp.tenant.application.command.CreateTenantCommand;
 import com.xuan.erp.tenant.application.command.DeleteTenantCommand;
 import com.xuan.erp.tenant.application.command.TenantAdminBootstrapCommand;
 import com.xuan.erp.tenant.application.command.UpdateTenantCommand;
 import com.xuan.erp.tenant.application.query.TenantDetailView;
+import com.xuan.erp.tenant.application.query.TenantInternalStatusView;
 import com.xuan.erp.tenant.domain.model.Tenant;
 import com.xuan.erp.tenant.domain.model.TenantDetailSupplement;
+import com.xuan.erp.tenant.domain.model.TenantPlan;
+import com.xuan.erp.tenant.domain.model.TenantPlanAssignment;
 import com.xuan.erp.tenant.domain.model.TenantProvisionTask;
 import com.xuan.erp.tenant.domain.model.TenantStatusHistory;
+import com.xuan.erp.tenant.domain.model.type.PlanAssignmentStatus;
 import com.xuan.erp.tenant.domain.model.type.ProvisionTaskStatus;
+import com.xuan.erp.tenant.domain.model.type.TenantPlanStatus;
 import com.xuan.erp.tenant.domain.model.type.TenantStatus;
+import com.xuan.erp.tenant.domain.repository.TenantPlanAssignmentRepository;
+import com.xuan.erp.tenant.domain.repository.TenantPlanRepository;
 import com.xuan.erp.tenant.domain.repository.TenantProvisionTaskRepository;
 import com.xuan.erp.tenant.domain.repository.TenantRepository;
 import com.xuan.erp.tenant.domain.repository.TenantStatusHistoryRepository;
@@ -40,6 +48,8 @@ public class TenantApplicationService {
     private final TenantStatusHistoryRepository statusHistoryRepository;
     private final TenantProvisionTaskRepository provisionTaskRepository;
     private final TenantProvisionApplicationService tenantProvisionApplicationService;
+    private final TenantPlanRepository tenantPlanRepository;
+    private final TenantPlanAssignmentRepository tenantPlanAssignmentRepository;
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -59,7 +69,17 @@ public class TenantApplicationService {
             TenantStatusHistoryRepository statusHistoryRepository,
             @Nullable TenantProvisionTaskRepository provisionTaskRepository,
             @Nullable TenantProvisionApplicationService tenantProvisionApplicationService) {
-        this(tenantRepository, statusHistoryRepository, provisionTaskRepository, tenantProvisionApplicationService, null);
+        this(tenantRepository, statusHistoryRepository, provisionTaskRepository, tenantProvisionApplicationService, null, null, null);
+    }
+
+    public TenantApplicationService(
+            TenantRepository tenantRepository,
+            TenantStatusHistoryRepository statusHistoryRepository,
+            @Nullable TenantProvisionTaskRepository provisionTaskRepository,
+            @Nullable TenantProvisionApplicationService tenantProvisionApplicationService,
+            @Nullable PasswordEncoder passwordEncoder) {
+        this(tenantRepository, statusHistoryRepository, provisionTaskRepository, tenantProvisionApplicationService,
+                passwordEncoder, null, null);
     }
 
     @Autowired
@@ -68,11 +88,15 @@ public class TenantApplicationService {
             TenantStatusHistoryRepository statusHistoryRepository,
             @Nullable TenantProvisionTaskRepository provisionTaskRepository,
             @Nullable TenantProvisionApplicationService tenantProvisionApplicationService,
-            @Nullable PasswordEncoder passwordEncoder) {
+            @Nullable PasswordEncoder passwordEncoder,
+            @Nullable TenantPlanRepository tenantPlanRepository,
+            @Nullable TenantPlanAssignmentRepository tenantPlanAssignmentRepository) {
         this.tenantRepository = tenantRepository;
         this.statusHistoryRepository = statusHistoryRepository;
         this.provisionTaskRepository = provisionTaskRepository;
         this.tenantProvisionApplicationService = tenantProvisionApplicationService;
+        this.tenantPlanRepository = tenantPlanRepository;
+        this.tenantPlanAssignmentRepository = tenantPlanAssignmentRepository;
         this.passwordEncoder = passwordEncoder == null ? PasswordEncoderFactories.createDelegatingPasswordEncoder() : passwordEncoder;
     }
 
@@ -81,13 +105,25 @@ public class TenantApplicationService {
         return toDetailView(tenant, tenantRepository.getDetailSupplement(tenantId));
     }
 
+    public TenantInternalStatusView getTenantInternalStatus(Long tenantId) {
+        TenantDetailView detail = getTenant(tenantId);
+        String deniedReason = loginDeniedReason(detail, OffsetDateTime.now());
+        return new TenantInternalStatusView(
+                detail.id(),
+                detail.code(),
+                detail.status(),
+                deniedReason == null,
+                deniedReason,
+                detail.currentPlanExpiresAt());
+    }
+
     public TenantDetailView createTenant(CreateTenantCommand command) {
         String normalizedCode = Tenant.normalizeCode(command.code());
         String taskKey = "tenant:create:" + normalizedCode;
-        String operator = "system";
+        String operator = CurrentUserHolder.usernameOrSystem();
         return executeIdempotent(taskKey, command.idempotencyKey(), 0L, operator,
                 () -> tenantRepository.findActiveByNormalizedCode(normalizedCode)
-                        .map(this::toDetailView)
+                        .map(this::toDetailViewWithSupplement)
                         .orElseThrow(() -> new BusinessException("TENANT_NOT_FOUND", "租户不存在")),
                 () -> {
                     tenantRepository.findActiveByNormalizedCode(normalizedCode)
@@ -116,16 +152,27 @@ public class TenantApplicationService {
                             null,
                             null
                     ));
+                    assignInitialPlan(saved.id(), command.planId(), command.planExpiresAt(), operator, now);
                     appendHistory(saved.id(), null, saved.status(), "CREATE", "租户创建", operator);
                     startProvisioning(saved.id(), taskKey, command.idempotencyKey(), operator, command);
                     return saved;
                 });
     }
 
+    private String loginDeniedReason(TenantDetailView detail, OffsetDateTime now) {
+        if (detail.status() != TenantStatus.PROVISIONED && detail.status() != TenantStatus.ENABLED) {
+            return "租户状态不允许登录: " + detail.status().code();
+        }
+        if (detail.currentPlanExpiresAt() != null && !detail.currentPlanExpiresAt().isAfter(now)) {
+            return "租户套餐已到期";
+        }
+        return null;
+    }
+
     public TenantDetailView updateTenant(Long tenantId, UpdateTenantCommand command) {
-        String operator = operator("system");
+        String operator = CurrentUserHolder.usernameOrSystem();
         return executeIdempotent("tenant:update:" + tenantId, command.idempotencyKey(), tenantId, operator,
-                () -> toDetailView(requireTenant(tenantId)),
+                () -> getTenant(tenantId),
                 () -> tenantRepository.save(requireTenant(tenantId).updateProfile(
                         command.name(),
                         command.contactName(),
@@ -137,7 +184,7 @@ public class TenantApplicationService {
 
     public List<TenantDetailView> listTenants() {
         return tenantRepository.findActiveTenants().stream()
-                .map(this::toDetailView)
+                .map(this::toDetailViewWithSupplement)
                 .toList();
     }
 
@@ -146,7 +193,7 @@ public class TenantApplicationService {
         long normalizedPageSize = Math.max(pageSize, 1);
         long offset = (normalizedPageNum - 1) * normalizedPageSize;
         List<TenantDetailView> records = tenantRepository.findActiveTenants(offset, normalizedPageSize).stream()
-                .map(this::toDetailView)
+                .map(this::toDetailViewWithSupplement)
                 .toList();
         return new PageResult<>(records, tenantRepository.countActiveTenants(), normalizedPageNum, normalizedPageSize);
     }
@@ -155,7 +202,7 @@ public class TenantApplicationService {
         String operator = operator(command.operator());
         String reason = requireText(command.reason(), "启用原因不能为空");
         return executeIdempotent("tenant:enable:" + tenantId, command.idempotencyKey(), tenantId, operator,
-                () -> toDetailView(requireTenant(tenantId)),
+                () -> getTenant(tenantId),
                 () -> {
                     Tenant tenant = requireTenant(tenantId);
                     Tenant saved = tenantRepository.save(tenant.enable(reason, operator, OffsetDateTime.now()));
@@ -168,7 +215,7 @@ public class TenantApplicationService {
         String operator = operator(command.operator());
         String reason = requireText(command.reason(), "停用原因不能为空");
         return executeIdempotent("tenant:disable:" + tenantId, command.idempotencyKey(), tenantId, operator,
-                () -> toDetailView(requireTenant(tenantId)),
+                () -> getTenant(tenantId),
                 () -> {
                     Tenant tenant = requireTenant(tenantId);
                     Tenant saved = tenantRepository.save(tenant.disable(reason, operator, OffsetDateTime.now()));
@@ -202,7 +249,7 @@ public class TenantApplicationService {
             Supplier<Tenant> action) {
         if (provisionTaskRepository == null || idempotencyKey == null || idempotencyKey.isBlank()) {
             Tenant result = action.get();
-            return result == null ? null : toDetailView(result);
+            return result == null ? null : toDetailViewWithSupplement(result);
         }
 
         Optional<TenantProvisionTask> existing = provisionTaskRepository.findActiveByTaskKeyAndIdempotencyKey(taskKey, idempotencyKey.trim());
@@ -266,7 +313,7 @@ public class TenantApplicationService {
                     null,
                     null
             ));
-            return saved == null ? null : toDetailView(saved);
+            return saved == null ? null : toDetailViewWithSupplement(saved);
         } catch (RuntimeException error) {
             provisionTaskRepository.save(new TenantProvisionTask(
                     runningTask.id(),
@@ -321,15 +368,21 @@ public class TenantApplicationService {
                 tenant.provisionedAt(),
                 tenant.enabledAt(),
                 tenant.remark(),
+                supplement.currentPlanAssignmentId(),
                 supplement.currentPlanId(),
                 supplement.currentPlanCode(),
                 supplement.currentPlanName(),
+                supplement.currentPlanExpiresAt(),
                 supplement.primaryDomainId(),
                 supplement.primaryDomain(),
                 supplement.statusHistoryCount(),
                 supplement.latestStatusChangeType(),
                 supplement.latestStatusChangedAt()
         );
+    }
+
+    private TenantDetailView toDetailViewWithSupplement(Tenant tenant) {
+        return toDetailView(tenant, tenantRepository.getDetailSupplement(tenant.id()));
     }
 
     private Tenant requireTenant(Long tenantId) {
@@ -356,6 +409,40 @@ public class TenantApplicationService {
         ));
     }
 
+    private void assignInitialPlan(Long tenantId, Long planId, OffsetDateTime planExpiresAt, String operator, OffsetDateTime now) {
+        if (planId == null) {
+            return;
+        }
+        if (tenantPlanRepository == null || tenantPlanAssignmentRepository == null) {
+            throw new BusinessException("TENANT_PLAN_ASSIGNMENT_NOT_CONFIGURED", "租户套餐分配未配置");
+        }
+        TenantPlan plan = tenantPlanRepository.findById(planId)
+                .orElseThrow(() -> new BusinessException("TENANT_PLAN_NOT_FOUND", "租户套餐不存在"));
+        if (plan.status() != TenantPlanStatus.ENABLED) {
+            throw new BusinessException("TENANT_PLAN_DISABLED", "租户套餐未启用");
+        }
+        tenantPlanAssignmentRepository.save(new TenantPlanAssignment(
+                null,
+                tenantId,
+                null,
+                plan.id(),
+                PlanAssignmentStatus.ACTIVE,
+                now,
+                planExpiresAt,
+                now,
+                operator,
+                "创建租户绑定套餐",
+                "CREATE_TENANT",
+                null,
+                operator,
+                now,
+                operator,
+                now,
+                null,
+                null,
+                null));
+    }
+
     private String requireText(String value, String message) {
         if (value == null || value.isBlank()) {
             throw new BusinessException("TENANT_INVALID_ARGUMENT", message);
@@ -364,7 +451,7 @@ public class TenantApplicationService {
     }
 
     private String operator(String operator) {
-        return operator == null || operator.isBlank() ? "system" : operator.trim();
+        return operator == null || operator.isBlank() ? CurrentUserHolder.usernameOrSystem() : operator.trim();
     }
 
     private String toJson(Map<String, Object> value) {

@@ -4,6 +4,8 @@ import com.xuan.erp.common.security.jwt.JwkJwtTokenParser;
 import com.xuan.erp.iam.infrastructure.security.IamBearerTokenAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -32,6 +34,7 @@ public class IamSecurityConfiguration {
     }
 
     @Bean
+    @Order(Ordered.HIGHEST_PRECEDENCE)
     SecurityFilterChain iamSecurityFilterChain(HttpSecurity http, IamBearerTokenAuthenticationFilter authenticationFilter) throws Exception {
         return http
                 .csrf(AbstractHttpConfigurer::disable)
@@ -52,7 +55,10 @@ public class IamSecurityConfiguration {
                                 "/actuator/health",
                                 "/actuator/health/**",
                                 "/actuator/info",
+                                "/error",
                                 "/api/iam/auth/login",
+                                "/api/iam/auth/refresh",
+                                "/api/iam/auth/logout",
                                 "/.well-known/jwks.json")
                         .permitAll()
                         .anyRequest().authenticated())

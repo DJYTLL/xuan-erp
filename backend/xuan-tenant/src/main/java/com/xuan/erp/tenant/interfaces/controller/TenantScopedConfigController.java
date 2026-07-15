@@ -35,7 +35,7 @@ public class TenantScopedConfigController {
     }
 
     @Operation(summary = "查询租户配置列表", description = "按租户 ID 分页查询租户配置")
-    @PreAuthorize("hasAuthority('tenant-config:view')")
+    @PreAuthorize("@xuanPermission.has('tenant-config:view')")
     @GetMapping
     public ApiResponse<PageResult<TenantConfigResponse>> listConfigs(
             @PathVariable("tenantId") @Min(value = 1, message = "租户 ID 必须大于 0") Long tenantId,
@@ -51,7 +51,7 @@ public class TenantScopedConfigController {
     }
 
     @Operation(summary = "修改租户配置", description = "按租户 ID 和配置键修改租户配置")
-    @PreAuthorize("hasAuthority('tenant-config:manage')")
+    @PreAuthorize("@xuanPermission.has('tenant-config:manage')")
     @PutMapping("/{configKey}")
     public ApiResponse<TenantConfigResponse> updateConfig(
             @PathVariable("tenantId") Long tenantId,

@@ -17,7 +17,22 @@ public interface IamPermissionPersistenceMapper {
     IamPermissionRecord findByCode(@Param("code") String code);
 
     /**
+     * 按权限主键查询有效权限记录。
+     */
+    IamPermissionRecord findById(@Param("id") Long id);
+
+    /**
      * 查询全部有效权限记录。
      */
     List<IamPermissionRecord> findActivePermissions();
+
+    /**
+     * 新增权限记录。
+     */
+    int insert(@Param("permission") IamPermissionRecord permission);
+
+    /**
+     * 更新权限记录。
+     */
+    int update(@Param("permission") IamPermissionRecord permission);
 }

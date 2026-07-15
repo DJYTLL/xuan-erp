@@ -1,23 +1,32 @@
 package com.xuan.erp.common.security.autoconfigure;
 
+import com.xuan.erp.common.security.servlet.GatewayIdentityAuthenticationFilter;
+import com.xuan.erp.common.security.jwt.BearerTokenResolver;
+import com.xuan.erp.common.security.jwt.JwkJwtTokenParser;
+import com.xuan.erp.common.security.servlet.BusinessJwtAuthenticationFilter;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
-import org.springframework.security.config.Customizer;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
 
 /**
  * Servlet Web 场景下的默认安全自动配置。
  */
-@AutoConfiguration(before = UserDetailsServiceAutoConfiguration.class)
+@AutoConfiguration(after = XuanJwtSecurityAutoConfiguration.class, before = UserDetailsServiceAutoConfiguration.class)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnClass({HttpSecurity.class, SecurityFilterChain.class})
 public class XuanServletSecurityAutoConfiguration {
@@ -27,9 +36,14 @@ public class XuanServletSecurityAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean(SecurityFilterChain.class)
-    SecurityFilterChain xuanServletSecurityFilterChain(HttpSecurity http) throws Exception {
-        return http
+    SecurityFilterChain xuanServletSecurityFilterChain(
+            HttpSecurity http,
+            ObjectProvider<BusinessJwtAuthenticationFilter> businessJwtAuthenticationFilter,
+            GatewayIdentityAuthenticationFilter gatewayIdentityAuthenticationFilter) throws Exception {
+        HttpSecurity security = http
                 .csrf(AbstractHttpConfigurer::disable)
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(
                                 "/v3/api-docs",
@@ -42,9 +56,51 @@ public class XuanServletSecurityAutoConfiguration {
                                 "/actuator/info")
                         .permitAll()
                         .anyRequest().authenticated())
-                .httpBasic(Customizer.withDefaults())
-                .formLogin(AbstractHttpConfigurer::disable)
-                .build();
+                .httpBasic(AbstractHttpConfigurer::disable)
+                .formLogin(AbstractHttpConfigurer::disable);
+
+        BusinessJwtAuthenticationFilter jwtFilter = businessJwtAuthenticationFilter.getIfAvailable();
+        if (jwtFilter == null) {
+            security.addFilterAfter(gatewayIdentityAuthenticationFilter, SecurityContextHolderFilter.class);
+        } else {
+            security.addFilterAfter(jwtFilter, SecurityContextHolderFilter.class)
+                    .addFilterAfter(gatewayIdentityAuthenticationFilter, BusinessJwtAuthenticationFilter.class);
+        }
+        return security.build();
+    }
+
+    @Bean
+    @ConditionalOnBean({BearerTokenResolver.class, JwkJwtTokenParser.class})
+    @ConditionalOnMissingBean(BusinessJwtAuthenticationFilter.class)
+    BusinessJwtAuthenticationFilter businessJwtAuthenticationFilter(
+            BearerTokenResolver bearerTokenResolver,
+            JwkJwtTokenParser jwtTokenParser) {
+        return new BusinessJwtAuthenticationFilter(bearerTokenResolver, jwtTokenParser);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(GatewayIdentityAuthenticationFilter.class)
+    GatewayIdentityAuthenticationFilter gatewayIdentityAuthenticationFilter() {
+        return new GatewayIdentityAuthenticationFilter();
+    }
+
+    @Bean
+    FilterRegistrationBean<GatewayIdentityAuthenticationFilter> gatewayIdentityAuthenticationFilterRegistration(
+            GatewayIdentityAuthenticationFilter gatewayIdentityAuthenticationFilter) {
+        FilterRegistrationBean<GatewayIdentityAuthenticationFilter> registration =
+                new FilterRegistrationBean<>(gatewayIdentityAuthenticationFilter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    @Bean
+    @ConditionalOnBean(BusinessJwtAuthenticationFilter.class)
+    FilterRegistrationBean<BusinessJwtAuthenticationFilter> businessJwtAuthenticationFilterRegistration(
+            BusinessJwtAuthenticationFilter businessJwtAuthenticationFilter) {
+        FilterRegistrationBean<BusinessJwtAuthenticationFilter> registration =
+                new FilterRegistrationBean<>(businessJwtAuthenticationFilter);
+        registration.setEnabled(false);
+        return registration;
     }
 
     /**

@@ -36,3 +36,18 @@ permissions:
     action: manage
     templateAction: edit
     note: 当前聚合租户配置创建、编辑和删除，后续可按统一模板受控细分
+  - code: tenant-plan:view
+    resource: tenant-plan
+    action: view
+    templateAction: view
+    note: 查看租户套餐、套餐详情和套餐分配记录
+  - code: tenant-plan:manage
+    resource: tenant-plan
+    action: manage
+    templateAction: edit
+    note: 创建、修改、启用、停用和删除租户套餐
+  - code: tenant-plan:assign
+    resource: tenant-plan-assignment
+    action: assign
+    templateAction: edit
+    note: 创建、修改和删除租户套餐分配关系

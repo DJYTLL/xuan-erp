@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xuan.erp.iam.infrastructure.persistence.mapper.IamRefreshTokenPersistenceMapper">
+
+    <resultMap id="IamRefreshTokenRecordMap" type="com.xuan.erp.iam.infrastructure.persistence.entity.IamRefreshTokenRecord">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.Long"/>
+            <arg column="user_id" javaType="java.lang.Long"/>
+            <arg column="token_hash" javaType="java.lang.String"/>
+            <arg column="token_family_id" javaType="java.lang.String"/>
+            <arg column="expires_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="revoked_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="replaced_by_token_hash" javaType="java.lang.String"/>
+            <arg column="last_used_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="audience_tenant_id" javaType="java.lang.Long"/>
+            <arg column="device_id" javaType="java.lang.String"/>
+            <arg column="ip_address" javaType="java.lang.String"/>
+            <arg column="user_agent" javaType="java.lang.String"/>
+            <arg column="created_by" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="updated_by" javaType="java.lang.String"/>
+            <arg column="updated_at" javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="IamRefreshTokenColumns">
+        id, tenant_id, user_id, token_hash, token_family_id, expires_at,
+        revoked_at, replaced_by_token_hash, last_used_at, audience_tenant_id,
+        device_id, ip_address, user_agent, created_by, created_at, updated_by, updated_at
+    </sql>
+
+    <select id="findByTokenHash" resultMap="IamRefreshTokenRecordMap">
+        SELECT <include refid="IamRefreshTokenColumns"/>
+        FROM iam_refresh_token
+        WHERE token_hash = #{tokenHash}
+        LIMIT 1
+    </select>
+
+    <select id="findById" resultMap="IamRefreshTokenRecordMap">
+        SELECT <include refid="IamRefreshTokenColumns"/>
+        FROM iam_refresh_token
+        WHERE id = #{id}
+    </select>
+
+    <insert id="insert">
+        INSERT INTO iam_refresh_token (
+            tenant_id, user_id, token_hash, token_family_id, expires_at,
+            revoked_at, replaced_by_token_hash, last_used_at, audience_tenant_id,
+            device_id, ip_address, user_agent, created_by, created_at, updated_by, updated_at
+        ) VALUES (
+            #{tenantId}, #{userId}, #{tokenHash}, #{tokenFamilyId}, #{expiresAt},
+            #{revokedAt}, #{replacedByTokenHash}, #{lastUsedAt}, #{audienceTenantId},
+            #{deviceId}, #{ipAddress}, #{userAgent}, #{createdBy}, #{createdAt}, #{updatedBy}, #{updatedAt}
+        )
+    </insert>
+
+    <update id="update">
+        UPDATE iam_refresh_token
+        SET tenant_id = #{tenantId},
+            user_id = #{userId},
+            token_hash = #{tokenHash},
+            token_family_id = #{tokenFamilyId},
+            expires_at = #{expiresAt},
+            revoked_at = #{revokedAt},
+            replaced_by_token_hash = #{replacedByTokenHash},
+            last_used_at = #{lastUsedAt},
+            audience_tenant_id = #{audienceTenantId},
+            device_id = #{deviceId},
+            ip_address = #{ipAddress},
+            user_agent = #{userAgent},
+            created_by = #{createdBy},
+            created_at = #{createdAt},
+            updated_by = #{updatedBy},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+</mapper>

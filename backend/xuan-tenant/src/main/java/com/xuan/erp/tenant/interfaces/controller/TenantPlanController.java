@@ -12,6 +12,7 @@ import com.xuan.erp.tenant.interfaces.dto.UpdateTenantPlanRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -40,6 +41,7 @@ public class TenantPlanController {
      */
     @Operation(summary = "查询租户套餐列表", description = "查询所有未逻辑删除的租户套餐")
     @GetMapping
+    @PreAuthorize("@xuanPermission.has('tenant-plan:view')")
     public ApiResponse<List<TenantPlanResponse>> listPlans() {
         return ApiResponse.success(tenantPlanApplicationService.listPlans().stream()
                 .map(TenantPlanAssembler::toResponse)
@@ -51,6 +53,7 @@ public class TenantPlanController {
      */
     @Operation(summary = "查询租户套餐详情", description = "根据套餐 ID 查询单个租户套餐详情")
     @GetMapping("/{planId}")
+    @PreAuthorize("@xuanPermission.has('tenant-plan:view')")
     public ApiResponse<TenantPlanResponse> getPlan(@PathVariable("planId") Long planId) {
         return ApiResponse.success(TenantPlanAssembler.toResponse(tenantPlanApplicationService.getPlan(planId)));
     }
@@ -60,6 +63,7 @@ public class TenantPlanController {
      */
     @Operation(summary = "创建租户套餐", description = "创建新租户套餐，默认创建为启用状态")
     @PostMapping
+    @PreAuthorize("@xuanPermission.has('tenant-plan:manage')")
     public ApiResponse<TenantPlanResponse> createPlan(@RequestBody CreateTenantPlanRequest request) {
         return ApiResponse.success(TenantPlanAssembler.toResponse(tenantPlanApplicationService.createPlan(TenantPlanAssembler.toCommand(request))));
     }
@@ -69,6 +73,7 @@ public class TenantPlanController {
      */
     @Operation(summary = "修改租户套餐", description = "修改租户套餐名称、计费周期、价格、额度和功能开关")
     @PutMapping("/{planId}")
+    @PreAuthorize("@xuanPermission.has('tenant-plan:manage')")
     public ApiResponse<TenantPlanResponse> updatePlan(@PathVariable("planId") Long planId, @RequestBody UpdateTenantPlanRequest request) {
         return ApiResponse.success(TenantPlanAssembler.toResponse(tenantPlanApplicationService.updatePlan(planId, TenantPlanAssembler.toCommand(request))));
     }
@@ -78,6 +83,7 @@ public class TenantPlanController {
      */
     @Operation(summary = "启用租户套餐", description = "启用指定租户套餐，并记录操作原因和操作人")
     @PostMapping("/{planId}/enable")
+    @PreAuthorize("@xuanPermission.has('tenant-plan:manage')")
     public ApiResponse<TenantPlanResponse> enablePlan(@PathVariable("planId") Long planId, @RequestBody ChangeTenantPlanStatusRequest request) {
         return ApiResponse.success(TenantPlanAssembler.toResponse(tenantPlanApplicationService.enablePlan(planId, TenantPlanAssembler.toCommand(request))));
     }
@@ -87,6 +93,7 @@ public class TenantPlanController {
      */
     @Operation(summary = "停用租户套餐", description = "停用指定租户套餐，并要求记录停用原因")
     @PostMapping("/{planId}/disable")
+    @PreAuthorize("@xuanPermission.has('tenant-plan:manage')")
     public ApiResponse<TenantPlanResponse> disablePlan(@PathVariable("planId") Long planId, @RequestBody ChangeTenantPlanStatusRequest request) {
         return ApiResponse.success(TenantPlanAssembler.toResponse(tenantPlanApplicationService.disablePlan(planId, TenantPlanAssembler.toCommand(request))));
     }
@@ -96,6 +103,7 @@ public class TenantPlanController {
      */
     @Operation(summary = "删除租户套餐", description = "软删除指定租户套餐，并要求记录删除原因")
     @DeleteMapping("/{planId}")
+    @PreAuthorize("@xuanPermission.has('tenant-plan:manage')")
     public ApiResponse<Void> deletePlan(@PathVariable("planId") Long planId, @RequestBody DeleteRequest request) {
         tenantPlanApplicationService.deletePlan(planId, TenantAssembler.toCommand(request));
         return ApiResponse.success(null);

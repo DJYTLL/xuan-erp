@@ -28,7 +28,7 @@ class TenantOutboxEventControllerContractTest {
         assertNotNull(postMapping);
         assertEquals("/tenant-outbox-events/{eventId}/retry", postMapping.value()[0]);
         assertEquals("eventId", retryEvent.getParameters()[0].getAnnotation(PathVariable.class).value());
-        assertEquals("hasAuthority('tenant-provision:manage')", permission(retryEvent));
+        assertEquals("@xuanPermission.has('tenant-provision:manage')", permission(retryEvent));
     }
 
     private static String permission(Method method) {

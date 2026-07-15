@@ -17,6 +17,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 import org.springframework.stereotype.Service;
 
 /**
@@ -24,6 +25,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class IamCurrentAuthorizationApplicationService {
+
+    private static final Set<String> PLATFORM_SUPER_ADMIN_USERNAMES = Set.of("super_admin", "superadmin");
 
     private final IamMenuRepository menuRepository;
     private final IamPermissionRepository permissionRepository;
@@ -64,6 +67,9 @@ public class IamCurrentAuthorizationApplicationService {
         Set<String> activePermissionCodes = permissionRepository.findActivePermissions().stream()
                 .map(permission -> permission.code())
                 .collect(LinkedHashSet::new, LinkedHashSet::add, LinkedHashSet::addAll);
+        if (isSuperAdmin(currentUser)) {
+            return sortedPermissionCodesWithWildcard(activePermissionCodes);
+        }
         Collection<String> preferredSource = snapshot == null ? currentUser.permissions() : snapshot.permissionCodes();
         List<String> filtered = preferredSource.stream()
                 .filter(code -> code != null && !code.isBlank())
@@ -72,6 +78,9 @@ public class IamCurrentAuthorizationApplicationService {
                 .distinct()
                 .sorted()
                 .toList();
+        if (snapshot != null) {
+            return filtered;
+        }
         if (!filtered.isEmpty()) {
             return filtered;
         }
@@ -83,22 +92,40 @@ public class IamCurrentAuthorizationApplicationService {
                 .toList();
     }
 
+    private boolean isSuperAdmin(CurrentUser currentUser) {
+        return currentUser.roles().contains("super_admin")
+                || currentUser.permissions().contains("*")
+                || (Long.valueOf(0L).equals(currentUser.tenantId()) && PLATFORM_SUPER_ADMIN_USERNAMES.contains(currentUser.username()));
+    }
+
+    private List<String> sortedPermissionCodesWithWildcard(Set<String> activePermissionCodes) {
+        return Stream.concat(Stream.of("*"), activePermissionCodes.stream().filter(code -> code != null && !code.isBlank()).sorted())
+                .distinct()
+                .toList();
+    }
+
     private Set<String> activeMenuCodes(IamAuthorizationSnapshot snapshot, Set<String> permissionCodeSet) {
         List<IamMenu> activeMenus = menuRepository.findActiveMenus().stream()
                 .filter(menu -> menu.enabled())
                 .sorted(Comparator.comparingInt(IamMenu::sortNo).thenComparing(IamMenu::code))
                 .toList();
+        Set<String> permissionDerivedMenuCodes = permissionDerivedMenuCodes(activeMenus, permissionCodeSet);
         if (snapshot != null && snapshot.menuCodes() != null && !snapshot.menuCodes().isEmpty()) {
             Set<String> menuCodes = new LinkedHashSet<>(snapshot.menuCodes());
+            menuCodes.addAll(permissionDerivedMenuCodes);
             includeParentMenus(activeMenus, menuCodes);
             return menuCodes;
         }
-        Set<String> menuCodes = activeMenus.stream()
+        Set<String> menuCodes = new LinkedHashSet<>(permissionDerivedMenuCodes);
+        includeParentMenus(activeMenus, menuCodes);
+        return menuCodes;
+    }
+
+    private Set<String> permissionDerivedMenuCodes(List<IamMenu> activeMenus, Set<String> permissionCodeSet) {
+        return activeMenus.stream()
                 .filter(menu -> menu.permissionCode() == null || menu.permissionCode().isBlank() || permissionCodeSet.contains(menu.permissionCode()))
                 .map(IamMenu::code)
                 .collect(LinkedHashSet::new, LinkedHashSet::add, LinkedHashSet::addAll);
-        includeParentMenus(activeMenus, menuCodes);
-        return menuCodes;
     }
 
     private void includeParentMenus(List<IamMenu> activeMenus, Set<String> menuCodes) {

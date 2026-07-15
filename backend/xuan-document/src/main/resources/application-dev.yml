@@ -9,11 +9,11 @@ spring:
       username: nacos
       password: nacos
       discovery:
-        server-addr: duaoyunxuan.com:9041
+        server-addr: duaoyunxuan.top:9041
         namespace: dev
         group: XUAN_ERP_GROUP
       config:
-        server-addr: duaoyunxuan.com:9041
+        server-addr: duaoyunxuan.top:9041
         namespace: dev
         group: XUAN_ERP_GROUP
         file-extension: yaml

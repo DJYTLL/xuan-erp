@@ -27,25 +27,25 @@ class IamCurrentAuthorizationApplicationServiceTest {
     void buildsCurrentPermissionSnapshotFromCurrentUserAndAuthorizationSnapshot() {
         InMemoryMenuRepository menuRepository = new InMemoryMenuRepository(
                 menu(2L, "system", null, "系统", "/system", "iam:view", 120),
-                menu(1L, "product", null, "商品", "/product", "product:read", 20),
-                menu(3L, "product-sku", 1L, "商品档案", "/product/sku", "product:read", 10));
+                menu(1L, "product", null, "商品", "/product", "product:view", 20),
+                menu(3L, "product-sku", 1L, "商品档案", "/product/sku", "product:view", 10));
         InMemoryPermissionRepository permissionRepository = new InMemoryPermissionRepository(
                 permission("iam:view", "权限查看", "xuan-iam", "system"),
-                permission("product:read", "商品查看", "xuan-product", "product"));
+                permission("product:view", "商品查看", "xuan-product", "product"));
         InMemoryAuthorizationSnapshotRepository snapshotRepository = new InMemoryAuthorizationSnapshotRepository(
-                snapshot(1L, 1001L, 7L, List.of("iam:view", "product:read"), List.of("system", "product", "product-sku")));
+                snapshot(1L, 1001L, 7L, List.of("iam:view", "product:view"), List.of("system", "product", "product-sku")));
 
         IamCurrentAuthorizationApplicationService service = new IamCurrentAuthorizationApplicationService(
                 menuRepository, permissionRepository, snapshotRepository);
 
         CurrentUser currentUser = new CurrentUser(
-                1001L, 1L, "tenant_admin", Set.of("tenant_admin"), 7L, Set.of("iam:view", "product:read"));
+                1001L, 1L, "tenant_admin", Set.of("tenant_admin"), 7L, Set.of("iam:view", "product:view"));
 
         IamCurrentPermissionSnapshotView view = service.getCurrentPermissionSnapshot(currentUser);
 
         assertEquals(7L, view.authVersion());
-        assertEquals(List.of("iam:view", "product:read"), view.routePermissions());
-        assertEquals(List.of("iam:view", "product:read"), view.buttonPermissions());
+        assertEquals(List.of("iam:view", "product:view"), view.routePermissions());
+        assertEquals(List.of("iam:view", "product:view"), view.buttonPermissions());
         assertEquals(List.of("product", "system"), view.menus().stream().map(IamCurrentMenuNodeView::code).toList());
         assertEquals(List.of("product-sku"), view.menus().get(0).children().stream().map(IamCurrentMenuNodeView::code).toList());
         assertTrue(view.fieldPermissions().isEmpty());
@@ -57,24 +57,113 @@ class IamCurrentAuthorizationApplicationServiceTest {
     void fallsBackToCurrentUserPermissionsWhenSnapshotMissing() {
         InMemoryMenuRepository menuRepository = new InMemoryMenuRepository(
                 menu(1L, "system", null, "系统", "/system", "iam:view", 120),
-                menu(2L, "product", null, "商品", "/product", "product:read", 20),
-                menu(3L, "audit", null, "审计", "/audit", "audit:read", 130));
+                menu(2L, "product", null, "商品", "/product", "product:view", 20),
+                menu(3L, "audit", null, "审计", "/audit", "audit:view", 130));
         InMemoryPermissionRepository permissionRepository = new InMemoryPermissionRepository(
                 permission("iam:view", "权限查看", "xuan-iam", "system"),
-                permission("product:read", "商品查看", "xuan-product", "product"),
-                permission("audit:read", "审计查看", "xuan-audit", "audit"));
+                permission("product:view", "商品查看", "xuan-product", "product"),
+                permission("audit:view", "审计查看", "xuan-audit", "audit"));
         IamCurrentAuthorizationApplicationService service = new IamCurrentAuthorizationApplicationService(
                 menuRepository, permissionRepository, new InMemoryAuthorizationSnapshotRepository());
 
         CurrentUser currentUser = new CurrentUser(
-                1001L, 1L, "tenant_admin", Set.of("tenant_admin"), 9L, Set.of("product:read", "iam:view"));
+                1001L, 1L, "tenant_admin", Set.of("tenant_admin"), 9L, Set.of("product:view", "iam:view"));
 
         IamCurrentPermissionSnapshotView view = service.getCurrentPermissionSnapshot(currentUser);
 
         assertEquals(9L, view.authVersion());
-        assertEquals(List.of("iam:view", "product:read"), view.routePermissions());
+        assertEquals(List.of("iam:view", "product:view"), view.routePermissions());
         assertEquals(List.of("product", "system"), view.menus().stream().map(IamCurrentMenuNodeView::code).toList());
         assertEquals(Map.of(), view.columnPermissions());
+    }
+
+    @Test
+    void usesEmptySnapshotPermissionsInsteadOfStaleCurrentUserPermissions() {
+        InMemoryMenuRepository menuRepository = new InMemoryMenuRepository(
+                menu(1L, "system", null, "系统", "/system", "iam:view", 120));
+        InMemoryPermissionRepository permissionRepository = new InMemoryPermissionRepository(
+                permission("iam:view", "权限查看", "xuan-iam", "system"));
+        InMemoryAuthorizationSnapshotRepository snapshotRepository = new InMemoryAuthorizationSnapshotRepository(
+                snapshot(1L, 1001L, 10L, List.of(), List.of()));
+        IamCurrentAuthorizationApplicationService service = new IamCurrentAuthorizationApplicationService(
+                menuRepository, permissionRepository, snapshotRepository);
+
+        CurrentUser currentUser = new CurrentUser(
+                1001L, 1L, "tenant_admin", Set.of("tenant_admin"), 9L, Set.of("iam:view"));
+
+        IamCurrentPermissionSnapshotView view = service.getCurrentPermissionSnapshot(currentUser);
+
+        assertEquals(10L, view.authVersion());
+        assertEquals(List.of(), view.routePermissions());
+        assertEquals(List.of(), view.buttonPermissions());
+        assertEquals(List.of(), view.menus());
+    }
+
+    @Test
+    void includesPermissionDerivedMenusWhenSnapshotMenuCodesAreStale() {
+        InMemoryMenuRepository menuRepository = new InMemoryMenuRepository(
+                menu(1L, "system", null, "系统", "/system", "iam:view", 120),
+                menu(2L, "iam-role-management", 1L, "角色授权", "/system/iam/roles", "iam:view", 123),
+                menu(3L, "iam-user-management", 1L, "用户授权", "/system/iam/users", "iam:view", 124));
+        InMemoryPermissionRepository permissionRepository = new InMemoryPermissionRepository(
+                permission("iam:view", "权限查看", "xuan-iam", "system"));
+        InMemoryAuthorizationSnapshotRepository snapshotRepository = new InMemoryAuthorizationSnapshotRepository(
+                snapshot(1L, 1001L, 11L, List.of("iam:view"), List.of("system", "iam-role-management")));
+        IamCurrentAuthorizationApplicationService service = new IamCurrentAuthorizationApplicationService(
+                menuRepository, permissionRepository, snapshotRepository);
+
+        CurrentUser currentUser = new CurrentUser(
+                1001L, 1L, "tenant_admin", Set.of("tenant_admin"), 11L, Set.of("iam:view"));
+
+        IamCurrentPermissionSnapshotView view = service.getCurrentPermissionSnapshot(currentUser);
+
+        assertEquals(List.of("system"), view.menus().stream().map(IamCurrentMenuNodeView::code).toList());
+        assertEquals(
+                List.of("iam-role-management", "iam-user-management"),
+                view.menus().get(0).children().stream().map(IamCurrentMenuNodeView::code).toList());
+    }
+
+    @Test
+    void grantsAllActivePermissionsToPlatformSuperAdminSnapshot() {
+        InMemoryMenuRepository menuRepository = new InMemoryMenuRepository(
+                menu(1L, "system", null, "系统", "/system", "iam:view", 120),
+                menu(2L, "product", null, "商品", "/product", "product:view", 20));
+        InMemoryPermissionRepository permissionRepository = new InMemoryPermissionRepository(
+                permission("iam:view", "权限查看", "xuan-iam", "system"),
+                permission("product:view", "商品查看", "xuan-product", "product"),
+                permission("product:create", "商品新增", "xuan-product", "product"));
+        IamCurrentAuthorizationApplicationService service = new IamCurrentAuthorizationApplicationService(
+                menuRepository, permissionRepository, new InMemoryAuthorizationSnapshotRepository());
+
+        CurrentUser currentUser = new CurrentUser(
+                1L, 0L, "super_admin", Set.of("super_admin"), 1L, Set.of("*"));
+
+        IamCurrentPermissionSnapshotView view = service.getCurrentPermissionSnapshot(currentUser);
+
+        assertEquals(List.of("*", "iam:view", "product:create", "product:view"), view.routePermissions());
+        assertEquals(List.of("*", "iam:view", "product:create", "product:view"), view.buttonPermissions());
+        assertEquals(List.of("product", "system"), view.menus().stream().map(IamCurrentMenuNodeView::code).toList());
+    }
+
+    @Test
+    void grantsAllActivePermissionsToPlatformSuperadminAliasSnapshot() {
+        InMemoryMenuRepository menuRepository = new InMemoryMenuRepository(
+                menu(1L, "system", null, "系统", "/system", "iam:view", 120),
+                menu(2L, "tenant-plan-management", null, "套餐管理", "/system/tenant-plans", "tenant-plan:view", 15));
+        InMemoryPermissionRepository permissionRepository = new InMemoryPermissionRepository(
+                permission("iam:view", "权限查看", "xuan-iam", "system"),
+                permission("tenant-plan:view", "套餐查看", "xuan-tenant", "tenant-plan-management"),
+                permission("tenant-plan:manage", "套餐管理", "xuan-tenant", "tenant-plan-management"));
+        IamCurrentAuthorizationApplicationService service = new IamCurrentAuthorizationApplicationService(
+                menuRepository, permissionRepository, new InMemoryAuthorizationSnapshotRepository());
+
+        CurrentUser currentUser = new CurrentUser(
+                1L, 0L, "superadmin", Set.of(), 1L, Set.of());
+
+        IamCurrentPermissionSnapshotView view = service.getCurrentPermissionSnapshot(currentUser);
+
+        assertEquals(List.of("*", "iam:view", "tenant-plan:manage", "tenant-plan:view"), view.routePermissions());
+        assertEquals(List.of("tenant-plan-management", "system"), view.menus().stream().map(IamCurrentMenuNodeView::code).toList());
     }
 
     private static IamMenu menu(

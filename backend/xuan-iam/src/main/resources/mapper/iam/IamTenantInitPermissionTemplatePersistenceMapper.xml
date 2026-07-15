@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xuan.erp.iam.infrastructure.persistence.mapper.IamTenantInitPermissionTemplatePersistenceMapper">
+
+    <resultMap id="IamTenantInitPermissionTemplateRecordMap" type="com.xuan.erp.iam.infrastructure.persistence.entity.IamTenantInitPermissionTemplateRecord">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="code" javaType="java.lang.String"/>
+            <arg column="name" javaType="java.lang.String"/>
+            <arg column="description" javaType="java.lang.String"/>
+            <arg column="permission_codes_json" javaType="java.lang.String"/>
+            <arg column="is_default" javaType="java.lang.Boolean"/>
+            <arg column="is_enabled" javaType="java.lang.Boolean"/>
+            <arg column="created_by" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="updated_by" javaType="java.lang.String"/>
+            <arg column="updated_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="deleted_by" javaType="java.lang.String"/>
+            <arg column="delete_reason" javaType="java.lang.String"/>
+            <arg column="deleted_at" javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="TemplateColumns">
+        id, code, name, description, permission_codes::text AS permission_codes_json,
+        is_default, is_enabled, created_by, created_at, updated_by, updated_at,
+        deleted_by, delete_reason, deleted_at
+    </sql>
+
+    <select id="findById" resultMap="IamTenantInitPermissionTemplateRecordMap">
+        SELECT <include refid="TemplateColumns"/>
+        FROM iam_tenant_init_permission_template
+        WHERE id = #{id}
+          AND deleted_at IS NULL
+    </select>
+
+    <select id="findActiveByCode" resultMap="IamTenantInitPermissionTemplateRecordMap">
+        SELECT <include refid="TemplateColumns"/>
+        FROM iam_tenant_init_permission_template
+        WHERE code = #{code}
+          AND deleted_at IS NULL
+        LIMIT 1
+    </select>
+
+    <select id="findActiveTemplates" resultMap="IamTenantInitPermissionTemplateRecordMap">
+        SELECT <include refid="TemplateColumns"/>
+        FROM iam_tenant_init_permission_template
+        WHERE deleted_at IS NULL
+        ORDER BY is_default DESC, code
+    </select>
+
+    <insert id="insert">
+        INSERT INTO iam_tenant_init_permission_template (
+            code, name, description, permission_codes, is_default, is_enabled,
+            created_by, created_at, updated_by, updated_at
+        )
+        VALUES (
+            #{template.code}, #{template.name}, #{template.description},
+            CAST(#{template.permissionCodesJson} AS jsonb),
+            #{template.defaultTemplate}, #{template.enabled},
+            #{template.createdBy}, #{template.createdAt}, #{template.updatedBy}, #{template.updatedAt}
+        )
+    </insert>
+
+    <update id="update">
+        UPDATE iam_tenant_init_permission_template
+        SET name = #{template.name},
+            description = #{template.description},
+            permission_codes = CAST(#{template.permissionCodesJson} AS jsonb),
+            is_default = #{template.defaultTemplate},
+            is_enabled = #{template.enabled},
+            updated_by = #{template.updatedBy},
+            updated_at = #{template.updatedAt}
+        WHERE id = #{template.id}
+          AND deleted_at IS NULL
+    </update>
+
+    <update id="clearDefaultTemplate">
+        UPDATE iam_tenant_init_permission_template
+        SET is_default = false,
+            updated_by = #{operator},
+            updated_at = now()
+        WHERE is_default = true
+          AND deleted_at IS NULL
+    </update>
+</mapper>

@@ -1,7 +1,10 @@
 package com.xuan.erp.common.mq.autoconfigure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xuan.erp.common.mq.RocketMqConsumerContainer;
+import com.xuan.erp.common.mq.RocketMqMessageHandler;
 import com.xuan.erp.common.mq.RocketMqMessageSender;
+import java.util.Map;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -61,6 +64,24 @@ class XuanRocketMqAutoConfigurationTest {
                         .isSameAs(context.getBean("customRocketMqMessageSender")));
     }
 
+    // 测试业务方声明消息处理器后，公共自动配置会注册统一 Consumer 容器。
+    @Test
+    void registersConsumerContainerWhenHandlersExist() {
+        contextRunner
+                .withPropertyValues(
+                        "xuan.rocketmq.enabled=true",
+                        "xuan.rocketmq.name-server=duaoyunxuan.com:9047",
+                        "xuan.rocketmq.producer.group=xuan-test-producer",
+                        "xuan.rocketmq.consumer.auto-startup=false")
+                .withUserConfiguration(HandlerConfiguration.class)
+                .run(context -> {
+                    assertThat(context).hasSingleBean(RocketMqConsumerContainer.class);
+                    RocketMqConsumerContainer container = context.getBean(RocketMqConsumerContainer.class);
+                    assertThat(container.isRunning()).isFalse();
+                    assertThat(container.handlerCount()).isEqualTo(1);
+                });
+    }
+
     @Configuration(proxyBeanMethods = false)
     static class CustomSenderConfiguration {
 
@@ -70,6 +91,34 @@ class XuanRocketMqAutoConfigurationTest {
                 @Override
                 public <T> com.xuan.erp.common.mq.RocketMqSendResult send(com.xuan.erp.common.mq.RocketMqMessage<T> message) {
                     return null;
+                }
+            };
+        }
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    static class HandlerConfiguration {
+
+        @Bean
+        RocketMqMessageHandler tenantProvisionHandler() {
+            return new RocketMqMessageHandler() {
+                @Override
+                public String consumerGroup() {
+                    return "xuan-test-consumer";
+                }
+
+                @Override
+                public String topic() {
+                    return "xuan-tenant-event";
+                }
+
+                @Override
+                public String tagExpression() {
+                    return "TenantIamBootstrapRequested";
+                }
+
+                @Override
+                public void handle(String payload, Map<String, String> headers) {
                 }
             };
         }

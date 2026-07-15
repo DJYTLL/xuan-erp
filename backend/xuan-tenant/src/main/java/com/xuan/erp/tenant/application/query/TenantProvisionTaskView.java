@@ -9,6 +9,8 @@ public record TenantProvisionTaskView(
         String taskKey,
         String taskType,
         ProvisionTaskStatus status,
+        String lastErrorCode,
+        String lastErrorMessage,
         List<TenantProvisionTaskStepView> steps
 ) {
 }

@@ -30,6 +30,16 @@
           AND deleted_at IS NULL
     </select>
 
+    <select id="findActiveByTenantIdAndCode" resultMap="IamRoleRecordMap">
+        SELECT id, tenant_id, code, name, description, is_enabled,
+               created_by, created_at, updated_by, updated_at, deleted_by, delete_reason, deleted_at
+        FROM iam_role
+        WHERE tenant_id = #{tenantId}
+          AND code = #{code}
+          AND deleted_at IS NULL
+        LIMIT 1
+    </select>
+
     <select id="findActiveRoles" resultMap="IamRoleRecordMap">
         SELECT id, tenant_id, code, name, description, is_enabled,
                created_by, created_at, updated_by, updated_at, deleted_by, delete_reason, deleted_at
@@ -38,4 +48,26 @@
           AND deleted_at IS NULL
         ORDER BY id
     </select>
+
+    <insert id="insert">
+        INSERT INTO iam_role (
+            tenant_id, code, name, description, is_enabled,
+            created_by, created_at, updated_by, updated_at
+        )
+        VALUES (
+            #{role.tenantId}, #{role.code}, #{role.name}, #{role.description}, #{role.enabled},
+            #{role.createdBy}, #{role.createdAt}, #{role.updatedBy}, #{role.updatedAt}
+        )
+    </insert>
+
+    <update id="update">
+        UPDATE iam_role
+        SET name = #{role.name},
+            description = #{role.description},
+            is_enabled = #{role.enabled},
+            updated_by = #{role.updatedBy},
+            updated_at = #{role.updatedAt}
+        WHERE id = #{role.id}
+          AND deleted_at IS NULL
+    </update>
 </mapper>

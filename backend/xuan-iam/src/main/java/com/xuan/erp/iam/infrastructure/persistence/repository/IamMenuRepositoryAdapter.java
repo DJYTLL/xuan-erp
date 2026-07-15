@@ -27,9 +27,25 @@ public class IamMenuRepositoryAdapter implements IamMenuRepository {
     }
 
     @Override
+    public Optional<IamMenu> findById(Long id) {
+        return Optional.ofNullable(mapper.findById(id))
+                .map(IamMenuPersistenceAssembler::toDomain);
+    }
+
+    @Override
     public List<IamMenu> findActiveMenus() {
         return mapper.findActiveMenus().stream()
                 .map(IamMenuPersistenceAssembler::toDomain)
                 .toList();
+    }
+
+    @Override
+    public IamMenu save(IamMenu menu) {
+        if (menu.id() == null) {
+            mapper.insert(IamMenuPersistenceAssembler.toRecord(menu));
+            return findByCode(menu.code()).orElseThrow();
+        }
+        mapper.update(IamMenuPersistenceAssembler.toRecord(menu));
+        return findById(menu.id()).orElseThrow();
     }
 }

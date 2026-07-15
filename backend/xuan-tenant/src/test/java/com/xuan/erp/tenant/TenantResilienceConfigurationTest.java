@@ -33,7 +33,7 @@ class TenantResilienceConfigurationTest {
         assertTrue(config.contains("tx-service-group: xuan-erp-tx-group"));
         assertTrue(config.contains("xuan-erp-tx-group"));
         assertTrue(config.contains("type: file"));
-        assertTrue(config.contains("default: duaoyunxuan.com:9045"));
+        assertTrue(config.contains("default: ${XUAN_SEATA_TC_ADDRESS:${xuan.infra.seata.tc-address:duaoyunxuan.top:9045}}"));
     }
 
     @Test

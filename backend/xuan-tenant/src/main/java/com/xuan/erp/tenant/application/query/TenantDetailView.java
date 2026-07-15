@@ -13,9 +13,11 @@ public record TenantDetailView(
         OffsetDateTime provisionedAt,
         OffsetDateTime enabledAt,
         String remark,
+        Long currentPlanAssignmentId,
         Long currentPlanId,
         String currentPlanCode,
         String currentPlanName,
+        OffsetDateTime currentPlanExpiresAt,
         Long primaryDomainId,
         String primaryDomain,
         long statusHistoryCount,
@@ -34,6 +36,7 @@ public record TenantDetailView(
             OffsetDateTime enabledAt,
             String remark
     ) {
-        this(id, code, name, status, contactName, contactPhone, provisionedAt, enabledAt, remark, null, null, null, null, null, 0L, null, null);
+        this(id, code, name, status, contactName, contactPhone, provisionedAt, enabledAt, remark,
+                null, null, null, null, null, null, null, 0L, null, null);
     }
 }

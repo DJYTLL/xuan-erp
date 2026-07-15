@@ -34,7 +34,7 @@ public class TenantProvisionTaskController {
     }
 
     @Operation(summary = "查询租户初始化任务", description = "按租户 ID 查询初始化任务及步骤")
-    @PreAuthorize("hasAuthority('tenant-provision:view')")
+    @PreAuthorize("@xuanPermission.has('tenant-provision:view')")
     @GetMapping("/tenants/{tenantId}/provision-tasks")
     public ApiResponse<List<TenantProvisionTaskResponse>> listTasks(
             @PathVariable("tenantId") @Min(value = 1, message = "租户 ID 必须大于 0") Long tenantId) {
@@ -42,7 +42,7 @@ public class TenantProvisionTaskController {
     }
 
     @Operation(summary = "重试初始化任务步骤", description = "按任务 ID 和步骤键触发人工重试入口")
-    @PreAuthorize("hasAuthority('tenant-provision:manage')")
+    @PreAuthorize("@xuanPermission.has('tenant-provision:manage')")
     @PostMapping("/tenant-provision-tasks/{taskId}/retry")
     public ApiResponse<Void> retryTask(
             @PathVariable("taskId") @Min(value = 1, message = "任务 ID 必须大于 0") Long taskId,
@@ -58,6 +58,8 @@ public class TenantProvisionTaskController {
                 view.taskKey(),
                 view.taskType(),
                 view.status(),
+                view.lastErrorCode(),
+                view.lastErrorMessage(),
                 view.steps().stream().map(this::toResponse).toList()
         );
     }
@@ -69,7 +71,9 @@ public class TenantProvisionTaskController {
                 view.stepKey(),
                 view.stepName(),
                 view.status(),
-                view.sequenceNo()
+                view.sequenceNo(),
+                view.lastErrorCode(),
+                view.lastErrorMessage()
         );
     }
 }

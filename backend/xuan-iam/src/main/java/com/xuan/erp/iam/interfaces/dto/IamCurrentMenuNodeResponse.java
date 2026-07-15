@@ -27,7 +27,7 @@ public record IamCurrentMenuNodeResponse(
         String path,
         @Schema(description = "菜单图标", example = "Package")
         String icon,
-        @Schema(description = "进入菜单所需权限编码", example = "product:read")
+        @Schema(description = "进入菜单所需权限编码", example = "product:view")
         String permissionCode,
         @Schema(description = "菜单排序号", example = "20")
         int sortNo,

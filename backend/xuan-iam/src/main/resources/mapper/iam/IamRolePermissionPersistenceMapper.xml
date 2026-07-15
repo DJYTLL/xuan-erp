@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xuan.erp.iam.infrastructure.persistence.mapper.IamRolePermissionPersistenceMapper">
+
+    <select id="findPermissionCodesByRoleId" resultType="java.lang.String">
+        SELECT permission.code
+        FROM iam_role_permission role_permission
+        JOIN iam_permission permission ON permission.id = role_permission.permission_id
+        WHERE role_permission.tenant_id = #{tenantId}
+          AND role_permission.role_id = #{roleId}
+          AND role_permission.deleted_at IS NULL
+          AND permission.deleted_at IS NULL
+          AND permission.is_enabled = true
+        ORDER BY permission.code
+    </select>
+
+    <update id="disableRolePermissions">
+        UPDATE iam_role_permission
+        SET deleted_by = #{operator},
+            delete_reason = 'role-permission-replaced',
+            deleted_at = now(),
+            updated_by = #{operator},
+            updated_at = now()
+        WHERE tenant_id = #{tenantId}
+          AND role_id = #{roleId}
+          AND deleted_at IS NULL
+    </update>
+
+    <insert id="insertRolePermission">
+        INSERT INTO iam_role_permission (
+            tenant_id, role_id, permission_id, created_by, updated_by
+        )
+        SELECT #{tenantId}, #{roleId}, #{permissionId}, #{operator}, #{operator}
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM iam_role_permission existing
+            WHERE existing.tenant_id = #{tenantId}
+              AND existing.role_id = #{roleId}
+              AND existing.permission_id = #{permissionId}
+              AND existing.deleted_at IS NULL
+        )
+    </insert>
+
+    <select id="findUserIdsByRoleId" resultType="java.lang.Long">
+        SELECT user_role.user_id
+        FROM iam_user_role user_role
+        JOIN iam_user iam_user ON iam_user.id = user_role.user_id
+        WHERE user_role.tenant_id = #{tenantId}
+          AND user_role.role_id = #{roleId}
+          AND user_role.deleted_at IS NULL
+          AND iam_user.deleted_at IS NULL
+          AND iam_user.is_enabled = true
+        ORDER BY user_role.user_id
+    </select>
+
+    <select id="findRoleIdsByUserId" resultType="java.lang.Long">
+        SELECT user_role.role_id
+        FROM iam_user_role user_role
+        JOIN iam_role role ON role.id = user_role.role_id
+        WHERE user_role.tenant_id = #{tenantId}
+          AND user_role.user_id = #{userId}
+          AND user_role.deleted_at IS NULL
+          AND role.deleted_at IS NULL
+          AND role.is_enabled = true
+        ORDER BY user_role.role_id
+    </select>
+
+    <select id="findPermissionCodesByUserId" resultType="java.lang.String">
+        SELECT DISTINCT permission.code
+        FROM iam_user_role user_role
+        JOIN iam_role role ON role.id = user_role.role_id
+        JOIN iam_role_permission role_permission ON role_permission.role_id = role.id
+            AND role_permission.tenant_id = user_role.tenant_id
+        JOIN iam_permission permission ON permission.id = role_permission.permission_id
+        WHERE user_role.tenant_id = #{tenantId}
+          AND user_role.user_id = #{userId}
+          AND user_role.deleted_at IS NULL
+          AND role.deleted_at IS NULL
+          AND role.is_enabled = true
+          AND role_permission.deleted_at IS NULL
+          AND permission.deleted_at IS NULL
+          AND permission.is_enabled = true
+        ORDER BY permission.code
+    </select>
+
+    <update id="disableUserRoles">
+        UPDATE iam_user_role
+        SET deleted_by = #{operator},
+            delete_reason = 'user-role-replaced',
+            deleted_at = now(),
+            updated_by = #{operator},
+            updated_at = now()
+        WHERE tenant_id = #{tenantId}
+          AND user_id = #{userId}
+          AND deleted_at IS NULL
+    </update>
+
+    <insert id="insertUserRole">
+        INSERT INTO iam_user_role (
+            tenant_id, user_id, role_id, created_by, updated_by
+        )
+        SELECT #{tenantId}, #{userId}, #{roleId}, #{operator}, #{operator}
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM iam_user_role existing
+            WHERE existing.tenant_id = #{tenantId}
+              AND existing.user_id = #{userId}
+              AND existing.role_id = #{roleId}
+              AND existing.deleted_at IS NULL
+        )
+    </insert>
+</mapper>

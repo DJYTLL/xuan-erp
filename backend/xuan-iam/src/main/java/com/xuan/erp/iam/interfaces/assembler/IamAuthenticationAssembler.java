@@ -2,10 +2,13 @@ package com.xuan.erp.iam.interfaces.assembler;
 
 import com.xuan.erp.common.security.CurrentUser;
 import com.xuan.erp.iam.application.command.LoginIamUserCommand;
+import com.xuan.erp.iam.application.command.RefreshIamTokenCommand;
+import com.xuan.erp.iam.application.command.RevokeIamRefreshTokenCommand;
 import com.xuan.erp.iam.application.query.IamLoginView;
 import com.xuan.erp.iam.interfaces.dto.IamCurrentUserResponse;
 import com.xuan.erp.iam.interfaces.dto.IamLoginRequest;
 import com.xuan.erp.iam.interfaces.dto.IamLoginResponse;
+import com.xuan.erp.iam.interfaces.dto.IamRefreshTokenRequest;
 
 /**
  * IAM 认证装配器，负责登录请求、登录响应和当前用户响应之间的转换。
@@ -19,8 +22,22 @@ public final class IamAuthenticationAssembler {
         return new LoginIamUserCommand(request.tenantId(), request.username(), request.password());
     }
 
+    public static RefreshIamTokenCommand toCommand(IamRefreshTokenRequest request) {
+        return new RefreshIamTokenCommand(request.refreshToken());
+    }
+
+    public static RevokeIamRefreshTokenCommand toRevokeCommand(IamRefreshTokenRequest request) {
+        return new RevokeIamRefreshTokenCommand(request.refreshToken());
+    }
+
     public static IamLoginResponse toResponse(IamLoginView view) {
-        return new IamLoginResponse("Bearer", view.accessToken(), view.accessTokenExpiresAt(), toCurrentUserResponse(view.currentUser()));
+        return new IamLoginResponse(
+                "Bearer",
+                view.accessToken(),
+                view.accessTokenExpiresAt(),
+                view.refreshToken(),
+                view.refreshTokenExpiresAt(),
+                toCurrentUserResponse(view.currentUser()));
     }
 
     public static IamCurrentUserResponse toCurrentUserResponse(CurrentUser currentUser) {

@@ -5,9 +5,11 @@ import com.xuan.erp.tenant.application.command.CreateTenantCommand;
 import com.xuan.erp.tenant.application.command.DeleteTenantCommand;
 import com.xuan.erp.tenant.application.command.UpdateTenantCommand;
 import com.xuan.erp.tenant.application.query.TenantDetailView;
+import com.xuan.erp.tenant.application.query.TenantInternalStatusView;
 import com.xuan.erp.tenant.interfaces.dto.ChangeTenantStatusRequest;
 import com.xuan.erp.tenant.interfaces.dto.CreateTenantRequest;
 import com.xuan.erp.tenant.interfaces.dto.DeleteRequest;
+import com.xuan.erp.tenant.interfaces.dto.TenantInternalStatusResponse;
 import com.xuan.erp.tenant.interfaces.dto.TenantResponse;
 import com.xuan.erp.tenant.interfaces.dto.UpdateTenantRequest;
 
@@ -28,7 +30,9 @@ public final class TenantAssembler {
                 request.adminPassword(),
                 request.adminDisplayName(),
                 request.adminEmail(),
-                request.adminPhone());
+                request.adminPhone(),
+                request.planId(),
+                request.planExpiresAt());
     }
 
     public static UpdateTenantCommand toCommand(UpdateTenantRequest request) {
@@ -54,14 +58,27 @@ public final class TenantAssembler {
                 view.provisionedAt(),
                 view.enabledAt(),
                 view.remark(),
+                view.currentPlanAssignmentId(),
                 view.currentPlanId(),
                 view.currentPlanCode(),
                 view.currentPlanName(),
+                view.currentPlanExpiresAt(),
                 view.primaryDomainId(),
                 view.primaryDomain(),
                 view.statusHistoryCount(),
                 view.latestStatusChangeType(),
                 view.latestStatusChangedAt()
+        );
+    }
+
+    public static TenantInternalStatusResponse toInternalStatusResponse(TenantInternalStatusView view) {
+        return new TenantInternalStatusResponse(
+                view.tenantId(),
+                view.code(),
+                view.status(),
+                view.loginAllowed(),
+                view.loginDeniedReason(),
+                view.currentPlanExpiresAt()
         );
     }
 }

@@ -5,6 +5,8 @@ import com.xuan.erp.tenant.domain.model.type.OutboxEventStatus;
 import com.xuan.erp.tenant.domain.repository.TenantOutboxEventRepository;
 import com.xuan.erp.tenant.infrastructure.persistence.entity.TenantOutboxEventRecord;
 import com.xuan.erp.tenant.infrastructure.persistence.mapper.TenantOutboxEventPersistenceMapper;
+import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
 
@@ -20,6 +22,13 @@ public class TenantOutboxEventRepositoryAdapter implements TenantOutboxEventRepo
     @Override
     public Optional<TenantOutboxEvent> findById(Long eventId) {
         return Optional.ofNullable(mapper.findById(eventId)).map(this::toDomain);
+    }
+
+    @Override
+    public List<TenantOutboxEvent> findPublishable(int limit) {
+        return mapper.findPublishable(OffsetDateTime.now(), Math.max(limit, 1)).stream()
+                .map(this::toDomain)
+                .toList();
     }
 
     @Override

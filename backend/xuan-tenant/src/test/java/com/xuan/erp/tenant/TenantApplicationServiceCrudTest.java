@@ -2,6 +2,7 @@ package com.xuan.erp.tenant;
 
 import com.xuan.erp.common.exception.BusinessException;
 import com.xuan.erp.common.api.PageResult;
+import com.xuan.erp.common.security.CurrentUser;
 import com.xuan.erp.tenant.application.service.TenantApplicationService;
 import com.xuan.erp.tenant.application.service.TenantProvisionApplicationService;
 import com.xuan.erp.tenant.application.command.ChangeTenantStatusCommand;
@@ -9,19 +10,28 @@ import com.xuan.erp.tenant.application.command.CreateTenantCommand;
 import com.xuan.erp.tenant.application.command.DeleteTenantCommand;
 import com.xuan.erp.tenant.application.command.UpdateTenantCommand;
 import com.xuan.erp.tenant.application.query.TenantDetailView;
+import com.xuan.erp.tenant.application.query.TenantInternalStatusView;
 import com.xuan.erp.tenant.domain.model.Tenant;
 import com.xuan.erp.tenant.domain.model.TenantDetailSupplement;
+import com.xuan.erp.tenant.domain.model.TenantPlan;
+import com.xuan.erp.tenant.domain.model.TenantPlanAssignment;
 import com.xuan.erp.tenant.domain.model.TenantProvisionTask;
 import com.xuan.erp.tenant.domain.model.TenantProvisionTaskStep;
 import com.xuan.erp.tenant.domain.model.TenantStatusHistory;
+import com.xuan.erp.tenant.domain.model.type.BillingCycle;
+import com.xuan.erp.tenant.domain.model.type.PlanAssignmentStatus;
 import com.xuan.erp.tenant.domain.model.type.ProvisionTaskStatus;
 import com.xuan.erp.tenant.domain.model.type.ProvisionTaskStepStatus;
 import com.xuan.erp.tenant.domain.repository.TenantRepository;
 import com.xuan.erp.tenant.domain.repository.TenantOutboxEventRepository;
+import com.xuan.erp.tenant.domain.repository.TenantPlanAssignmentRepository;
+import com.xuan.erp.tenant.domain.repository.TenantPlanRepository;
 import com.xuan.erp.tenant.domain.repository.TenantProvisionTaskRepository;
 import com.xuan.erp.tenant.domain.repository.TenantProvisionTaskStepRepository;
 import com.xuan.erp.tenant.domain.repository.TenantStatusHistoryRepository;
 import com.xuan.erp.tenant.domain.model.type.TenantStatus;
+import com.xuan.erp.tenant.domain.model.type.TenantPlanStatus;
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -29,7 +39,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -38,6 +52,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class TenantApplicationServiceCrudTest {
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
 
     @Test
     void createsTenantWithNormalizedCodeAndInitialStatusHistory() {
@@ -65,6 +84,102 @@ class TenantApplicationServiceCrudTest {
         assertTrue(iamBootstrapPayload.contains("\"adminPasswordHash\""));
         assertFalse(iamBootstrapPayload.contains("\"adminPassword\""));
         assertFalse(iamBootstrapPayload.contains("123456"));
+    }
+
+    @Test
+    void usesCurrentUserAsDefaultOperatorWhenCreatingTenant() {
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                new CurrentUser(7L, 1001L, "tenant-admin", Set.of("tenant_admin"), 5L, Set.of("tenant:create")),
+                "N/A",
+                Set.of()));
+        InMemoryTenantRepository tenantRepository = new InMemoryTenantRepository();
+        InMemoryTenantStatusHistoryRepository historyRepository = new InMemoryTenantStatusHistoryRepository();
+        TenantApplicationService service = new TenantApplicationService(tenantRepository, historyRepository);
+
+        TenantDetailView view = service.createTenant(new CreateTenantCommand("acme", "玄云", null, null, null));
+
+        Tenant tenant = tenantRepository.findById(view.id()).orElseThrow();
+        assertEquals("tenant-admin", tenant.createdBy());
+        assertEquals("tenant-admin", tenant.updatedBy());
+        assertEquals("tenant-admin", historyRepository.saved.getFirst().createdBy());
+    }
+
+    @Test
+    void createsTenantWithSelectedPlanAssignment() {
+        InMemoryTenantRepository tenantRepository = new InMemoryTenantRepository();
+        InMemoryTenantStatusHistoryRepository historyRepository = new InMemoryTenantStatusHistoryRepository();
+        InMemoryTenantPlanRepository planRepository = new InMemoryTenantPlanRepository();
+        InMemoryTenantPlanAssignmentRepository assignmentRepository = new InMemoryTenantPlanAssignmentRepository();
+        planRepository.store.put(7L, tenantPlan(7L, "standard", TenantPlanStatus.ENABLED));
+        OffsetDateTime planExpiresAt = OffsetDateTime.parse("2026-08-15T15:59:59Z");
+        TenantApplicationService service = new TenantApplicationService(
+                tenantRepository,
+                historyRepository,
+                null,
+                null,
+                null,
+                planRepository,
+                assignmentRepository);
+
+        TenantDetailView view = service.createTenant(new CreateTenantCommand(
+                "acme",
+                "玄云",
+                null,
+                null,
+                null,
+                null,
+                "admin",
+                "123456",
+                "租户管理员",
+                null,
+                null,
+                7L,
+                planExpiresAt));
+
+        assertEquals(view.id(), assignmentRepository.saved.getFirst().tenantId());
+        assertEquals(7L, assignmentRepository.saved.getFirst().planId());
+        assertEquals(planExpiresAt, assignmentRepository.saved.getFirst().expiresAt());
+        assertEquals(PlanAssignmentStatus.ACTIVE, assignmentRepository.saved.getFirst().status());
+        assertEquals("CREATE_TENANT", assignmentRepository.saved.getFirst().source());
+    }
+
+    @Test
+    void createTenantReturnsCurrentPlanSummaryWhenInitialPlanAssigned() {
+        InMemoryTenantRepository tenantRepository = new InMemoryTenantRepository();
+        InMemoryTenantStatusHistoryRepository historyRepository = new InMemoryTenantStatusHistoryRepository();
+        InMemoryTenantPlanRepository planRepository = new InMemoryTenantPlanRepository();
+        InMemoryTenantPlanAssignmentRepository assignmentRepository =
+                new InMemoryTenantPlanAssignmentRepository(tenantRepository, planRepository);
+        planRepository.store.put(7L, tenantPlan(7L, "standard", TenantPlanStatus.ENABLED));
+        OffsetDateTime planExpiresAt = OffsetDateTime.parse("2026-08-15T15:59:59Z");
+        TenantApplicationService service = new TenantApplicationService(
+                tenantRepository,
+                historyRepository,
+                null,
+                null,
+                null,
+                planRepository,
+                assignmentRepository);
+
+        TenantDetailView view = service.createTenant(new CreateTenantCommand(
+                "acme",
+                "玄云",
+                null,
+                null,
+                null,
+                null,
+                "admin",
+                "123456",
+                "租户管理员",
+                null,
+                null,
+                7L,
+                planExpiresAt));
+
+        assertEquals(7L, view.currentPlanId());
+        assertEquals("standard", view.currentPlanCode());
+        assertEquals("standard", view.currentPlanName());
+        assertEquals(planExpiresAt, view.currentPlanExpiresAt());
     }
 
     @Test
@@ -136,6 +251,21 @@ class TenantApplicationServiceCrudTest {
                 () -> service.deleteTenant(tenantId, new DeleteTenantCommand("误操作清理", "admin")));
 
         assertEquals("TENANT_DELETE_FORBIDDEN", error.code());
+    }
+
+    @Test
+    void provisionedTenantAllowsLoginInInternalStatusView() {
+        InMemoryTenantRepository tenantRepository = new InMemoryTenantRepository();
+        TenantApplicationService service = new TenantApplicationService(tenantRepository, new InMemoryTenantStatusHistoryRepository());
+        Long tenantId = service.createTenant(new CreateTenantCommand("acme", "玄云", null, null, null)).id();
+        Tenant created = tenantRepository.store.get(tenantId);
+        tenantRepository.store.put(tenantId, created.markProvisioned("初始化完成", "system", OffsetDateTime.now()));
+
+        TenantInternalStatusView status = service.getTenantInternalStatus(tenantId);
+
+        assertEquals(TenantStatus.PROVISIONED, status.status());
+        assertTrue(status.loginAllowed());
+        assertEquals(null, status.loginDeniedReason());
     }
 
     @Test
@@ -212,14 +342,44 @@ class TenantApplicationServiceCrudTest {
     }
 
     @Test
+    void paginatedTenantListIncludesAggregatedPlanSummary() {
+        InMemoryTenantRepository tenantRepository = new InMemoryTenantRepository();
+        TenantApplicationService service = new TenantApplicationService(tenantRepository, new InMemoryTenantStatusHistoryRepository());
+        Long tenantId = service.createTenant(new CreateTenantCommand("acme", "玄云", "张三", "138", null)).id();
+        tenantRepository.detailSupplements.put(tenantId, new TenantDetailSupplement(
+                12L,
+                9L,
+                "pro",
+                "专业版",
+                OffsetDateTime.parse("2026-12-31T15:59:59Z"),
+                null,
+                null,
+                1L,
+                "CREATE",
+                OffsetDateTime.parse("2026-07-07T08:00:00Z")
+        ));
+
+        PageResult<TenantDetailView> page = service.listTenants(1, 20);
+
+        assertEquals(1, page.records().size());
+        TenantDetailView row = page.records().getFirst();
+        assertEquals(12L, row.currentPlanAssignmentId());
+        assertEquals(9L, row.currentPlanId());
+        assertEquals("专业版", row.currentPlanName());
+        assertEquals(OffsetDateTime.parse("2026-12-31T15:59:59Z"), row.currentPlanExpiresAt());
+    }
+
+    @Test
     void returnsAggregatedTenantDetailSummary() {
         InMemoryTenantRepository tenantRepository = new InMemoryTenantRepository();
         TenantApplicationService service = new TenantApplicationService(tenantRepository, new InMemoryTenantStatusHistoryRepository());
         Long tenantId = service.createTenant(new CreateTenantCommand("acme", "玄云", "张三", "138", null)).id();
         tenantRepository.detailSupplements.put(tenantId, new TenantDetailSupplement(
+                12L,
                 9L,
                 "pro",
                 "专业版",
+                OffsetDateTime.parse("2026-12-31T15:59:59Z"),
                 5L,
                 "acme.example.com",
                 3L,
@@ -231,6 +391,8 @@ class TenantApplicationServiceCrudTest {
 
         assertEquals("pro", detail.currentPlanCode());
         assertEquals("专业版", detail.currentPlanName());
+        assertEquals(12L, detail.currentPlanAssignmentId());
+        assertEquals(OffsetDateTime.parse("2026-12-31T15:59:59Z"), detail.currentPlanExpiresAt());
         assertEquals("acme.example.com", detail.primaryDomain());
         assertEquals(3L, detail.statusHistoryCount());
         assertEquals("DISABLE", detail.latestStatusChangeType());
@@ -469,10 +631,127 @@ class TenantApplicationServiceCrudTest {
         }
     }
 
+    private static final class InMemoryTenantPlanRepository implements TenantPlanRepository {
+        private final Map<Long, TenantPlan> store = new LinkedHashMap<>();
+
+        @Override
+        public Optional<TenantPlan> findById(Long id) {
+            return Optional.ofNullable(store.get(id)).filter(plan -> plan.deletedAt() == null);
+        }
+
+        @Override
+        public Optional<TenantPlan> findActiveByCode(String code) {
+            return store.values().stream()
+                    .filter(plan -> plan.deletedAt() == null)
+                    .filter(plan -> plan.code().equals(code))
+                    .findFirst();
+        }
+
+        @Override
+        public List<TenantPlan> findActivePlans() {
+            return store.values().stream()
+                    .filter(plan -> plan.deletedAt() == null)
+                    .toList();
+        }
+
+        @Override
+        public TenantPlan save(TenantPlan plan) {
+            store.put(plan.id(), plan);
+            return plan;
+        }
+    }
+
+    private static final class InMemoryTenantPlanAssignmentRepository implements TenantPlanAssignmentRepository {
+        private final List<TenantPlanAssignment> saved = new ArrayList<>();
+        private final InMemoryTenantRepository tenantRepository;
+        private final InMemoryTenantPlanRepository planRepository;
+
+        private InMemoryTenantPlanAssignmentRepository() {
+            this(null, null);
+        }
+
+        private InMemoryTenantPlanAssignmentRepository(
+                InMemoryTenantRepository tenantRepository,
+                InMemoryTenantPlanRepository planRepository) {
+            this.tenantRepository = tenantRepository;
+            this.planRepository = planRepository;
+        }
+
+        @Override
+        public TenantPlanAssignment save(TenantPlanAssignment assignment) {
+            TenantPlanAssignment savedAssignment = new TenantPlanAssignment(
+                    (long) saved.size() + 1,
+                    assignment.tenantId(),
+                    assignment.previousPlanId(),
+                    assignment.planId(),
+                    assignment.status(),
+                    assignment.effectiveAt(),
+                    assignment.expiresAt(),
+                    assignment.assignedAt(),
+                    assignment.assignedBy(),
+                    assignment.changeReason(),
+                    assignment.source(),
+                    assignment.remark(),
+                    assignment.createdBy(),
+                    assignment.createdAt(),
+                    assignment.updatedBy(),
+                    assignment.updatedAt(),
+                    assignment.deletedBy(),
+                    assignment.deleteReason(),
+                    assignment.deletedAt());
+            saved.add(savedAssignment);
+            if (tenantRepository != null && planRepository != null) {
+                TenantPlan plan = planRepository.store.get(savedAssignment.planId());
+                tenantRepository.detailSupplements.put(savedAssignment.tenantId(), new TenantDetailSupplement(
+                        savedAssignment.id(),
+                        plan.id(),
+                        plan.code(),
+                        plan.name(),
+                        savedAssignment.expiresAt(),
+                        null,
+                        null,
+                        0L,
+                        null,
+                        null));
+            }
+            return savedAssignment;
+        }
+    }
+
+    private static TenantPlan tenantPlan(Long id, String code, TenantPlanStatus status) {
+        OffsetDateTime now = OffsetDateTime.parse("2026-07-14T00:00:00Z");
+        return new TenantPlan(
+                id,
+                code,
+                code,
+                status,
+                BillingCycle.MONTHLY,
+                BigDecimal.ZERO,
+                "CNY",
+                null,
+                null,
+                null,
+                "{}",
+                0,
+                null,
+                "system",
+                now,
+                "system",
+                now,
+                null,
+                null,
+                null);
+    }
+
     private static final class NoOpTenantOutboxEventRepository implements TenantOutboxEventRepository {
         @Override
         public Optional<com.xuan.erp.tenant.domain.model.TenantOutboxEvent> findById(Long eventId) {
             return Optional.empty();
+        }
+
+        @Override
+        public List<com.xuan.erp.tenant.domain.model.TenantOutboxEvent> findPublishable(int limit) {
+            return List.of();
         }
 
         @Override

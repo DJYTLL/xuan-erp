@@ -1,6 +1,7 @@
 package com.xuan.erp.tenant;
 
 import com.xuan.erp.tenant.interfaces.controller.TenantProvisionTaskController;
+import com.xuan.erp.tenant.interfaces.controller.TenantProvisionCallbackController;
 import java.lang.reflect.Method;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -25,7 +26,7 @@ class TenantProvisionTaskControllerContractTest {
         assertNotNull(getMapping);
         assertEquals("/tenants/{tenantId}/provision-tasks", getMapping.value()[0]);
         assertEquals("tenantId", listTasks.getParameters()[0].getAnnotation(PathVariable.class).value());
-        assertEquals("hasAuthority('tenant-provision:view')", permission(listTasks));
+        assertEquals("@xuanPermission.has('tenant-provision:view')", permission(listTasks));
     }
 
     @Test
@@ -39,7 +40,25 @@ class TenantProvisionTaskControllerContractTest {
         assertNotNull(postMapping);
         assertEquals("/tenant-provision-tasks/{taskId}/retry", postMapping.value()[0]);
         assertEquals("taskId", retryTask.getParameters()[0].getAnnotation(PathVariable.class).value());
-        assertEquals("hasAuthority('tenant-provision:manage')", permission(retryTask));
+        assertEquals("@xuanPermission.has('tenant-provision:manage')", permission(retryTask));
+    }
+
+    @Test
+    void internalProvisionCallbackRouteUsesDedicatedCallbackPermission() throws Exception {
+        RequestMapping mapping = TenantProvisionCallbackController.class.getAnnotation(RequestMapping.class);
+        assertNotNull(mapping);
+        assertEquals("/internal", mapping.value()[0]);
+
+        Method handleCallback = TenantProvisionCallbackController.class.getDeclaredMethod(
+                "handleCallback",
+                Long.class,
+                com.xuan.erp.tenant.interfaces.dto.TenantProvisionCallbackRequest.class
+        );
+        PostMapping postMapping = handleCallback.getAnnotation(PostMapping.class);
+        assertNotNull(postMapping);
+        assertEquals("/tenants/{tenantId}/provision-callbacks", postMapping.value()[0]);
+        assertEquals("tenantId", handleCallback.getParameters()[0].getAnnotation(PathVariable.class).value());
+        assertEquals("@xuanPermission.has('tenant-provision:callback')", permission(handleCallback));
     }
 
     private static String permission(Method method) {

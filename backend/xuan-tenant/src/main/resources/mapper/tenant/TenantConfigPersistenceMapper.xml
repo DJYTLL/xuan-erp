@@ -5,22 +5,24 @@
 <mapper namespace="com.xuan.erp.tenant.infrastructure.persistence.mapper.TenantConfigPersistenceMapper">
 
     <resultMap id="TenantConfigRecordMap" type="com.xuan.erp.tenant.infrastructure.persistence.entity.TenantConfigRecord">
-        <id column="id" property="id"/>
-        <result column="tenant_id" property="tenantId"/>
-        <result column="config_key" property="configKey"/>
-        <result column="config_value" property="configValue"/>
-        <result column="value_type" property="valueType"/>
-        <result column="description" property="description"/>
-        <result column="is_public" property="publicConfig"/>
-        <result column="is_sensitive" property="sensitive"/>
-        <result column="is_encrypted" property="encrypted"/>
-        <result column="created_by" property="createdBy"/>
-        <result column="created_at" property="createdAt"/>
-        <result column="updated_by" property="updatedBy"/>
-        <result column="updated_at" property="updatedAt"/>
-        <result column="deleted_by" property="deletedBy"/>
-        <result column="delete_reason" property="deleteReason"/>
-        <result column="deleted_at" property="deletedAt"/>
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.Long"/>
+            <arg column="config_key" javaType="java.lang.String"/>
+            <arg column="config_value" javaType="java.lang.String"/>
+            <arg column="value_type" javaType="java.lang.String"/>
+            <arg column="description" javaType="java.lang.String"/>
+            <arg column="is_public" javaType="_boolean"/>
+            <arg column="is_sensitive" javaType="_boolean"/>
+            <arg column="is_encrypted" javaType="_boolean"/>
+            <arg column="created_by" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="updated_by" javaType="java.lang.String"/>
+            <arg column="updated_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="deleted_by" javaType="java.lang.String"/>
+            <arg column="delete_reason" javaType="java.lang.String"/>
+            <arg column="deleted_at" javaType="java.time.OffsetDateTime"/>
+        </constructor>
     </resultMap>
 
     <select id="findById" resultMap="TenantConfigRecordMap">

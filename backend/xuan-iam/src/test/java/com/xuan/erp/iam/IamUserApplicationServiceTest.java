@@ -4,13 +4,18 @@ import com.xuan.erp.common.exception.BusinessException;
 import com.xuan.erp.iam.application.command.CreateIamUserCommand;
 import com.xuan.erp.iam.application.command.DisableIamUserCommand;
 import com.xuan.erp.iam.application.command.RebuildAuthorizationSnapshotCommand;
+import com.xuan.erp.iam.application.command.SetIamUserRolesCommand;
 import com.xuan.erp.iam.application.query.IamAuthorizationSnapshotView;
+import com.xuan.erp.iam.application.query.IamUserRoleGrantView;
 import com.xuan.erp.iam.application.query.IamUserDetailView;
 import com.xuan.erp.iam.application.service.IamAuthorizationApplicationService;
 import com.xuan.erp.iam.application.service.IamUserApplicationService;
 import com.xuan.erp.iam.domain.model.IamAuthorizationSnapshot;
+import com.xuan.erp.iam.domain.model.IamRole;
 import com.xuan.erp.iam.domain.model.IamUser;
 import com.xuan.erp.iam.domain.repository.IamAuthorizationSnapshotRepository;
+import com.xuan.erp.iam.domain.repository.IamRolePermissionRepository;
+import com.xuan.erp.iam.domain.repository.IamRoleRepository;
 import com.xuan.erp.iam.domain.repository.IamUserRepository;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -31,7 +36,7 @@ class IamUserApplicationServiceTest {
     @Test
     void createsUserWithTenantScopedCaseSensitiveUsername() {
         InMemoryIamUserRepository userRepository = new InMemoryIamUserRepository();
-        IamUserApplicationService service = new IamUserApplicationService(userRepository);
+        IamUserApplicationService service = service(userRepository);
 
         IamUserDetailView first = service.createUser(new CreateIamUserCommand(
                 1001L,
@@ -59,7 +64,7 @@ class IamUserApplicationServiceTest {
     @Test
     void rejectsDuplicateUsernameInSameTenant() {
         InMemoryIamUserRepository userRepository = new InMemoryIamUserRepository();
-        IamUserApplicationService service = new IamUserApplicationService(userRepository);
+        IamUserApplicationService service = service(userRepository);
         service.createUser(new CreateIamUserCommand(1001L, "admin", "{bcrypt}hash", "管理员", null, null, null));
 
         BusinessException error = assertThrows(BusinessException.class,
@@ -71,7 +76,7 @@ class IamUserApplicationServiceTest {
     @Test
     void disablesUserAndIncrementsAuthVersion() {
         InMemoryIamUserRepository userRepository = new InMemoryIamUserRepository();
-        IamUserApplicationService service = new IamUserApplicationService(userRepository);
+        IamUserApplicationService service = service(userRepository);
         Long userId = service.createUser(new CreateIamUserCommand(1001L, "admin", "{bcrypt}hash", "管理员", null, null, null)).id();
 
         IamUserDetailView disabled = service.disableUser(userId, new DisableIamUserCommand("离职停用", "security-admin"));
@@ -79,6 +84,82 @@ class IamUserApplicationServiceTest {
         assertFalse(disabled.enabled());
         assertEquals(1L, disabled.authVersion());
         assertEquals("离职停用", userRepository.store.get(userId).deleteReason());
+    }
+
+    @Test
+    void listsPlatformUsersWhenTenantIdIsZero() {
+        InMemoryIamUserRepository userRepository = new InMemoryIamUserRepository();
+        IamUserApplicationService service = service(userRepository);
+        userRepository.save(user(1L, 0L, "super_admin", 3L));
+        userRepository.save(user(2L, 1001L, "tenant_admin", 5L));
+
+        List<IamUserDetailView> users = service.listUsers(0L);
+
+        assertEquals(List.of("super_admin"), users.stream().map(IamUserDetailView::username).toList());
+    }
+
+    @Test
+    void getsPlatformUserRolesWhenTenantIdIsZero() {
+        InMemoryIamUserRepository userRepository = new InMemoryIamUserRepository();
+        InMemoryRolePermissionRepository rolePermissionRepository = new InMemoryRolePermissionRepository();
+        IamUserApplicationService service = new IamUserApplicationService(
+                userRepository,
+                new InMemoryRoleRepository(),
+                rolePermissionRepository,
+                new InMemoryAuthorizationSnapshotRepository());
+        userRepository.save(user(1L, 0L, "super_admin", 2L));
+        rolePermissionRepository.userRoleIds.put(1L, List.of(10L));
+
+        IamUserRoleGrantView grant = service.getUserRoles(0L, 1L);
+
+        assertEquals(0L, grant.tenantId());
+        assertEquals(1L, grant.userId());
+        assertEquals(List.of(10L), grant.roleIds());
+    }
+
+    @Test
+    void rejectsReplacingPlatformUserRoles() {
+        InMemoryIamUserRepository userRepository = new InMemoryIamUserRepository();
+        IamUserApplicationService service = service(userRepository);
+        userRepository.save(user(1L, 0L, "super_admin", 2L));
+
+        BusinessException error = assertThrows(BusinessException.class,
+                () -> service.replaceUserRoles(new SetIamUserRolesCommand(0L, 1L, List.of(10L), "security-admin")));
+
+        assertEquals("IAM_PLATFORM_USER_ROLE_READ_ONLY", error.code());
+    }
+
+    @Test
+    void replacesUserRolesAndRefreshesAuthorizationSnapshot() {
+        InMemoryIamUserRepository userRepository = new InMemoryIamUserRepository();
+        InMemoryRoleRepository roleRepository = new InMemoryRoleRepository();
+        InMemoryRolePermissionRepository rolePermissionRepository = new InMemoryRolePermissionRepository();
+        InMemoryAuthorizationSnapshotRepository snapshotRepository = new InMemoryAuthorizationSnapshotRepository();
+        IamUserApplicationService service = new IamUserApplicationService(
+                userRepository,
+                roleRepository,
+                rolePermissionRepository,
+                snapshotRepository);
+        Long userId = service.createUser(new CreateIamUserCommand(1001L, "buyer", "{bcrypt}hash", "采购员", null, null, null)).id();
+        IamRole buyerRole = roleRepository.save(role(10L, 1001L, "buyer"));
+        IamRole viewerRole = roleRepository.save(role(11L, 1001L, "viewer"));
+        rolePermissionRepository.rolePermissionCodes.put(buyerRole.id(), List.of("procurement:view"));
+        rolePermissionRepository.rolePermissionCodes.put(viewerRole.id(), List.of("product:view"));
+
+        IamUserRoleGrantView grant = service.replaceUserRoles(new SetIamUserRolesCommand(
+                1001L,
+                userId,
+                List.of(viewerRole.id(), buyerRole.id(), buyerRole.id()),
+                "security-admin"));
+
+        IamUser refreshedUser = userRepository.findById(userId).orElseThrow();
+        IamAuthorizationSnapshot refreshedSnapshot = snapshotRepository.findByTenantIdAndUserId(1001L, userId).orElseThrow();
+        assertEquals(List.of(buyerRole.id(), viewerRole.id()), grant.roleIds());
+        assertEquals(List.of(buyerRole.id(), viewerRole.id()), rolePermissionRepository.userRoleIds.get(userId));
+        assertEquals(1L, refreshedUser.authVersion());
+        assertEquals(1L, refreshedSnapshot.authVersion());
+        assertEquals(List.of(buyerRole.id(), viewerRole.id()), refreshedSnapshot.roleIds());
+        assertEquals(List.of("procurement:view", "product:view"), refreshedSnapshot.permissionCodes());
     }
 
     @Test
@@ -160,6 +241,139 @@ class IamUserApplicationServiceTest {
                     user.deletedAt());
             store.put(id, saved);
             return saved;
+        }
+    }
+
+    private static IamUserApplicationService service(InMemoryIamUserRepository userRepository) {
+        return new IamUserApplicationService(
+                userRepository,
+                new InMemoryRoleRepository(),
+                new InMemoryRolePermissionRepository(),
+                new InMemoryAuthorizationSnapshotRepository());
+    }
+
+    private static IamUser user(Long id, Long tenantId, String username, long authVersion) {
+        OffsetDateTime now = OffsetDateTime.now();
+        return new IamUser(
+                id,
+                tenantId,
+                username,
+                "{noop}password",
+                username,
+                null,
+                null,
+                null,
+                true,
+                true,
+                true,
+                true,
+                null,
+                now,
+                0,
+                null,
+                null,
+                false,
+                authVersion,
+                null,
+                "system",
+                now,
+                "system",
+                now,
+                null,
+                null,
+                null);
+    }
+
+    private static IamRole role(Long id, Long tenantId, String code) {
+        OffsetDateTime now = OffsetDateTime.now();
+        return new IamRole(
+                id,
+                tenantId,
+                code,
+                code,
+                code,
+                true,
+                "system",
+                now,
+                "system",
+                now,
+                null,
+                null,
+                null);
+    }
+
+    private static final class InMemoryRoleRepository implements IamRoleRepository {
+        private final Map<Long, IamRole> store = new LinkedHashMap<>();
+
+        @Override
+        public Optional<IamRole> findById(Long id) {
+            return Optional.ofNullable(store.get(id)).filter(IamRole::active);
+        }
+
+        @Override
+        public Optional<IamRole> findActiveByTenantIdAndCode(Long tenantId, String code) {
+            return store.values().stream()
+                    .filter(IamRole::active)
+                    .filter(role -> role.tenantId().equals(tenantId))
+                    .filter(role -> role.code().equals(code))
+                    .findFirst();
+        }
+
+        @Override
+        public List<IamRole> findActiveRoles(Long tenantId) {
+            return store.values().stream()
+                    .filter(IamRole::active)
+                    .filter(role -> role.tenantId().equals(tenantId))
+                    .sorted(Comparator.comparing(IamRole::id))
+                    .toList();
+        }
+
+        @Override
+        public IamRole save(IamRole role) {
+            store.put(role.id(), role);
+            return role;
+        }
+    }
+
+    private static final class InMemoryRolePermissionRepository implements IamRolePermissionRepository {
+        private final Map<Long, List<Long>> userRoleIds = new LinkedHashMap<>();
+        private final Map<Long, List<String>> rolePermissionCodes = new LinkedHashMap<>();
+
+        @Override
+        public List<String> findPermissionCodesByRoleId(Long tenantId, Long roleId) {
+            return rolePermissionCodes.getOrDefault(roleId, List.of());
+        }
+
+        @Override
+        public void replaceRolePermissions(Long tenantId, Long roleId, List<Long> permissionIds, String operator) {
+        }
+
+        @Override
+        public List<Long> findUserIdsByRoleId(Long tenantId, Long roleId) {
+            return userRoleIds.entrySet().stream()
+                    .filter(entry -> entry.getValue().contains(roleId))
+                    .map(Map.Entry::getKey)
+                    .sorted()
+                    .toList();
+        }
+
+        @Override
+        public List<Long> findRoleIdsByUserId(Long tenantId, Long userId) {
+            return userRoleIds.getOrDefault(userId, List.of());
+        }
+
+        @Override
+        public List<String> findPermissionCodesByUserId(Long tenantId, Long userId) {
+            return findRoleIdsByUserId(tenantId, userId).stream()
+                    .flatMap(roleId -> rolePermissionCodes.getOrDefault(roleId, List.of()).stream())
+                    .distinct()
+                    .sorted()
+                    .toList();
+        }
+
+        @Override
+        public void replaceUserRoles(Long tenantId, Long userId, List<Long> roleIds, String operator) {
+            userRoleIds.put(userId, List.copyOf(roleIds));
         }
     }
 

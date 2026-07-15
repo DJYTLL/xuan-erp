@@ -9,6 +9,8 @@ public record TenantProvisionTaskResponse(
         String taskKey,
         String taskType,
         ProvisionTaskStatus status,
+        String lastErrorCode,
+        String lastErrorMessage,
         List<TenantProvisionTaskStepResponse> steps
 ) {
 }

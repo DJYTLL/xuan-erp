@@ -19,7 +19,7 @@
         <template #actions>
           <el-button type="primary" @click="search">搜索</el-button>
           <el-button @click="resetFilters">重置</el-button>
-          <PermissionButton v-if="mode === 'draft'" type="primary" permission="purchase:create" @click="openCreateOrder">新增</PermissionButton>
+          <PermissionButton v-if="mode === 'draft'" type="primary" permission="procurement:create" @click="openCreateOrder">新增</PermissionButton>
         </template>
       </QueryToolbar>
     </template>
@@ -120,15 +120,16 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ElMessage } from 'element-plus';
-import ApprovalConfirmDialog from '@/components/business/ApprovalConfirmDialog.vue';
-import AppState from '@/components/business/AppState.vue';
-import BatchConfirmDialog from '@/components/business/BatchConfirmDialog.vue';
-import DataTableShell from '@/components/business/DataTableShell.vue';
-import DetailDrawer from '@/components/business/DetailDrawer.vue';
-import ListPageShell from '@/components/business/ListPageShell.vue';
-import PermissionButton from '@/components/business/PermissionButton.vue';
-import QueryToolbar from '@/components/business/QueryToolbar.vue';
+import { useI18n } from 'vue-i18n';
+import { ElMessage } from 'element-plus/es/components/message/index';
+import ApprovalConfirmDialog from '@/framework/components/ApprovalConfirmDialog.vue';
+import AppState from '@/framework/components/AppState.vue';
+import BatchConfirmDialog from '@/framework/components/BatchConfirmDialog.vue';
+import DataTableShell from '@/framework/components/DataTableShell.vue';
+import DetailDrawer from '@/framework/components/DetailDrawer.vue';
+import ListPageShell from '@/framework/components/ListPageShell.vue';
+import PermissionButton from '@/framework/components/PermissionButton.vue';
+import QueryToolbar from '@/framework/components/QueryToolbar.vue';
 
 defineOptions({ name: 'PurchaseOrderView' });
 
@@ -147,8 +148,18 @@ type ColumnKey = 'index' | 'orderNo' | 'supplier' | 'status' | 'buyer' | 'amount
 
 const route = useRoute();
 const router = useRouter();
+const { t } = useI18n();
 const mode = computed(() => String(route.meta.purchaseMode || 'draft'));
-const pageTitle = computed(() => String(route.meta.title || '采购单'));
+const pageTitle = computed(() => {
+  const titleKey = route.meta.titleKey as string | undefined;
+  if (titleKey) {
+    const translated = t(titleKey);
+    if (translated !== titleKey) {
+      return translated;
+    }
+  }
+  return String(route.meta.title || '采购单');
+});
 
 const filters = reactive({
   keyword: '',
@@ -249,7 +260,7 @@ function exportRows() {
 }
 
 function openCreateOrder() {
-  ElMessage.info('新增采购单后续可接入动态表单弹窗或单据编辑页');
+  router.push('/purchase/orders/create');
 }
 
 function openOrderDetail(row: OrderRow) {

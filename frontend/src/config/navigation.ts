@@ -1,176 +1,120 @@
 import type { Component } from 'vue';
 import {
+  Activity,
   BadgeDollarSign,
-  Blocks,
   Boxes,
+  Building2,
   CircleDollarSign,
+  Database,
+  KeyRound,
   LayoutDashboard,
+  ListTree,
   PackageOpen,
+  ScrollText,
   Settings,
+  ShieldCheck,
+  Users,
 } from 'lucide-vue-next';
+import {
+  createNavigationMenu as createFrameworkNavigationMenu,
+  createNavigationPermissionTree as createFrameworkNavigationPermissionTree,
+  type MenuNode,
+  type MenuUiMeta,
+  type NavigationPermissionNode,
+  type NavigationTranslator,
+} from '@/framework/navigation/menu';
+import type { CurrentMenuNode } from '@/types/auth';
 
-export type MenuNode = {
-  key: string;
-  title: string;
-  path?: string;
-  icon?: Component;
-  disabled?: boolean;
-  children?: MenuNode[];
-  permission?: string | string[];
-  keepAlive?: boolean;
-  affixTab?: boolean;
-  closable?: boolean;
+export type {
+  MenuNode,
+  NavigationPermissionNode,
+  NavigationTranslator,
 };
 
-export type NavigationTranslator = (key: string) => string;
+const iconMap: Record<string, Component> = {
+  Activity,
+  BadgeDollarSign,
+  Boxes,
+  Building2,
+  CircleDollarSign,
+  Database,
+  KeyRound,
+  LayoutDashboard,
+  ListTree,
+  PackageOpen,
+  ScrollText,
+  Settings,
+  ShieldCheck,
+  Users,
+};
 
-export function createNavigationMenu(t: NavigationTranslator): MenuNode[] {
-  return [
-    {
-      key: 'dashboard',
-      title: t('nav.dashboard'),
-      path: '/dashboard',
-      icon: LayoutDashboard,
-      keepAlive: true,
-      affixTab: true,
-      closable: false,
-    },
-    {
-      key: 'inventory',
-      title: t('nav.inventory'),
-      icon: PackageOpen,
-      children: [
-        {
-          key: 'base-data',
-          title: t('nav.baseData'),
-          children: [
-            {
-              key: 'products',
-              title: t('nav.products'),
-              path: '/inventory/products',
-              permission: 'product:view',
-              keepAlive: true,
-            },
-            {
-              key: 'suppliers',
-              title: '供应商管理',
-              path: '/inventory/suppliers',
-              disabled: true,
-            },
-            {
-              key: 'warehouses',
-              title: '仓库管理',
-              path: '/inventory/warehouses',
-              disabled: true,
-            },
-          ],
-        },
-        {
-          key: 'purchase-management',
-          title: t('nav.purchase'),
-          children: [
-            {
-              key: 'purchase-order-draft',
-              title: '采购单（草稿）',
-              path: '/purchase/orders/draft',
-              permission: 'purchase:order:view',
-              keepAlive: true,
-            },
-            {
-              key: 'purchase-order-approved',
-              title: '采购单（已审核）',
-              path: '/purchase/orders/approved',
-              permission: 'purchase:order:view',
-              keepAlive: true,
-            },
-            {
-              key: 'purchase-return-draft',
-              title: '采购退货（草稿）',
-              path: '/purchase/returns/draft',
-              permission: 'purchase:return:view',
-              keepAlive: true,
-            },
-            {
-              key: 'purchase-return-approved',
-              title: '采购退货（已审核）',
-              path: '/purchase/returns/approved',
-              permission: 'purchase:return:view',
-              keepAlive: true,
-            },
-          ],
-        },
-      ],
-    },
-    {
-      key: 'sales',
-      title: t('nav.sales'),
-      icon: BadgeDollarSign,
-      children: [
-        {
-          key: 'sales-orders',
-          title: '销售订单',
-          path: '/sales/orders',
-          disabled: true,
-        },
-        {
-          key: 'sales-return',
-          title: '销售退货',
-          path: '/sales/returns',
-          disabled: true,
-        },
-      ],
-    },
-    {
-      key: 'warehouse',
-      title: '仓库管理',
-      icon: Boxes,
-      children: [
-        {
-          key: 'stock-in',
-          title: '入库单',
-          path: '/warehouse/in',
-          disabled: true,
-        },
-        {
-          key: 'stock-out',
-          title: '出库单',
-          path: '/warehouse/out',
-          disabled: true,
-        },
-      ],
-    },
-    {
-      key: 'finance',
-      title: t('nav.finance'),
-      icon: CircleDollarSign,
-      children: [
-        {
-          key: 'payables',
-          title: '应付款',
-          path: '/finance/payables',
-          disabled: true,
-        },
-        {
-          key: 'receivables',
-          title: '应收款',
-          path: '/finance/receivables',
-          disabled: true,
-        },
-      ],
-    },
-    {
-      key: 'system',
-      title: '系统设置',
-      icon: Settings,
-      children: [
-        {
-          key: 'components',
-          title: t('nav.components'),
-          path: '/components',
-          icon: Blocks,
-          keepAlive: true,
-        },
-      ],
-    },
-  ];
+const menuUiMetaMap: Record<string, MenuUiMeta> = {
+  workbench: { icon: LayoutDashboard, keepAlive: true, affixTab: true, closable: false },
+  dashboard: { icon: LayoutDashboard, keepAlive: true, affixTab: true, closable: false },
+  product: { keepAlive: true },
+  inventory: { icon: PackageOpen },
+  products: { keepAlive: true },
+  sales: { icon: BadgeDollarSign },
+  warehouse: { icon: Boxes },
+  finance: { icon: CircleDollarSign },
+  system: { icon: Settings },
+  'system-permission-center': { icon: KeyRound },
+  'system-tenant-center': { icon: Building2 },
+  'system-audit-center': { icon: ScrollText },
+  'iam-menu-management': { icon: ListTree, keepAlive: true },
+  'iam-permission-management': { icon: KeyRound, keepAlive: true },
+  'iam-role-management': { icon: ShieldCheck, keepAlive: true },
+  'iam-user-management': { icon: Users, keepAlive: true },
+  'iam-init-template-management': { icon: ShieldCheck, keepAlive: true },
+  'tenant-management': { icon: Building2, keepAlive: true },
+  'tenant-plan-management': { icon: CircleDollarSign, keepAlive: true },
+  'audit-logs': { icon: ScrollText, keepAlive: true },
+  'audit-interface-costs': { icon: Activity, keepAlive: true },
+  'audit-sql-rankings': { icon: Database, keepAlive: true },
+  'purchase-order-draft': { keepAlive: true },
+  'purchase-order-approved': { keepAlive: true },
+  'purchase-return-draft': { keepAlive: true },
+  'purchase-return-approved': { keepAlive: true },
+};
+
+const pathUiMetaMap: Record<string, MenuUiMeta> = {
+  '/workbench': { icon: LayoutDashboard, keepAlive: true, affixTab: true, closable: false },
+  '/product': { keepAlive: true },
+  '/dashboard': { icon: LayoutDashboard, keepAlive: true, affixTab: true, closable: false },
+  '/inventory/products': { keepAlive: true },
+  '/system/iam/menus': { icon: ListTree, keepAlive: true },
+  '/system/iam/permissions': { icon: KeyRound, keepAlive: true },
+  '/system/iam/roles': { icon: ShieldCheck, keepAlive: true },
+  '/system/iam/users': { icon: Users, keepAlive: true },
+  '/system/iam/init-templates': { icon: ShieldCheck, keepAlive: true },
+  '/system/tenants': { icon: Building2, keepAlive: true },
+  '/system/tenant-plans': { icon: CircleDollarSign, keepAlive: true },
+  '/system/audit/logs': { icon: ScrollText, keepAlive: true },
+  '/system/audit/interface-costs': { icon: Activity, keepAlive: true },
+  '/system/audit/sql-rankings': { icon: Database, keepAlive: true },
+  '/purchase/orders/draft': { keepAlive: true },
+  '/purchase/orders/approved': { keepAlive: true },
+  '/purchase/returns/draft': { keepAlive: true },
+  '/purchase/returns/approved': { keepAlive: true },
+};
+
+const navigationOptions = {
+  iconMap,
+  menuUiMetaMap,
+  pathUiMetaMap,
+};
+
+export function createNavigationMenu(nodes: CurrentMenuNode[], t: NavigationTranslator): MenuNode[] {
+  return createFrameworkNavigationMenu(nodes, t, navigationOptions);
+}
+
+export function createNavigationPermissionTree(
+  nodes: CurrentMenuNode[],
+  t: NavigationTranslator,
+): NavigationPermissionNode[] {
+  return createFrameworkNavigationPermissionTree(nodes, t);
+}
+
+export function createDefaultNavigationMenu(nodes: CurrentMenuNode[], t: NavigationTranslator): MenuNode[] {
+  return createNavigationMenu(nodes, t);
 }

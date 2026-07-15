@@ -3,6 +3,7 @@ package com.xuan.erp.tenant.interfaces.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.time.OffsetDateTime;
 
 public record CreateTenantRequest(
         @NotBlank(message = "租户编码不能为空")
@@ -35,7 +36,11 @@ public record CreateTenantRequest(
         String adminEmail,
         @Size(max = 50, message = "管理员手机号长度不能超过 50")
         @Schema(description = "租户管理员手机号", example = "13800000000")
-        String adminPhone
+        String adminPhone,
+        @Schema(description = "创建租户时绑定的套餐 ID", example = "1")
+        Long planId,
+        @Schema(description = "初始套餐到期时间，不传表示暂不设置到期时间", example = "2026-08-15T23:59:59+08:00")
+        OffsetDateTime planExpiresAt
 ) {
 
     public CreateTenantRequest(
@@ -45,6 +50,23 @@ public record CreateTenantRequest(
             String contactPhone,
             String remark,
             String idempotencyKey) {
-        this(code, name, contactName, contactPhone, remark, idempotencyKey, null, null, null, null, null);
+        this(code, name, contactName, contactPhone, remark, idempotencyKey, null, null, null, null, null, null, null);
+    }
+
+    public CreateTenantRequest(
+            String code,
+            String name,
+            String contactName,
+            String contactPhone,
+            String remark,
+            String idempotencyKey,
+            String adminUsername,
+            String adminPassword,
+            String adminDisplayName,
+            String adminEmail,
+            String adminPhone,
+            Long planId) {
+        this(code, name, contactName, contactPhone, remark, idempotencyKey,
+                adminUsername, adminPassword, adminDisplayName, adminEmail, adminPhone, planId, null);
     }
 }

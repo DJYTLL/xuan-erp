@@ -4,21 +4,30 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xuan.erp.common.exception.BusinessException;
 import com.xuan.erp.tenant.application.command.TenantAdminBootstrapCommand;
+import com.xuan.erp.tenant.application.command.TenantProvisionCallbackCommand;
 import com.xuan.erp.tenant.application.query.TenantProvisionTaskStepView;
 import com.xuan.erp.tenant.application.query.TenantProvisionTaskView;
+import com.xuan.erp.tenant.domain.model.Tenant;
 import com.xuan.erp.tenant.domain.model.TenantOutboxEvent;
 import com.xuan.erp.tenant.domain.model.TenantProvisionTask;
 import com.xuan.erp.tenant.domain.model.TenantProvisionTaskStep;
+import com.xuan.erp.tenant.domain.model.TenantStatusHistory;
 import com.xuan.erp.tenant.domain.model.type.OutboxEventStatus;
 import com.xuan.erp.tenant.domain.model.type.ProvisionTaskStatus;
 import com.xuan.erp.tenant.domain.model.type.ProvisionTaskStepStatus;
+import com.xuan.erp.tenant.domain.model.type.TenantStatus;
 import com.xuan.erp.tenant.domain.repository.TenantOutboxEventRepository;
 import com.xuan.erp.tenant.domain.repository.TenantProvisionTaskRepository;
 import com.xuan.erp.tenant.domain.repository.TenantProvisionTaskStepRepository;
+import com.xuan.erp.tenant.domain.repository.TenantRepository;
+import com.xuan.erp.tenant.domain.repository.TenantStatusHistoryRepository;
 import java.time.OffsetDateTime;
-import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
 /**
@@ -29,20 +38,41 @@ public class TenantProvisionApplicationService {
 
     private static final String TASK_TYPE = "TENANT_PROVISION";
     private static final String IAM_BOOTSTRAP_STEP_KEY = "IAM_BOOTSTRAP";
+    private static final String TENANT_EVENT_TOPIC = "xuan-tenant-event";
+    private static final String AGGREGATE_TYPE = "TENANT_PROVISION_TASK";
+    private static final String SOURCE_SERVICE = "xuan-tenant";
+    private static final String EVENT_PROVISIONING_STARTED = "TenantProvisioningStarted";
+    private static final String EVENT_IAM_BOOTSTRAP_REQUESTED = "TenantIamBootstrapRequested";
+    private static final String EVENT_IAM_STEP_COMPLETED = "TenantIamProvisionStepCompleted";
+    private static final String EVENT_IAM_STEP_FAILED = "TenantIamProvisionStepFailed";
+    private static final String EVENT_TENANT_PROVISIONED = "TenantProvisioned";
 
     private final TenantProvisionTaskRepository taskRepository;
     private final TenantProvisionTaskStepRepository taskStepRepository;
-    @SuppressWarnings("unused")
     private final TenantOutboxEventRepository outboxEventRepository;
+    private final TenantRepository tenantRepository;
+    private final TenantStatusHistoryRepository statusHistoryRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public TenantProvisionApplicationService(
             TenantProvisionTaskRepository taskRepository,
             TenantProvisionTaskStepRepository taskStepRepository,
             TenantOutboxEventRepository outboxEventRepository) {
+        this(taskRepository, taskStepRepository, outboxEventRepository, null, null);
+    }
+
+    @Autowired
+    public TenantProvisionApplicationService(
+            TenantProvisionTaskRepository taskRepository,
+            TenantProvisionTaskStepRepository taskStepRepository,
+            TenantOutboxEventRepository outboxEventRepository,
+            @Nullable TenantRepository tenantRepository,
+            @Nullable TenantStatusHistoryRepository statusHistoryRepository) {
         this.taskRepository = taskRepository;
         this.taskStepRepository = taskStepRepository;
         this.outboxEventRepository = outboxEventRepository;
+        this.tenantRepository = tenantRepository;
+        this.statusHistoryRepository = statusHistoryRepository;
     }
 
     public TenantProvisionTaskView startProvisioning(Long tenantId, String taskKey, String idempotencyKey, String requestedBy) {
@@ -111,12 +141,17 @@ public class TenantProvisionApplicationService {
                 null
         ));
 
+        appendProvisioningStartedEvent(task, normalizedIdempotencyKey, operator, now);
+        appendIamBootstrapRequestedEvent(task, step, adminBootstrapCommand, operator, now);
+
         return new TenantProvisionTaskView(
                 task.id(),
                 task.tenantId(),
                 task.taskKey(),
                 task.taskType(),
                 task.status(),
+                task.lastErrorCode(),
+                task.lastErrorMessage(),
                 List.of(toStepView(step))
         );
     }
@@ -129,9 +164,26 @@ public class TenantProvisionApplicationService {
                         task.taskKey(),
                         task.taskType(),
                         task.status(),
+                        task.lastErrorCode(),
+                        task.lastErrorMessage(),
                         taskStepRepository.findByTaskId(task.id()).stream().map(this::toStepView).toList()
                 ))
                 .toList();
+    }
+
+    public void handleProvisionCallback(Long tenantId, TenantProvisionCallbackCommand command) {
+        TenantProvisionTask task = requireCallbackTask(tenantId, command);
+        TenantProvisionTaskStep step = requireStep(task.id(), requireText(command.provisionStep(), "初始化步骤不能为空"));
+        if (!IAM_BOOTSTRAP_STEP_KEY.equals(step.stepKey())) {
+            throw new BusinessException("TENANT_PROVISION_STEP_UNSUPPORTED", "当前仅支持 IAM_BOOTSTRAP 初始化步骤");
+        }
+
+        if (command.success()) {
+            completeIamBootstrapStep(task, step, command);
+            return;
+        }
+
+        failIamBootstrapStep(task, step, command);
     }
 
     public void retryTask(Long taskId, String stepKey, String operator, String reason) {
@@ -244,6 +296,271 @@ public class TenantProvisionApplicationService {
                 .orElseThrow(() -> new BusinessException("TENANT_OUTBOX_EVENT_NOT_FOUND", "Outbox 事件不存在"));
     }
 
+    private TenantProvisionTask requireCallbackTask(Long tenantId, TenantProvisionCallbackCommand command) {
+        String taskKey = textOrNull(command.taskKey());
+        String idempotencyKey = textOrNull(command.idempotencyKey());
+        if (taskKey == null && idempotencyKey == null) {
+            throw new BusinessException("TENANT_PROVISION_CALLBACK_MISSING_TASK_KEY", "初始化回执必须带任务键或幂等键");
+        }
+        if (taskKey != null) {
+            return taskRepository.findActiveByTenantIdAndTaskKey(tenantId, taskKey)
+                    .orElseThrow(() -> new BusinessException("TENANT_PROVISION_TASK_NOT_FOUND", "初始化任务不存在"));
+        }
+        return taskRepository.findActiveByTenantId(tenantId).stream()
+                .filter(task -> idempotencyKey.equals(task.idempotencyKey()))
+                .findFirst()
+                .orElseThrow(() -> new BusinessException("TENANT_PROVISION_TASK_NOT_FOUND", "初始化任务不存在"));
+    }
+
+    private void completeIamBootstrapStep(TenantProvisionTask task, TenantProvisionTaskStep step, TenantProvisionCallbackCommand command) {
+        requireCallbackEventType(command.eventType(), EVENT_IAM_STEP_COMPLETED);
+        if (task.status() == ProvisionTaskStatus.SUCCEEDED && step.status() == ProvisionTaskStepStatus.SUCCEEDED) {
+            return;
+        }
+        OffsetDateTime now = OffsetDateTime.now();
+        String operator = operator(command.operator());
+        String resultJson = callbackResultPayload(command);
+
+        taskStepRepository.save(new TenantProvisionTaskStep(
+                step.id(),
+                step.tenantId(),
+                step.provisionTaskId(),
+                step.stepKey(),
+                step.stepName(),
+                ProvisionTaskStepStatus.SUCCEEDED,
+                step.sequenceNo(),
+                step.idempotencyKey(),
+                step.requestPayloadJson(),
+                resultJson,
+                step.retryCount(),
+                step.maxRetryCount(),
+                null,
+                null,
+                step.startedAt() == null ? now : step.startedAt(),
+                now,
+                step.createdBy(),
+                step.createdAt(),
+                operator,
+                now,
+                step.deletedBy(),
+                step.deleteReason(),
+                step.deletedAt()
+        ));
+
+        TenantProvisionTask savedTask = taskRepository.save(new TenantProvisionTask(
+                task.id(),
+                task.tenantId(),
+                task.taskKey(),
+                task.taskType(),
+                ProvisionTaskStatus.SUCCEEDED,
+                task.idempotencyKey(),
+                step.stepName(),
+                task.requestPayloadJson(),
+                resultJson,
+                task.retryCount(),
+                task.maxRetryCount(),
+                null,
+                null,
+                task.startedAt() == null ? now : task.startedAt(),
+                now,
+                task.createdBy(),
+                task.createdAt(),
+                operator,
+                now,
+                task.deletedBy(),
+                task.deleteReason(),
+                task.deletedAt()
+        ));
+
+        markTenantProvisioned(savedTask.tenantId(), operator, now);
+        appendTenantProvisionedEvent(savedTask, command.eventId(), operator, now);
+    }
+
+    private void failIamBootstrapStep(TenantProvisionTask task, TenantProvisionTaskStep step, TenantProvisionCallbackCommand command) {
+        requireCallbackEventType(command.eventType(), EVENT_IAM_STEP_FAILED);
+        if (task.status() == ProvisionTaskStatus.SUCCEEDED || step.status() == ProvisionTaskStepStatus.SUCCEEDED) {
+            return;
+        }
+        if (task.status() == ProvisionTaskStatus.FAILED
+                && step.status() == ProvisionTaskStepStatus.FAILED
+                && hasProcessedCallback(step, command.eventId())) {
+            return;
+        }
+        OffsetDateTime now = OffsetDateTime.now();
+        String operator = operator(command.operator());
+        String errorCode = requireText(command.errorCode(), "失败错误码不能为空");
+        String errorMessage = requireText(command.errorMessage(), "失败错误信息不能为空");
+        String resultJson = callbackResultPayload(command);
+
+        taskStepRepository.save(new TenantProvisionTaskStep(
+                step.id(),
+                step.tenantId(),
+                step.provisionTaskId(),
+                step.stepKey(),
+                step.stepName(),
+                ProvisionTaskStepStatus.FAILED,
+                step.sequenceNo(),
+                step.idempotencyKey(),
+                step.requestPayloadJson(),
+                resultJson,
+                step.retryCount() + 1,
+                step.maxRetryCount(),
+                errorCode,
+                errorMessage,
+                step.startedAt() == null ? now : step.startedAt(),
+                now,
+                step.createdBy(),
+                step.createdAt(),
+                operator,
+                now,
+                step.deletedBy(),
+                step.deleteReason(),
+                step.deletedAt()
+        ));
+
+        taskRepository.save(new TenantProvisionTask(
+                task.id(),
+                task.tenantId(),
+                task.taskKey(),
+                task.taskType(),
+                ProvisionTaskStatus.FAILED,
+                task.idempotencyKey(),
+                step.stepName(),
+                task.requestPayloadJson(),
+                resultJson,
+                task.retryCount() + 1,
+                task.maxRetryCount(),
+                errorCode,
+                errorMessage,
+                task.startedAt() == null ? now : task.startedAt(),
+                now,
+                task.createdBy(),
+                task.createdAt(),
+                operator,
+                now,
+                task.deletedBy(),
+                task.deleteReason(),
+                task.deletedAt()
+        ));
+    }
+
+    private void markTenantProvisioned(Long tenantId, String operator, OffsetDateTime now) {
+        if (tenantRepository == null || statusHistoryRepository == null) {
+            return;
+        }
+        Tenant tenant = tenantRepository.findById(tenantId)
+                .orElseThrow(() -> new BusinessException("TENANT_NOT_FOUND", "租户不存在"));
+        if (tenant.status() == TenantStatus.PROVISIONED || tenant.status() == TenantStatus.ENABLED) {
+            return;
+        }
+        Tenant provisioned = tenantRepository.save(tenant.markProvisioned("IAM_BOOTSTRAP 初始化完成", operator, now));
+        statusHistoryRepository.append(new TenantStatusHistory(
+                null,
+                provisioned.id(),
+                tenant.status(),
+                provisioned.status(),
+                "PROVISION",
+                "IAM_BOOTSTRAP 初始化完成",
+                now,
+                operator,
+                null,
+                null,
+                "EVENT",
+                operator,
+                now
+        ));
+    }
+
+    private void appendProvisioningStartedEvent(TenantProvisionTask task, String idempotencyKey, String operator, OffsetDateTime now) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("tenantId", task.tenantId());
+        payload.put("taskId", task.id());
+        payload.put("taskKey", task.taskKey());
+        payload.put("idempotencyKey", idempotencyKey);
+        payload.put("provisionStep", IAM_BOOTSTRAP_STEP_KEY);
+        payload.put("occurredAt", now.toString());
+        payload.put("sourceService", SOURCE_SERVICE);
+        appendOutboxEvent(task, EVENT_PROVISIONING_STARTED, payload, operator, now);
+    }
+
+    private void appendIamBootstrapRequestedEvent(
+            TenantProvisionTask task,
+            TenantProvisionTaskStep step,
+            TenantAdminBootstrapCommand adminBootstrapCommand,
+            String operator,
+            OffsetDateTime now) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("tenantId", task.tenantId());
+        payload.put("taskId", task.id());
+        payload.put("taskKey", task.taskKey());
+        payload.put("stepId", step.id());
+        payload.put("provisionStep", step.stepKey());
+        payload.put("idempotencyKey", step.idempotencyKey());
+        if (adminBootstrapCommand != null) {
+            payload.put("adminUsername", adminBootstrapCommand.adminUsername());
+            payload.put("adminDisplayName", adminBootstrapCommand.adminDisplayName());
+            if (adminBootstrapCommand.adminEmail() != null) {
+                payload.put("adminEmail", adminBootstrapCommand.adminEmail());
+            }
+            if (adminBootstrapCommand.adminPhone() != null) {
+                payload.put("adminPhone", adminBootstrapCommand.adminPhone());
+            }
+        }
+        payload.put("occurredAt", now.toString());
+        payload.put("sourceService", SOURCE_SERVICE);
+        appendOutboxEvent(task, EVENT_IAM_BOOTSTRAP_REQUESTED, payload, operator, now);
+    }
+
+    private void appendTenantProvisionedEvent(TenantProvisionTask task, String callbackEventId, String operator, OffsetDateTime now) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("tenantId", task.tenantId());
+        payload.put("taskId", task.id());
+        payload.put("taskKey", task.taskKey());
+        payload.put("provisionStep", IAM_BOOTSTRAP_STEP_KEY);
+        payload.put("callbackEventId", callbackEventId);
+        payload.put("occurredAt", now.toString());
+        payload.put("sourceService", SOURCE_SERVICE);
+        appendOutboxEvent(task, EVENT_TENANT_PROVISIONED, payload, operator, now);
+    }
+
+    private void appendOutboxEvent(
+            TenantProvisionTask task,
+            String eventType,
+            Map<String, Object> payload,
+            String operator,
+            OffsetDateTime now) {
+        String eventId = UUID.randomUUID().toString();
+        payload.put("eventId", eventId);
+        payload.put("eventType", eventType);
+        outboxEventRepository.append(new TenantOutboxEvent(
+                null,
+                task.tenantId(),
+                eventId,
+                AGGREGATE_TYPE,
+                task.id(),
+                eventType,
+                TENANT_EVENT_TOPIC,
+                toJson(payload),
+                toJson(Map.of("sourceService", SOURCE_SERVICE)),
+                OutboxEventStatus.PENDING,
+                0,
+                5,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                operator,
+                now,
+                operator,
+                now
+        ));
+    }
+
     private TenantProvisionTaskStepView toStepView(TenantProvisionTaskStep step) {
         return new TenantProvisionTaskStepView(
                 step.id(),
@@ -251,7 +568,9 @@ public class TenantProvisionApplicationService {
                 step.stepKey(),
                 step.stepName(),
                 step.status(),
-                step.sequenceNo()
+                step.sequenceNo(),
+                step.lastErrorCode(),
+                step.lastErrorMessage()
         );
     }
 
@@ -264,6 +583,50 @@ public class TenantProvisionApplicationService {
             throw new BusinessException("TENANT_PROVISION_INVALID_REQUEST", message);
         }
         return value.trim();
+    }
+
+    private void requireCallbackEventType(String actualEventType, String expectedEventType) {
+        String eventType = requireText(actualEventType, "回执事件类型不能为空");
+        if (!expectedEventType.equals(eventType)) {
+            throw new BusinessException("TENANT_PROVISION_CALLBACK_TYPE_MISMATCH", "初始化回执事件类型不匹配");
+        }
+    }
+
+    private boolean hasProcessedCallback(TenantProvisionTaskStep step, String eventId) {
+        String normalizedEventId = textOrNull(eventId);
+        return normalizedEventId != null
+                && step.resultPayloadJson() != null
+                && step.resultPayloadJson().contains("\"eventId\":\"" + normalizedEventId + "\"");
+    }
+
+    private String textOrNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private String callbackResultPayload(TenantProvisionCallbackCommand command) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("eventId", requireText(command.eventId(), "回执事件 ID 不能为空"));
+        payload.put("eventType", requireText(command.eventType(), "回执事件类型不能为空"));
+        payload.put("provisionStep", requireText(command.provisionStep(), "初始化步骤不能为空"));
+        payload.put("success", command.success());
+        if (command.errorCode() != null) {
+            payload.put("errorCode", command.errorCode());
+        }
+        if (command.errorMessage() != null) {
+            payload.put("errorMessage", command.errorMessage());
+        }
+        if (command.resultPayload() != null && !command.resultPayload().isEmpty()) {
+            payload.put("result", command.resultPayload());
+        }
+        return toJson(payload);
+    }
+
+    private String toJson(Map<String, Object> value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException error) {
+            throw new IllegalStateException("failed to serialize tenant provisioning payload", error);
+        }
     }
 
     private String provisioningPayload(Long tenantId, TenantAdminBootstrapCommand adminBootstrapCommand) {

@@ -24,6 +24,9 @@
 | `tenant:enable` / `tenant:disable` | `tenant:lifecycle` | V1 阶段用一个生命周期权限聚合启用、停用等动作，后续如需细分再拆开 |
 | `tenant-config:view` | `tenant-config:view` | 配置读取能力 |
 | `tenant-config:edit` | `tenant-config:manage` | 当前用 `manage` 聚合配置写操作，后续如平台统一改成 `edit`，需要走受控演进 |
+| `tenant-plan:view` | `tenant-plan:view` | 套餐和套餐分配查询能力 |
+| `tenant-plan:update` | `tenant-plan:manage` | 当前用 `manage` 聚合套餐创建、编辑、启停和删除 |
+| `tenant-plan:assign` | `tenant-plan:assign` | 套餐分配关系维护能力 |
 
 ## 目录说明
 

@@ -27,4 +27,21 @@ public final class IamRolePersistenceAssembler {
                 record.deleteReason(),
                 record.deletedAt());
     }
+
+    public static IamRoleRecord toRecord(IamRole role) {
+        return new IamRoleRecord(
+                role.id(),
+                role.tenantId(),
+                role.code(),
+                role.name(),
+                role.description(),
+                role.enabled(),
+                role.createdBy(),
+                role.createdAt(),
+                role.updatedBy(),
+                role.updatedAt(),
+                role.deletedBy(),
+                role.deleteReason(),
+                role.deletedAt());
+    }
 }

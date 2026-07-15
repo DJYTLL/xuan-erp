@@ -17,7 +17,22 @@ public interface IamMenuPersistenceMapper {
     IamMenuRecord findByCode(@Param("code") String code);
 
     /**
+     * 按菜单主键查询有效菜单记录。
+     */
+    IamMenuRecord findById(@Param("id") Long id);
+
+    /**
      * 查询全部有效菜单记录。
      */
     List<IamMenuRecord> findActiveMenus();
+
+    /**
+     * 新增菜单记录。
+     */
+    int insert(@Param("menu") IamMenuRecord menu);
+
+    /**
+     * 更新菜单记录。
+     */
+    int update(@Param("menu") IamMenuRecord menu);
 }

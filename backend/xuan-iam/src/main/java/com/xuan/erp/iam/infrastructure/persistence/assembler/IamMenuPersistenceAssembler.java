@@ -31,4 +31,25 @@ public final class IamMenuPersistenceAssembler {
                 record.deleteReason(),
                 record.deletedAt());
     }
+
+    public static IamMenuRecord toRecord(IamMenu menu) {
+        return new IamMenuRecord(
+                menu.id(),
+                menu.code(),
+                menu.parentId(),
+                menu.title(),
+                menu.i18nKey(),
+                menu.path(),
+                menu.icon(),
+                menu.permissionCode(),
+                menu.sortNo(),
+                menu.enabled(),
+                menu.createdBy(),
+                menu.createdAt(),
+                menu.updatedBy(),
+                menu.updatedAt(),
+                menu.deletedBy(),
+                menu.deleteReason(),
+                menu.deletedAt());
+    }
 }

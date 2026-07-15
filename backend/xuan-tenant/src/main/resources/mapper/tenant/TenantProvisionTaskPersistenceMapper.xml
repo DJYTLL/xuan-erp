@@ -5,28 +5,30 @@
 <mapper namespace="com.xuan.erp.tenant.infrastructure.persistence.mapper.TenantProvisionTaskPersistenceMapper">
 
     <resultMap id="TenantProvisionTaskRecordMap" type="com.xuan.erp.tenant.infrastructure.persistence.entity.TenantProvisionTaskRecord">
-        <id column="id" property="id"/>
-        <result column="tenant_id" property="tenantId"/>
-        <result column="task_key" property="taskKey"/>
-        <result column="task_type" property="taskType"/>
-        <result column="status" property="status"/>
-        <result column="idempotency_key" property="idempotencyKey"/>
-        <result column="step_name" property="stepName"/>
-        <result column="request_payload" property="requestPayloadJson"/>
-        <result column="result_payload" property="resultPayloadJson"/>
-        <result column="retry_count" property="retryCount"/>
-        <result column="max_retry_count" property="maxRetryCount"/>
-        <result column="last_error_code" property="lastErrorCode"/>
-        <result column="last_error_message" property="lastErrorMessage"/>
-        <result column="started_at" property="startedAt"/>
-        <result column="finished_at" property="finishedAt"/>
-        <result column="created_by" property="createdBy"/>
-        <result column="created_at" property="createdAt"/>
-        <result column="updated_by" property="updatedBy"/>
-        <result column="updated_at" property="updatedAt"/>
-        <result column="deleted_by" property="deletedBy"/>
-        <result column="delete_reason" property="deleteReason"/>
-        <result column="deleted_at" property="deletedAt"/>
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.Long"/>
+            <arg column="task_key" javaType="java.lang.String"/>
+            <arg column="task_type" javaType="java.lang.String"/>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="idempotency_key" javaType="java.lang.String"/>
+            <arg column="step_name" javaType="java.lang.String"/>
+            <arg column="request_payload" javaType="java.lang.String"/>
+            <arg column="result_payload" javaType="java.lang.String"/>
+            <arg column="retry_count" javaType="_int"/>
+            <arg column="max_retry_count" javaType="_int"/>
+            <arg column="last_error_code" javaType="java.lang.String"/>
+            <arg column="last_error_message" javaType="java.lang.String"/>
+            <arg column="started_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="finished_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="created_by" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="updated_by" javaType="java.lang.String"/>
+            <arg column="updated_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="deleted_by" javaType="java.lang.String"/>
+            <arg column="delete_reason" javaType="java.lang.String"/>
+            <arg column="deleted_at" javaType="java.time.OffsetDateTime"/>
+        </constructor>
     </resultMap>
 
     <select id="findById" resultMap="TenantProvisionTaskRecordMap">

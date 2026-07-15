@@ -19,73 +19,100 @@
       </label>
 
       <nav class="side-nav" aria-label="main navigation">
-        <template v-for="item in filteredMenuGroups" :key="item.key">
-          <RouterLink
-            v-if="item.path"
-            class="side-item side-root"
-            :class="{ active: isPathActive(item.path) }"
-            :title="item.title"
-            :to="item.path"
-          >
-            <component :is="item.icon" v-if="item.icon" :size="16" />
-            <span class="side-label">{{ item.title }}</span>
-          </RouterLink>
+        <div class="nav-scroll-area">
+          <ul class="menu-root">
+            <li v-for="item in filteredMenuGroups" :key="item.key" class="menu-item-l1">
+              <button
+                class="menu-label l1"
+                :class="{ 'is-active': isMenuItemActive(item), 'is-muted': item.disabled }"
+                :title="item.title"
+                type="button"
+                @click="handleMenuClick(item)"
+              >
+                <span class="icon-box">
+                  <component :is="item.icon" v-if="item.icon" :size="16" />
+                </span>
+                <span class="label-text">{{ item.title }}</span>
+                <ChevronRight
+                  v-if="hasChildren(item)"
+                  class="chevron"
+                  :class="{ rotated: isMenuExpanded(item) }"
+                  :size="15"
+                />
+              </button>
 
-          <div v-else class="side-tree">
-            <button
-              class="side-item side-root side-toggle"
-              :class="{ active: isMenuActive(item) }"
-              :title="item.title"
-              type="button"
-              @click="toggleMenu(item.key)"
-            >
-              <component :is="item.icon" v-if="item.icon" :size="16" />
-              <span class="side-label">{{ item.title }}</span>
-              <ChevronRight class="side-arrow" :class="{ open: isMenuOpen(item.key) }" :size="15" />
-            </button>
-
-            <div v-if="!isSidebarCollapsed && isMenuOpen(item.key)" class="side-children">
-              <template v-for="child in item.children" :key="child.key">
-                <RouterLink
-                  v-if="child.path"
-                  class="side-item side-child"
-                  :class="{ active: isPathActive(child.path), muted: child.disabled }"
-                  :title="child.title"
-                  :to="menuTarget(child)"
-                >
-                  <span class="side-label">{{ child.title }}</span>
-                </RouterLink>
-
-                <div v-else class="side-tree">
-                  <button
-                    class="side-item side-child side-toggle"
-                    :class="{ active: isMenuActive(child) }"
-                    :title="child.title"
-                    type="button"
-                    @click="toggleMenu(child.key)"
-                  >
-                    <span class="side-label">{{ child.title }}</span>
-                    <ChevronRight class="side-arrow" :class="{ open: isMenuOpen(child.key) }" :size="15" />
-                  </button>
-
-                  <div v-if="isMenuOpen(child.key)" class="side-grandchildren">
-                    <RouterLink
-                      v-for="grandchild in child.children"
-                      :key="grandchild.key"
-                      class="side-item side-grandchild"
-                      :class="{ active: isPathActive(grandchild.path), muted: grandchild.disabled }"
-                      :title="grandchild.title"
-                      :to="menuTarget(grandchild)"
+              <Transition name="slide-down">
+                <ul v-if="hasChildren(item) && isMenuExpanded(item)" class="submenu-l2">
+                  <li v-for="child in item.children" :key="child.key">
+                    <button
+                      class="menu-label l2"
+                      :class="{ 'is-active': isMenuItemActive(child), 'is-muted': child.disabled }"
+                      :title="child.title"
+                      type="button"
+                      @click="handleMenuClick(child)"
                     >
-                      <span class="side-label">{{ grandchild.title }}</span>
-                    </RouterLink>
-                  </div>
-                </div>
-              </template>
-            </div>
-          </div>
-        </template>
+                      <span v-if="!hasChildren(child)" class="menu-dot" />
+                      <span class="label-text">{{ child.title }}</span>
+                      <ChevronRight
+                        v-if="hasChildren(child)"
+                        class="chevron"
+                        :class="{ rotated: isMenuExpanded(child) }"
+                        :size="14"
+                      />
+                    </button>
+
+                    <Transition name="slide-down">
+                      <ul v-if="hasChildren(child) && isMenuExpanded(child)" class="submenu-l3">
+                        <li v-for="grandchild in child.children" :key="grandchild.key">
+                          <button
+                            class="menu-label l3"
+                            :class="{ 'is-active': isMenuItemActive(grandchild), 'is-muted': grandchild.disabled }"
+                            :title="grandchild.title"
+                            type="button"
+                            @click="handleMenuClick(grandchild)"
+                          >
+                            <span class="label-text">{{ grandchild.title }}</span>
+                          </button>
+                        </li>
+                      </ul>
+                    </Transition>
+                  </li>
+                </ul>
+              </Transition>
+
+              <div v-if="isSidebarCollapsed && hasChildren(item)" class="sidebar-flyout" @click.stop>
+                <strong class="sidebar-flyout-title">{{ item.title }}</strong>
+                <ul class="sidebar-flyout-list">
+                  <li v-for="child in item.children" :key="child.key">
+                    <button
+                      class="sidebar-flyout-item"
+                      :class="{ 'is-active': isMenuItemActive(child), 'is-muted': child.disabled }"
+                      type="button"
+                      @click="handleFlyoutMenuClick(child)"
+                    >
+                      {{ child.title }}
+                    </button>
+                    <ul v-if="hasChildren(child)" class="sidebar-flyout-sublist">
+                      <li v-for="grandchild in child.children" :key="grandchild.key">
+                        <button
+                          class="sidebar-flyout-item child"
+                          :class="{ 'is-active': isMenuItemActive(grandchild), 'is-muted': grandchild.disabled }"
+                          type="button"
+                          @click="handleFlyoutMenuClick(grandchild)"
+                        >
+                          {{ grandchild.title }}
+                        </button>
+                      </li>
+                    </ul>
+                  </li>
+                </ul>
+              </div>
+            </li>
+          </ul>
+        </div>
       </nav>
+
+      <div class="sidebar-footer">{{ frameworkConfig.shell.footerText }}</div>
     </aside>
 
     <section class="app-main">
@@ -105,7 +132,9 @@
         </nav>
 
         <div class="topbar-actions">
-          <span class="tenant-pill">{{ t('shell.tenant') }} {{ authStore.tenantId || 'default' }}</span>
+          <span v-if="frameworkConfig.shell.showTenant" class="tenant-pill">
+            {{ t(frameworkConfig.shell.tenantLabelKey) }} {{ authStore.tenantId || 'default' }}
+          </span>
           <LanguageSwitcher />
           <ThemeSwitcher />
           <button class="shell-icon-button layout-settings" type="button" aria-label="布局设置" @click="layoutSettingsVisible = true">
@@ -116,6 +145,7 @@
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="logout">{{ t('shell.logout') }}</el-dropdown-item>
+                <el-dropdown-item command="logout-clear-device" divided>{{ t('shell.logoutClearDevice') }}</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -134,7 +164,7 @@
           @contextmenu.prevent.stop="openTabContextMenu($event, tab)"
         >
           <span v-if="tab.path === route.path" class="tab-dot" />
-          <span>{{ tab.title }}</span>
+          <span>{{ tabTitle(tab) }}</span>
           <button
             v-if="tab.closable !== false"
             class="tab-close"
@@ -163,7 +193,7 @@
 
       <div class="route-loading-bar" :class="{ active: routeLoading }" />
 
-      <main class="app-content">
+      <main ref="contentRef" class="app-content" @scroll.passive="handleContentScroll">
         <RouterView v-slot="{ Component, route: viewRoute }">
           <KeepAlive :include="cachedRouteNames">
             <component
@@ -220,16 +250,23 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter, type RouteLocationNormalizedLoaded } from 'vue-router';
 import { useI18n } from 'vue-i18n';
+import { ElMessage } from 'element-plus/es/components/message/index';
+import { ElMessageBox } from 'element-plus/es/components/message-box/index';
 import { ChevronRight, PanelLeftClose, PanelLeftOpen, Search, SlidersHorizontal, X } from 'lucide-vue-next';
+import { appFrameworkConfig } from '@/app/frameworkConfig';
 import AppLogo from '@/components/app/AppLogo.vue';
 import LanguageSwitcher from '@/components/app/LanguageSwitcher.vue';
 import ThemeSwitcher from '@/components/app/ThemeSwitcher.vue';
+import { getUserPreference, saveUserPreference } from '@/api/preferences';
 import { createNavigationMenu, type MenuNode } from '@/config/navigation';
 import { useAuthStore } from '@/stores/auth';
+import { useAuthorizationStore } from '@/stores/authorization';
 import { useSettingsStore } from '@/stores/settings';
+import { clearLoginProfiles } from '@/utils/loginProfiles';
 
 type BreadcrumbItem = {
-  title: string;
+  title?: string;
+  titleKey?: string;
   path?: string;
 };
 
@@ -240,30 +277,43 @@ type PageTab = {
   closable?: boolean;
 };
 
-const OPEN_TABS_STORAGE_KEY = 'xuan-erp-open-tabs-v1';
+const frameworkConfig = appFrameworkConfig;
+const OPEN_TABS_STORAGE_KEY = frameworkConfig.storage.openTabsKeyPrefix;
+const OPEN_TABS_PREFERENCE_KEY = frameworkConfig.preferences.shellTabsKey;
+
+type ShellTabsPreference = {
+  tabs: PageTab[];
+  activePath: string;
+  scrollPositions: Record<string, number>;
+};
 
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
 const authStore = useAuthStore();
+const authorizationStore = useAuthorizationStore();
 const settingsStore = useSettingsStore();
 
-const menuGroups = computed(() => createNavigationMenu(t));
-const accessibleMenuGroups = computed(() => filterAccessibleMenuTree(menuGroups.value));
+const menuGroups = computed(() => createNavigationMenu(authorizationStore.menus, t));
 const filteredMenuGroups = computed(() => {
   const keyword = menuSearchKeyword.value.trim().toLowerCase();
   if (!keyword) {
-    return accessibleMenuGroups.value;
+    return menuGroups.value;
   }
-  return filterMenuTree(accessibleMenuGroups.value, keyword);
+  return filterMenuTree(menuGroups.value, keyword);
 });
-const openKeys = ref(['inventory', 'base-data', 'purchase-management']);
+const openKeys = ref<string[]>([]);
 const isSidebarCollapsed = ref(false);
 const menuSearchKeyword = ref('');
 const layoutSettingsVisible = ref(false);
 const routeLoading = ref(false);
+const isLoggingOut = ref(false);
 const openTabs = ref<PageTab[]>([]);
+const contentRef = ref<HTMLElement | null>(null);
 const routeRefreshVersion = ref<Record<string, number>>({});
+const scrollPositions = ref<Record<string, number>>({});
+let tabPreferenceRestored = false;
+let scrollSaveTimer: number | undefined;
 const tabContextMenu = reactive<{
   visible: boolean;
   x: number;
@@ -277,8 +327,8 @@ const tabContextMenu = reactive<{
 });
 
 const dashboardTab = computed<PageTab>(() => ({
-  title: '仪表盘',
-  path: '/dashboard',
+  title: t('route.dashboard'),
+  path: frameworkConfig.routes.homePath,
   affixTab: true,
   closable: false,
 }));
@@ -287,15 +337,22 @@ const breadcrumbItems = computed<BreadcrumbItem[]>(() => {
   if (!settingsStore.showBreadcrumb) {
     return [];
   }
-  const breadcrumb = route.meta.breadcrumb;
+  return resolveBreadcrumbItems(route);
+});
+
+function resolveBreadcrumbItems(currentRoute: RouteLocationNormalizedLoaded): BreadcrumbItem[] {
+  const breadcrumb = currentRoute.meta.breadcrumb;
   if (Array.isArray(breadcrumb)) {
-    return breadcrumb as BreadcrumbItem[];
+    return (breadcrumb as BreadcrumbItem[]).map((item) => ({
+      ...item,
+      title: resolveLocalizedText(item.titleKey, item.title),
+    }));
   }
   if (typeof breadcrumb === 'string') {
     return breadcrumb.split('/').map((title) => ({ title: title.trim() }));
   }
-  return [{ title: String(route.meta.title || '仪表盘') }];
-});
+  return [{ title: resolveRouteTitle(currentRoute) }];
+}
 
 const cachedRouteNames = computed(() => [...new Set(openTabs.value
   .map((tab) => getRouteMetaByPath(tab.path)?.cacheName)
@@ -318,20 +375,6 @@ function toggleMenu(key: string) {
   } else {
     openKeys.value = [...openKeys.value, key];
   }
-}
-
-function filterAccessibleMenuTree(items: MenuNode[]): MenuNode[] {
-  const result: MenuNode[] = [];
-  for (const item of items) {
-    if (!authStore.hasPermission(item.permission)) {
-      continue;
-    }
-    const children = item.children ? filterAccessibleMenuTree(item.children) : undefined;
-    if (item.path || children?.length) {
-      result.push({ ...item, children });
-    }
-  }
-  return result;
 }
 
 function filterMenuTree(items: MenuNode[], keyword: string): MenuNode[] {
@@ -366,25 +409,60 @@ async function handleMenuSearchEnter() {
   }
 }
 
-function isPathActive(path?: string) {
-  return Boolean(path && route.path === path);
+function hasChildren(item: MenuNode) {
+  return Boolean(item.children?.length);
 }
 
-function menuTarget(item: MenuNode) {
-  if (item.disabled || !item.path) {
-    return route.fullPath;
+function isMenuExpanded(item: MenuNode) {
+  return !isSidebarCollapsed.value && (isMenuOpen(item.key) || Boolean(menuSearchKeyword.value.trim()));
+}
+
+async function handleMenuClick(item: MenuNode) {
+  if (item.disabled) {
+    return;
   }
-  return item.path;
+  if (hasChildren(item)) {
+    toggleMenu(item.key);
+    return;
+  }
+  if (item.path) {
+    await router.push(item.path);
+  }
+}
+
+async function handleFlyoutMenuClick(item: MenuNode) {
+  if (item.disabled || !item.path) {
+    return;
+  }
+  await router.push(item.path);
 }
 
 function getRouteMetaByPath(path: string) {
   return router.resolve(path).meta;
 }
 
+function resolveLocalizedText(titleKey?: string, fallback?: unknown) {
+  if (titleKey) {
+    const translated = t(titleKey);
+    if (translated !== titleKey) {
+      return translated;
+    }
+  }
+  return String(fallback || t('route.dashboard'));
+}
+
+function resolveRouteTitle(targetRoute: RouteLocationNormalizedLoaded | ReturnType<typeof router.resolve>) {
+  return resolveLocalizedText(targetRoute.meta.titleKey as string | undefined, targetRoute.meta.title);
+}
+
+function tabTitle(tab: PageTab) {
+  return resolveRouteTitle(router.resolve(tab.path)) || tab.title;
+}
+
 function makeTab(path: string): PageTab {
   const resolved = router.resolve(path);
   return {
-    title: String(resolved.meta.title || '仪表盘'),
+    title: resolveRouteTitle(resolved),
     path: resolved.path,
     affixTab: Boolean(resolved.meta.affixTab),
     closable: resolved.meta.closable !== false,
@@ -397,7 +475,7 @@ function sanitizeTabs(tabs: PageTab[]) {
     .map((item) => router.resolve(item.path).path));
   const cleaned = [dashboardTab.value, ...tabs]
     .filter((tab) => tab && typeof tab.path === 'string' && routePaths.has(tab.path))
-    .map((tab) => (tab.path === '/dashboard' ? dashboardTab.value : makeTab(tab.path)));
+    .map((tab) => (tab.path === frameworkConfig.routes.homePath ? dashboardTab.value : makeTab(tab.path)));
   return cleaned.filter((tab, index, array) => array.findIndex((item) => item.path === tab.path) === index);
 }
 
@@ -410,8 +488,49 @@ function restoreTabs() {
   }
 }
 
+async function restoreTabsFromPreference() {
+  try {
+    const preference = await getUserPreference<ShellTabsPreference>(OPEN_TABS_PREFERENCE_KEY);
+    if (!preference) {
+      restoreTabs();
+      return;
+    }
+    openTabs.value = sanitizeTabs(preference.tabs || []);
+    scrollPositions.value = normalizeScrollPositions(preference.scrollPositions);
+    persistTabs();
+    if (route.path === frameworkConfig.routes.homePath && preference.activePath && preference.activePath !== route.path) {
+      const resolved = router.resolve(preference.activePath);
+      if (!resolved.meta.public && resolved.matched.length) {
+        await router.replace(resolved.path);
+      }
+    }
+  } catch {
+    restoreTabs();
+  } finally {
+    tabPreferenceRestored = true;
+  }
+}
+
 function persistTabs() {
   sessionStorage.setItem(openTabsStorageKey(), JSON.stringify(openTabs.value));
+}
+
+function shouldSaveTabsPreferenceRemotely() {
+  return tabPreferenceRestored && authStore.isAuthenticated && !isLoggingOut.value;
+}
+
+function saveTabsPreference() {
+  if (!shouldSaveTabsPreferenceRemotely()) {
+    return;
+  }
+  const preference: ShellTabsPreference = {
+    tabs: openTabs.value,
+    activePath: route.path,
+    scrollPositions: scrollPositions.value,
+  };
+  saveUserPreference(OPEN_TABS_PREFERENCE_KEY, preference).catch(() => {
+    // 标签页状态先落 sessionStorage；后端短暂失败不影响 tab 切换手感。
+  });
 }
 
 function openTabsStorageKey() {
@@ -419,10 +538,13 @@ function openTabsStorageKey() {
 }
 
 function hasActiveChild(item: MenuNode): boolean {
-  return Boolean(item.children?.some((child) => isPathActive(child.path) || hasActiveChild(child)));
+  return Boolean(item.children?.some((child) => isMenuItemActive(child)));
 }
 
-function isMenuActive(item: MenuNode) {
+function isMenuItemActive(item: MenuNode): boolean {
+  if (item.path && route.path === item.path) {
+    return true;
+  }
   return hasActiveChild(item);
 }
 
@@ -451,6 +573,7 @@ async function closeTab(tab: PageTab | null) {
   const isClosingCurrent = route.path === target.path;
   openTabs.value = openTabs.value.filter((item) => item.path !== target.path);
   delete routeRefreshVersion.value[target.path];
+  delete scrollPositions.value[target.path];
 
   if (isClosingCurrent) {
     const fallback = openTabs.value[Math.max(0, closingIndex - 1)] || openTabs.value[0] || dashboardTab.value;
@@ -463,8 +586,8 @@ async function removeTab(tab: PageTab) {
 }
 
 function routeComponentKey(viewRoute: RouteLocationNormalizedLoaded) {
-  const cacheName = typeof viewRoute.meta.cacheName === 'string' ? viewRoute.meta.cacheName : viewRoute.fullPath;
-  return `${cacheName}:${viewRoute.fullPath}:${routeRefreshVersion.value[viewRoute.fullPath] || 0}`;
+  const cacheName = typeof viewRoute.meta.cacheName === 'string' ? viewRoute.meta.cacheName : viewRoute.path;
+  return `${cacheName}:${viewRoute.path}:${routeRefreshVersion.value[viewRoute.path] || 0}`;
 }
 
 function handleTabAuxClick(event: MouseEvent, tab: PageTab) {
@@ -505,6 +628,7 @@ async function closeOtherTabs() {
     return;
   }
   openTabs.value = openTabs.value.filter((tab) => tab.affixTab || tab.path === target.path);
+  pruneScrollPositions();
   if (!openTabs.value.some((tab) => tab.path === route.path)) {
     await router.push(target.path);
   }
@@ -518,6 +642,7 @@ async function closeLeftTabs() {
   }
   const targetIndex = openTabs.value.findIndex((tab) => tab.path === target.path);
   openTabs.value = openTabs.value.filter((tab, index) => tab.affixTab || index >= targetIndex);
+  pruneScrollPositions();
   if (!openTabs.value.some((tab) => tab.path === route.path)) {
     await router.push(target.path);
   }
@@ -531,6 +656,7 @@ async function closeRightTabs() {
   }
   const targetIndex = openTabs.value.findIndex((tab) => tab.path === target.path);
   openTabs.value = openTabs.value.filter((tab, index) => tab.affixTab || index <= targetIndex);
+  pruneScrollPositions();
   if (!openTabs.value.some((tab) => tab.path === route.path)) {
     await router.push(target.path);
   }
@@ -539,6 +665,7 @@ async function closeRightTabs() {
 
 async function closeAllTabs() {
   openTabs.value = openTabs.value.filter((tab) => tab.affixTab);
+  pruneScrollPositions();
   const fallback = openTabs.value[0] || dashboardTab.value;
   if (route.path !== fallback.path) {
     await router.push(fallback.path);
@@ -555,37 +682,150 @@ function refreshCurrentTab() {
   hideTabContextMenu();
 }
 
-onMounted(() => {
+function normalizeScrollPositions(value: unknown) {
+  if (!value || typeof value !== 'object') {
+    return {};
+  }
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+    .filter(([, scrollTop]) => typeof scrollTop === 'number' && Number.isFinite(scrollTop))
+    .map(([path, scrollTop]) => [path, Math.max(0, Math.round(scrollTop as number))]));
+}
+
+function pruneScrollPositions() {
+  const openPaths = new Set(openTabs.value.map((tab) => tab.path));
+  scrollPositions.value = Object.fromEntries(
+    Object.entries(scrollPositions.value).filter(([path]) => openPaths.has(path)),
+  );
+}
+
+function saveContentScroll(path = route.path) {
+  const scrollTop = contentRef.value?.scrollTop || 0;
+  scrollPositions.value = {
+    ...scrollPositions.value,
+    [path]: Math.max(0, Math.round(scrollTop)),
+  };
+}
+
+function restoreContentScroll(path = route.path) {
+  window.requestAnimationFrame(() => {
+    if (!contentRef.value) {
+      return;
+    }
+    contentRef.value.scrollTop = scrollPositions.value[path] || 0;
+  });
+}
+
+function handleContentScroll() {
+  if (scrollSaveTimer) {
+    window.clearTimeout(scrollSaveTimer);
+  }
+  scrollSaveTimer = window.setTimeout(() => {
+    saveContentScroll();
+    saveTabsPreference();
+  }, 160);
+}
+
+onMounted(async () => {
+  await settingsStore.loadRemotePreferences();
   settingsStore.applyTheme();
-  restoreTabs();
+  await restoreTabsFromPreference();
   addCurrentRouteTab();
+  restoreContentScroll();
   window.addEventListener('click', hideTabContextMenu);
 });
 
 onBeforeUnmount(() => {
+  saveContentScroll();
+  saveTabsPreference();
+  if (scrollSaveTimer) {
+    window.clearTimeout(scrollSaveTimer);
+  }
   window.removeEventListener('click', hideTabContextMenu);
 });
 
 watch(
-  () => route.path,
-  () => {
-    routeLoading.value = true;
-    window.setTimeout(() => {
-      routeLoading.value = false;
-    }, 220);
-    addCurrentRouteTab();
+  menuGroups,
+  (items) => {
+    openKeys.value = collectActiveMenuKeys(items, route.path);
   },
   { immediate: true },
 );
 
-watch(openTabs, persistTabs, { deep: true });
+watch(
+  () => route.path,
+  (currentPath, previousPath) => {
+    if (previousPath) {
+      saveContentScroll(previousPath);
+    }
+    routeLoading.value = true;
+    window.setTimeout(() => {
+      routeLoading.value = false;
+    }, 220);
+    if (tabPreferenceRestored) {
+      addCurrentRouteTab();
+      restoreContentScroll(currentPath);
+      saveTabsPreference();
+    }
+    openKeys.value = collectActiveMenuKeys(menuGroups.value, currentPath);
+  },
+  { immediate: true },
+);
 
-function handleUserCommand(command: string) {
+watch(openTabs, () => {
+  persistTabs();
+  saveTabsPreference();
+}, { deep: true });
+
+async function handleUserCommand(command: string) {
+  const storageKey = openTabsStorageKey();
   if (command === 'logout') {
-    const storageKey = openTabsStorageKey();
-    authStore.logout();
+    isLoggingOut.value = true;
+    await authStore.logout();
     sessionStorage.removeItem(storageKey);
-    router.push('/login');
+    await router.push(frameworkConfig.routes.loginPath);
+    return;
   }
+  if (command === 'logout-clear-device') {
+    try {
+      await ElMessageBox.confirm(
+        t('shell.clearLocalRecordsMessage'),
+        t('shell.clearLocalRecordsTitle'),
+        {
+          type: 'warning',
+          confirmButtonText: t('common.confirm'),
+          cancelButtonText: t('common.cancel'),
+        },
+      );
+    } catch {
+      return;
+    }
+    clearLoginProfiles();
+    isLoggingOut.value = true;
+    await authStore.logout();
+    sessionStorage.removeItem(storageKey);
+    await router.push(frameworkConfig.routes.loginPath);
+    ElMessage.success(t('shell.localRecordsCleared'));
+  }
+}
+
+function collectActiveMenuKeys(items: MenuNode[], currentPath: string) {
+  const activeKeys: string[] = [];
+  for (const item of items) {
+    if (!item.children?.length) {
+      continue;
+    }
+    if (item.children.some((child) => isMenuItemActiveForPath(child, currentPath))) {
+      activeKeys.push(item.key);
+      activeKeys.push(...collectActiveMenuKeys(item.children, currentPath));
+    }
+  }
+  return activeKeys;
+}
+
+function isMenuItemActiveForPath(item: MenuNode, currentPath: string): boolean {
+  if (item.path && currentPath.startsWith(item.path)) {
+    return true;
+  }
+  return Boolean(item.children?.some((child) => isMenuItemActiveForPath(child, currentPath)));
 }
 </script>

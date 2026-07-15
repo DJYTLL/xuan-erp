@@ -6,19 +6,23 @@ const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 
 const checks = [
   {
-    file: 'src/components/business/DynamicFormDialog.vue',
-    includes: ['defineProps<', 'defineEmits<', 'fields', 'submit'],
+    file: 'src/framework/components/DynamicFormDialog.vue',
+    includes: ['defineProps<', 'defineEmits<', 'fields', 'submit', 'DynamicFormSection', 'workspace-dialog-body'],
   },
   {
-    file: 'src/components/business/DetailDrawer.vue',
+    file: 'src/styles/shell.css',
+    includes: ['.dynamic-form-dialog--workspace', 'margin: 24px auto', 'max-height: calc(100vh - 48px)'],
+  },
+  {
+    file: 'src/framework/components/DetailDrawer.vue',
     includes: ['defineProps<', 'items', 'modelValue'],
   },
   {
-    file: 'src/components/business/ApprovalConfirmDialog.vue',
+    file: 'src/framework/components/ApprovalConfirmDialog.vue',
     includes: ['defineProps<', 'approve', 'reject', 'submit'],
   },
   {
-    file: 'src/components/business/BatchConfirmDialog.vue',
+    file: 'src/framework/components/BatchConfirmDialog.vue',
     includes: ['defineProps<', 'selectedCount', 'confirm'],
   },
   {
@@ -27,7 +31,7 @@ const checks = [
   },
   {
     file: 'src/views/ProductManagementView.vue',
-    includes: ['DynamicFormDialog', 'DetailDrawer', 'BatchConfirmDialog'],
+    includes: ['DynamicFormDialog', 'DetailDrawer', 'BatchConfirmDialog', 'productFormSections', 'show-custom-fields'],
   },
   {
     file: 'src/views/PurchaseOrderView.vue',

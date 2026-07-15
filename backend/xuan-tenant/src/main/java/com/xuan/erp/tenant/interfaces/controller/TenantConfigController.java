@@ -40,7 +40,7 @@ public class TenantConfigController {
     }
 
     @Operation(summary = "分页查询租户配置", description = "按租户 ID 分页查询未逻辑删除的租户级系统配置")
-    @PreAuthorize("hasAuthority('tenant-config:view')")
+    @PreAuthorize("@xuanPermission.has('tenant-config:view')")
     @GetMapping
     public ApiResponse<PageResult<TenantConfigResponse>> listConfigs(
             @RequestParam("tenantId") @Min(value = 1, message = "租户 ID 必须大于 0") Long tenantId,
@@ -59,7 +59,7 @@ public class TenantConfigController {
     }
 
     @Operation(summary = "查询公开租户配置", description = "按租户 ID 查询允许前端公开读取的租户配置")
-    @PreAuthorize("hasAuthority('tenant-config:view')")
+    @PreAuthorize("@xuanPermission.has('tenant-config:view')")
     @GetMapping("/public")
     public ApiResponse<List<TenantConfigResponse>> listPublicConfigs(
             @RequestParam("tenantId") @Min(value = 1, message = "租户 ID 必须大于 0") Long tenantId) {
@@ -69,28 +69,28 @@ public class TenantConfigController {
     }
 
     @Operation(summary = "查询租户配置详情", description = "根据配置 ID 查询租户级系统配置详情")
-    @PreAuthorize("hasAuthority('tenant-config:view')")
+    @PreAuthorize("@xuanPermission.has('tenant-config:view')")
     @GetMapping("/{configId}")
     public ApiResponse<TenantConfigResponse> getConfig(@PathVariable("configId") Long configId) {
         return ApiResponse.success(TenantConfigAssembler.toResponse(service.getConfig(configId)));
     }
 
     @Operation(summary = "创建租户配置", description = "创建租户级系统配置")
-    @PreAuthorize("hasAuthority('tenant-config:manage')")
+    @PreAuthorize("@xuanPermission.has('tenant-config:manage')")
     @PostMapping
     public ApiResponse<TenantConfigResponse> createConfig(@Valid @RequestBody TenantConfigRequest request) {
         return ApiResponse.success(TenantConfigAssembler.toResponse(service.createConfig(TenantConfigAssembler.toCreateCommand(request))));
     }
 
     @Operation(summary = "修改租户配置", description = "修改租户级系统配置值、值类型、公开标记和敏感标记")
-    @PreAuthorize("hasAuthority('tenant-config:manage')")
+    @PreAuthorize("@xuanPermission.has('tenant-config:manage')")
     @PutMapping("/{configId}")
     public ApiResponse<TenantConfigResponse> updateConfig(@PathVariable("configId") Long configId, @Valid @RequestBody TenantConfigRequest request) {
         return ApiResponse.success(TenantConfigAssembler.toResponse(service.updateConfig(configId, TenantConfigAssembler.toUpdateCommand(request))));
     }
 
     @Operation(summary = "删除租户配置", description = "软删除租户配置，并要求记录删除原因")
-    @PreAuthorize("hasAuthority('tenant-config:manage')")
+    @PreAuthorize("@xuanPermission.has('tenant-config:manage')")
     @DeleteMapping("/{configId}")
     public ApiResponse<Void> deleteConfig(@PathVariable("configId") Long configId, @Valid @RequestBody DeleteRequest request) {
         service.deleteConfig(configId, request.reason(), request.operator());

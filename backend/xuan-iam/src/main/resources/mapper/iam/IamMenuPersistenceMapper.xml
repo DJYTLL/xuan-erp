@@ -35,6 +35,15 @@
         LIMIT 1
     </select>
 
+    <select id="findById" resultMap="IamMenuRecordMap">
+        SELECT id, code, parent_id, title, i18n_key, path, icon, permission_code, sort_no, is_enabled,
+               created_by, created_at, updated_by, updated_at, deleted_by, delete_reason, deleted_at
+        FROM iam_menu
+        WHERE id = #{id}
+          AND deleted_at IS NULL
+        LIMIT 1
+    </select>
+
     <select id="findActiveMenus" resultMap="IamMenuRecordMap">
         SELECT id, code, parent_id, title, i18n_key, path, icon, permission_code, sort_no, is_enabled,
                created_by, created_at, updated_by, updated_at, deleted_by, delete_reason, deleted_at
@@ -42,4 +51,32 @@
         WHERE deleted_at IS NULL
         ORDER BY sort_no, id
     </select>
+
+    <insert id="insert">
+        INSERT INTO iam_menu (
+            code, parent_id, title, i18n_key, path, icon, permission_code, sort_no, is_enabled,
+            created_by, created_at, updated_by, updated_at
+        )
+        VALUES (
+            #{menu.code}, #{menu.parentId}, #{menu.title}, #{menu.i18nKey}, #{menu.path}, #{menu.icon},
+            #{menu.permissionCode}, #{menu.sortNo}, #{menu.enabled}, #{menu.createdBy}, #{menu.createdAt},
+            #{menu.updatedBy}, #{menu.updatedAt}
+        )
+    </insert>
+
+    <update id="update">
+        UPDATE iam_menu
+        SET parent_id = #{menu.parentId},
+            title = #{menu.title},
+            i18n_key = #{menu.i18nKey},
+            path = #{menu.path},
+            icon = #{menu.icon},
+            permission_code = #{menu.permissionCode},
+            sort_no = #{menu.sortNo},
+            is_enabled = #{menu.enabled},
+            updated_by = #{menu.updatedBy},
+            updated_at = #{menu.updatedAt}
+        WHERE id = #{menu.id}
+          AND deleted_at IS NULL
+    </update>
 </mapper>

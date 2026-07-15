@@ -8,6 +8,8 @@ public record TenantProvisionTaskStepResponse(
         String stepKey,
         String stepName,
         ProvisionTaskStepStatus status,
-        int sequenceNo
+        int sequenceNo,
+        String lastErrorCode,
+        String lastErrorMessage
 ) {
 }

@@ -11,6 +11,7 @@ import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.JWTParser;
 import com.nimbusds.jwt.SignedJWT;
 import com.xuan.erp.common.security.CurrentUser;
+import com.xuan.erp.common.security.jwt.jwk.CachingJwkKeyProvider;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtException;
 
@@ -46,6 +47,7 @@ public class JwkJwtTokenParser {
     public static final String CLAIM_TOKEN_TYPE = "tokenType";
 
     private final JWKSet jwkSet;
+    private final CachingJwkKeyProvider jwkProvider;
     private final String issuer;
     private final String audience;
     private final Clock clock;
@@ -71,6 +73,37 @@ public class JwkJwtTokenParser {
      */
     public JwkJwtTokenParser(JWKSet jwkSet, String issuer, String audience, Clock clock) {
         this.jwkSet = Objects.requireNonNull(jwkSet, "jwkSet must not be null").toPublicJWKSet();
+        this.jwkProvider = null;
+        this.issuer = requireText(issuer, "issuer must not be blank");
+        this.audience = requireText(audience, "audience must not be blank");
+        this.clock = Objects.requireNonNull(clock, "clock must not be null");
+    }
+
+    /**
+     * 创建基于缓存 JWK Provider 的 JWT 解析器。
+     *
+     * <p>业务服务自动配置使用该构造器。解析器会先从 JWT header 读取 {@code kid}，再通过
+     * {@link CachingJwkKeyProvider} 获取包含目标公钥的 JWK Set，因此服务启动时不需要立即访问 IAM。</p>
+     *
+     * @param jwkProvider 可按 kid 获取 JWK Set 的缓存 Provider
+     * @param issuer 期望的 JWT 签发方
+     * @param audience 期望的 JWT 受众
+     */
+    public JwkJwtTokenParser(CachingJwkKeyProvider jwkProvider, String issuer, String audience) {
+        this(jwkProvider, issuer, audience, Clock.systemUTC());
+    }
+
+    /**
+     * 创建基于缓存 JWK Provider 的 JWT 解析器，并允许注入时钟以便测试过期时间。
+     *
+     * @param jwkProvider 可按 kid 获取 JWK Set 的缓存 Provider
+     * @param issuer 期望的 JWT 签发方
+     * @param audience 期望的 JWT 受众
+     * @param clock 当前时间来源；生产环境通常使用 UTC 系统时钟
+     */
+    public JwkJwtTokenParser(CachingJwkKeyProvider jwkProvider, String issuer, String audience, Clock clock) {
+        this.jwkSet = null;
+        this.jwkProvider = Objects.requireNonNull(jwkProvider, "jwkProvider must not be null");
         this.issuer = requireText(issuer, "issuer must not be blank");
         this.audience = requireText(audience, "audience must not be blank");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
@@ -164,7 +197,7 @@ public class JwkJwtTokenParser {
      * kid 对应公钥、JWK 不是 RSA 公钥、或者验签失败，都会归类为签名错误。</p>
      */
     private void verifySignature(SignedJWT signedJwt, String kid) {
-        JWK jwk = jwkSet.getKeyByKeyId(kid);
+        JWK jwk = jwkSet(kid).getKeyByKeyId(kid);
         if (!(jwk instanceof RSAKey rsaKey)) {
             throw new JwtValidationException(
                     JwtValidationException.Reason.SIGNATURE_INVALID,
@@ -182,6 +215,19 @@ public class JwkJwtTokenParser {
                     "JWT signature verification failed",
                     ex);
         }
+    }
+
+    /**
+     * 根据 kid 取得本次验签使用的 JWK Set。
+     *
+     * <p>静态构造器直接使用本地 JWK Set；Provider 构造器则通过缓存 Provider 获取。这里保持同步接口，
+     * 让 Servlet 业务服务和现有调用方都可以继续使用 {@link #parseAccessToken(String)}。</p>
+     */
+    private JWKSet jwkSet(String kid) {
+        if (jwkProvider == null) {
+            return jwkSet;
+        }
+        return jwkProvider.jwkSetForKid(kid).block();
     }
 
     /**

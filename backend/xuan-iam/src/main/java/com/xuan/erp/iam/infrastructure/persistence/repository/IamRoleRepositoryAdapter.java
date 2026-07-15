@@ -27,9 +27,25 @@ public class IamRoleRepositoryAdapter implements IamRoleRepository {
     }
 
     @Override
+    public Optional<IamRole> findActiveByTenantIdAndCode(Long tenantId, String code) {
+        return Optional.ofNullable(mapper.findActiveByTenantIdAndCode(tenantId, code))
+                .map(IamRolePersistenceAssembler::toDomain);
+    }
+
+    @Override
     public List<IamRole> findActiveRoles(Long tenantId) {
         return mapper.findActiveRoles(tenantId).stream()
                 .map(IamRolePersistenceAssembler::toDomain)
                 .toList();
+    }
+
+    @Override
+    public IamRole save(IamRole role) {
+        if (role.id() == null) {
+            mapper.insert(IamRolePersistenceAssembler.toRecord(role));
+            return findActiveByTenantIdAndCode(role.tenantId(), role.code()).orElseThrow();
+        }
+        mapper.update(IamRolePersistenceAssembler.toRecord(role));
+        return findById(role.id()).orElseThrow();
     }
 }

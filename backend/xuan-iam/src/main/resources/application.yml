@@ -51,8 +51,8 @@ feign:
 
 xuan:
   rocketmq:
-    enabled: ${XUAN_ROCKETMQ_ENABLED:false}
-    name-server: ${XUAN_ROCKETMQ_NAME_SERVER:duaoyunxuan.com:9047}
+    enabled: ${XUAN_ROCKETMQ_ENABLED:true}
+    name-server: ${XUAN_ROCKETMQ_NAME_SERVER:${xuan.infra.rocketmq.name-server:duaoyunxuan.top:9047}}
     producer:
       group: ${XUAN_ROCKETMQ_PRODUCER_GROUP:${spring.application.name}-producer}
     topics:
@@ -71,7 +71,7 @@ seata:
     vgroup-mapping:
       xuan-erp-tx-group: default
     grouplist:
-      default: duaoyunxuan.com:9045
+      default: ${XUAN_SEATA_TC_ADDRESS:${xuan.infra.seata.tc-address:duaoyunxuan.top:9045}}
 
 management:
   endpoints:

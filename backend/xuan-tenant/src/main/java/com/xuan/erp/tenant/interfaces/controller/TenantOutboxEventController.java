@@ -28,7 +28,7 @@ public class TenantOutboxEventController {
     }
 
     @Operation(summary = "重试 Outbox 事件", description = "按事件 ID 触发 Outbox 事件人工回放入口")
-    @PreAuthorize("hasAuthority('tenant-provision:manage')")
+    @PreAuthorize("@xuanPermission.has('tenant-provision:manage')")
     @PostMapping("/tenant-outbox-events/{eventId}/retry")
     public ApiResponse<Void> retryEvent(
             @PathVariable("eventId") @Min(value = 1, message = "事件 ID 必须大于 0") Long eventId,

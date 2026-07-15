@@ -1,9 +1,13 @@
 package com.xuan.erp.common.mq.autoconfigure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xuan.erp.common.mq.RocketMqConsumerContainer;
+import com.xuan.erp.common.mq.RocketMqMessageHandler;
 import com.xuan.erp.common.mq.DefaultRocketMqMessageSender;
 import com.xuan.erp.common.mq.RocketMqMessageSender;
 import com.xuan.erp.common.mq.config.XuanRocketMqProperties;
+import java.util.List;
+import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -19,7 +23,7 @@ import org.springframework.util.Assert;
  */
 @AutoConfiguration
 @EnableConfigurationProperties(XuanRocketMqProperties.class)
-@ConditionalOnClass({DefaultMQProducer.class, ObjectMapper.class})
+@ConditionalOnClass({DefaultMQProducer.class, DefaultMQPushConsumer.class, ObjectMapper.class})
 public class XuanRocketMqAutoConfiguration {
 
     /**
@@ -61,5 +65,18 @@ public class XuanRocketMqAutoConfiguration {
     @ConditionalOnMissingBean(RocketMqMessageSender.class)
     RocketMqMessageSender xuanRocketMqMessageSender(DefaultMQProducer producer, ObjectMapper objectMapper) {
         return new DefaultRocketMqMessageSender(producer, objectMapper);
+    }
+
+    /**
+     * 业务模块声明消息处理器后，统一注册 RocketMQ Consumer 容器。
+     */
+    @Bean
+    @ConditionalOnProperty(prefix = "xuan.rocketmq", name = "enabled", havingValue = "true")
+    @ConditionalOnBean(RocketMqMessageHandler.class)
+    @ConditionalOnMissingBean(RocketMqConsumerContainer.class)
+    RocketMqConsumerContainer xuanRocketMqConsumerContainer(
+            List<RocketMqMessageHandler> handlers,
+            XuanRocketMqProperties properties) {
+        return new RocketMqConsumerContainer(handlers, properties);
     }
 }

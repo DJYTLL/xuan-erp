@@ -2,8 +2,10 @@ package com.xuan.erp.iam;
 
 import com.xuan.erp.iam.infrastructure.persistence.entity.IamMenuRecord;
 import com.xuan.erp.iam.infrastructure.persistence.entity.IamPermissionRecord;
+import com.xuan.erp.iam.infrastructure.persistence.entity.IamRefreshTokenRecord;
 import com.xuan.erp.iam.infrastructure.persistence.entity.IamRoleRecord;
 import com.xuan.erp.iam.infrastructure.persistence.entity.IamUserRecord;
+import com.xuan.erp.iam.infrastructure.persistence.entity.IamUserPreferenceRecord;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,9 +26,12 @@ class IamPersistenceMapperContractTest {
                 "IamUserPersistenceMapper.xml",
                 "IamTenantBootstrapMapper.xml",
                 "IamRolePersistenceMapper.xml",
+                "IamRolePermissionPersistenceMapper.xml",
                 "IamPermissionPersistenceMapper.xml",
                 "IamMenuPersistenceMapper.xml",
-                "IamAuthorizationSnapshotPersistenceMapper.xml"
+                "IamUserPreferencePersistenceMapper.xml",
+                "IamAuthorizationSnapshotPersistenceMapper.xml",
+                "IamRefreshTokenPersistenceMapper.xml"
         );
 
         for (String fileName : xmlFiles) {
@@ -67,6 +72,44 @@ class IamPersistenceMapperContractTest {
     }
 
     @Test
+    void rolePermissionMapperXmlDefinesGrantReplacementStatements() throws IOException {
+        Path xmlPath = MAPPER_DIR.resolve("IamRolePermissionPersistenceMapper.xml");
+        assertTrue(Files.exists(xmlPath), "缺少 IamRolePermissionPersistenceMapper.xml");
+
+        String xml = Files.readString(xmlPath);
+        assertTrue(xml.contains("namespace=\"com.xuan.erp.iam.infrastructure.persistence.mapper.IamRolePermissionPersistenceMapper\""));
+        assertTrue(xml.contains("findPermissionCodesByRoleId"));
+        assertTrue(xml.contains("disableRolePermissions"));
+        assertTrue(xml.contains("insertRolePermission"));
+        assertTrue(xml.contains("iam_role_permission"));
+    }
+
+    @Test
+    void userPreferenceMapperXmlDefinesPreferenceUpsertStatements() throws IOException {
+        Path xmlPath = MAPPER_DIR.resolve("IamUserPreferencePersistenceMapper.xml");
+        assertTrue(Files.exists(xmlPath), "缺少 IamUserPreferencePersistenceMapper.xml");
+
+        String xml = Files.readString(xmlPath);
+        assertTrue(xml.contains("namespace=\"com.xuan.erp.iam.infrastructure.persistence.mapper.IamUserPreferencePersistenceMapper\""));
+        assertTrue(xml.contains("findByTenantIdAndUserIdAndPreferenceKey"));
+        assertTrue(xml.contains("upsert"));
+        assertTrue(xml.contains("iam_user_preference"));
+    }
+
+    @Test
+    void refreshTokenMapperXmlDefinesRotationStatements() throws IOException {
+        Path xmlPath = MAPPER_DIR.resolve("IamRefreshTokenPersistenceMapper.xml");
+        assertTrue(Files.exists(xmlPath), "缺少 IamRefreshTokenPersistenceMapper.xml");
+
+        String xml = Files.readString(xmlPath);
+        assertTrue(xml.contains("namespace=\"com.xuan.erp.iam.infrastructure.persistence.mapper.IamRefreshTokenPersistenceMapper\""));
+        assertTrue(xml.contains("findByTokenHash"));
+        assertTrue(xml.contains("iam_refresh_token"));
+        assertTrue(xml.contains("<insert"));
+        assertTrue(xml.contains("<update"));
+    }
+
+    @Test
     void constructorMappedRecordsAcceptMybatisWrapperTypes() {
         assertDoesNotThrow(() -> IamUserRecord.class.getDeclaredConstructor(
                 Long.class, Long.class, String.class, String.class, String.class, String.class, String.class,
@@ -86,5 +129,12 @@ class IamPersistenceMapperContractTest {
                 Long.class, String.class, Long.class, String.class, String.class, String.class, String.class,
                 String.class, Integer.class, Boolean.class, String.class, OffsetDateTime.class, String.class,
                 OffsetDateTime.class, String.class, String.class, OffsetDateTime.class));
+        assertDoesNotThrow(() -> IamUserPreferenceRecord.class.getDeclaredConstructor(
+                Long.class, Long.class, Long.class, String.class, String.class, String.class,
+                OffsetDateTime.class, String.class, OffsetDateTime.class));
+        assertDoesNotThrow(() -> IamRefreshTokenRecord.class.getDeclaredConstructor(
+                Long.class, Long.class, Long.class, String.class, String.class, OffsetDateTime.class,
+                OffsetDateTime.class, String.class, OffsetDateTime.class, Long.class, String.class, String.class,
+                String.class, String.class, OffsetDateTime.class, String.class, OffsetDateTime.class));
     }
 }

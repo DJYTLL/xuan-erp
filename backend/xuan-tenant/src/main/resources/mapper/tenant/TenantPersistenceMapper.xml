@@ -5,25 +5,27 @@
 <mapper namespace="com.xuan.erp.tenant.infrastructure.persistence.mapper.TenantPersistenceMapper">
 
     <resultMap id="TenantRecordMap" type="com.xuan.erp.tenant.infrastructure.persistence.entity.TenantRecord">
-        <id column="id" property="id"/>
-        <result column="code" property="code"/>
-        <result column="normalized_code" property="normalizedCode"/>
-        <result column="name" property="name"/>
-        <result column="status" property="status"/>
-        <result column="contact_name" property="contactName"/>
-        <result column="contact_phone" property="contactPhone"/>
-        <result column="provisioned_at" property="provisionedAt"/>
-        <result column="enabled_at" property="enabledAt"/>
-        <result column="disabled_at" property="disabledAt"/>
-        <result column="disabled_reason" property="disabledReason"/>
-        <result column="remark" property="remark"/>
-        <result column="created_by" property="createdBy"/>
-        <result column="created_at" property="createdAt"/>
-        <result column="updated_by" property="updatedBy"/>
-        <result column="updated_at" property="updatedAt"/>
-        <result column="deleted_by" property="deletedBy"/>
-        <result column="delete_reason" property="deleteReason"/>
-        <result column="deleted_at" property="deletedAt"/>
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="code" javaType="java.lang.String"/>
+            <arg column="normalized_code" javaType="java.lang.String"/>
+            <arg column="name" javaType="java.lang.String"/>
+            <arg column="status" javaType="java.lang.String"/>
+            <arg column="contact_name" javaType="java.lang.String"/>
+            <arg column="contact_phone" javaType="java.lang.String"/>
+            <arg column="provisioned_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="enabled_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="disabled_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="disabled_reason" javaType="java.lang.String"/>
+            <arg column="remark" javaType="java.lang.String"/>
+            <arg column="created_by" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="updated_by" javaType="java.lang.String"/>
+            <arg column="updated_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="deleted_by" javaType="java.lang.String"/>
+            <arg column="delete_reason" javaType="java.lang.String"/>
+            <arg column="deleted_at" javaType="java.time.OffsetDateTime"/>
+        </constructor>
     </resultMap>
 
     <select id="findById" resultMap="TenantRecordMap">
@@ -55,9 +57,11 @@
 
     <select id="findDetailSupplement" resultType="com.xuan.erp.tenant.infrastructure.persistence.entity.TenantDetailSupplementRecord">
         SELECT
+            plan_summary.current_plan_assignment_id AS currentPlanAssignmentId,
             plan_summary.current_plan_id AS currentPlanId,
             plan_summary.current_plan_code AS currentPlanCode,
             plan_summary.current_plan_name AS currentPlanName,
+            plan_summary.current_plan_expires_at AS currentPlanExpiresAt,
             domain_summary.primary_domain_id AS primaryDomainId,
             domain_summary.primary_domain AS primaryDomain,
             COALESCE(history_summary.status_history_count, 0) AS statusHistoryCount,
@@ -66,9 +70,11 @@
         FROM tenant tenant_root
         LEFT JOIN LATERAL (
             SELECT
+                assignment.id AS current_plan_assignment_id,
                 tenant_plan.id AS current_plan_id,
                 tenant_plan.code AS current_plan_code,
-                tenant_plan.name AS current_plan_name
+                tenant_plan.name AS current_plan_name,
+                assignment.expires_at AS current_plan_expires_at
             FROM tenant_plan_assignment assignment
             JOIN tenant_plan tenant_plan ON tenant_plan.id = assignment.plan_id
             WHERE assignment.tenant_id = #{tenantId}

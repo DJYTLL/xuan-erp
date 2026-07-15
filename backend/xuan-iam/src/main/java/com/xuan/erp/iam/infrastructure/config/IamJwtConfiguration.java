@@ -15,7 +15,7 @@ import org.springframework.context.annotation.Configuration;
  * IAM JWT 配置，负责签名 JWK、验签解析器与访问令牌签发器装配。
  */
 @Configuration
-@EnableConfigurationProperties(IamJwtProperties.class)
+@EnableConfigurationProperties({IamJwtProperties.class, IamAuthProperties.class})
 public class IamJwtConfiguration {
 
     private static final Logger log = LoggerFactory.getLogger(IamJwtConfiguration.class);

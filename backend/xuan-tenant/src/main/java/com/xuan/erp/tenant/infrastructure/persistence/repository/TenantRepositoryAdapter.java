@@ -96,9 +96,11 @@ public class TenantRepositoryAdapter implements TenantRepository {
 
     private TenantDetailSupplement toDetailSupplement(TenantDetailSupplementRecord record) {
         return new TenantDetailSupplement(
+                record.currentPlanAssignmentId(),
                 record.currentPlanId(),
                 record.currentPlanCode(),
                 record.currentPlanName(),
+                record.currentPlanExpiresAt(),
                 record.primaryDomainId(),
                 record.primaryDomain(),
                 record.statusHistoryCount() == null ? 0L : record.statusHistoryCount(),

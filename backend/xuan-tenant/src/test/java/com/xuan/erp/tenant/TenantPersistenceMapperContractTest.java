@@ -37,4 +37,29 @@ class TenantPersistenceMapperContractTest {
         assertTrue(xml.contains("<insert id=\"insert\""));
         assertTrue(xml.contains("<update id=\"update\""));
     }
+
+    @Test
+    void applicationConfigLoadsMybatisXmlMappers() throws IOException {
+        String applicationYaml = Files.readString(Path.of("src/main/resources/application.yml"));
+
+        assertTrue(applicationYaml.contains("mybatis:"), "缺少 MyBatis 配置段");
+        assertTrue(applicationYaml.contains("mapper-locations: classpath*:mapper/**/*.xml"),
+                "缺少 XML Mapper 扫描配置");
+    }
+
+    @Test
+    void recordMappersUseConstructorResultMaps() throws IOException {
+        List<String> xmlFiles = List.of(
+                "TenantPersistenceMapper.xml",
+                "TenantConfigPersistenceMapper.xml",
+                "TenantProvisionTaskPersistenceMapper.xml",
+                "TenantProvisionTaskStepPersistenceMapper.xml",
+                "TenantOutboxEventPersistenceMapper.xml"
+        );
+
+        for (String fileName : xmlFiles) {
+            String xml = Files.readString(MAPPER_DIR.resolve(fileName));
+            assertTrue(xml.contains("<constructor>"), "record mapper 必须使用构造器映射: " + fileName);
+        }
+    }
 }

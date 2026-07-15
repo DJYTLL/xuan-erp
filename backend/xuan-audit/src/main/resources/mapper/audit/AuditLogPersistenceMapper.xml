@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xuan.erp.audit.infrastructure.persistence.mapper.AuditLogPersistenceMapper">
+
+    <select id="insert" resultType="java.lang.Long">
+        INSERT INTO audit_log (
+            tenant_id, actor_username, actor_user_id, action, entity_type, entity_id,
+            detail, status, request_id, client_ip, user_agent, duration_ms, method, path,
+            http_status, error_code, error_message, auth_tenant_id, auth_tenant_code,
+            is_cross_tenant, created_at
+        )
+        VALUES (
+            #{auditLog.tenantId}, #{auditLog.actorUsername}, #{auditLog.actorUserId},
+            #{auditLog.action}, #{auditLog.entityType}, #{auditLog.entityId}, #{auditLog.detail},
+            #{auditLog.status}, #{auditLog.requestId}, #{auditLog.clientIp}, #{auditLog.userAgent},
+            #{auditLog.durationMs}, #{auditLog.method}, #{auditLog.path}, #{auditLog.httpStatus},
+            #{auditLog.errorCode}, #{auditLog.errorMessage}, #{auditLog.authTenantId},
+            #{auditLog.authTenantCode}, #{auditLog.crossTenant}, #{auditLog.createdAt}
+        )
+        RETURNING id
+    </select>
+
+    <select id="search" resultType="com.xuan.erp.audit.infrastructure.persistence.entity.AuditLogRecord">
+        SELECT
+            id,
+            tenant_id AS tenantId,
+            actor_username AS actorUsername,
+            actor_user_id AS actorUserId,
+            action,
+            entity_type AS entityType,
+            entity_id AS entityId,
+            detail,
+            status,
+            request_id AS requestId,
+            client_ip AS clientIp,
+            user_agent AS userAgent,
+            duration_ms AS durationMs,
+            method,
+            path,
+            http_status AS httpStatus,
+            error_code AS errorCode,
+            error_message AS errorMessage,
+            auth_tenant_id AS authTenantId,
+            auth_tenant_code AS authTenantCode,
+            is_cross_tenant AS crossTenant,
+            created_at AS createdAt
+        FROM audit_log
+        <where>
+            <if test="query.tenantId != null">
+                AND tenant_id = #{query.tenantId}
+            </if>
+            <if test="query.actorUsername != null">
+                AND actor_username = #{query.actorUsername}
+            </if>
+            <if test="query.action != null">
+                AND action = #{query.action}
+            </if>
+            <if test="query.entityType != null">
+                AND entity_type = #{query.entityType}
+            </if>
+            <if test="query.status != null">
+                AND status = #{query.status}
+            </if>
+            <if test="query.startTime != null">
+                AND created_at &gt;= #{query.startTime}
+            </if>
+            <if test="query.endTime != null">
+                AND created_at &lt;= #{query.endTime}
+            </if>
+        </where>
+        ORDER BY created_at DESC, id DESC
+        LIMIT #{query.limit}
+    </select>
+</mapper>

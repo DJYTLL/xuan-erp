@@ -32,6 +32,15 @@
         LIMIT 1
     </select>
 
+    <select id="findById" resultMap="IamPermissionRecordMap">
+        SELECT id, code, name, service_name, menu_code, description, is_enabled,
+               created_by, created_at, updated_by, updated_at, deleted_by, delete_reason, deleted_at
+        FROM iam_permission
+        WHERE id = #{id}
+          AND deleted_at IS NULL
+        LIMIT 1
+    </select>
+
     <select id="findActivePermissions" resultMap="IamPermissionRecordMap">
         SELECT id, code, name, service_name, menu_code, description, is_enabled,
                created_by, created_at, updated_by, updated_at, deleted_by, delete_reason, deleted_at
@@ -39,4 +48,29 @@
         WHERE deleted_at IS NULL
         ORDER BY id
     </select>
+
+    <insert id="insert">
+        INSERT INTO iam_permission (
+            code, name, service_name, menu_code, description, is_enabled,
+            created_by, created_at, updated_by, updated_at
+        )
+        VALUES (
+            #{permission.code}, #{permission.name}, #{permission.serviceName}, #{permission.menuCode},
+            #{permission.description}, #{permission.enabled}, #{permission.createdBy}, #{permission.createdAt},
+            #{permission.updatedBy}, #{permission.updatedAt}
+        )
+    </insert>
+
+    <update id="update">
+        UPDATE iam_permission
+        SET name = #{permission.name},
+            service_name = #{permission.serviceName},
+            menu_code = #{permission.menuCode},
+            description = #{permission.description},
+            is_enabled = #{permission.enabled},
+            updated_by = #{permission.updatedBy},
+            updated_at = #{permission.updatedAt}
+        WHERE id = #{permission.id}
+          AND deleted_at IS NULL
+    </update>
 </mapper>

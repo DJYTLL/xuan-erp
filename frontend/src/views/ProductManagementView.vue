@@ -1,7 +1,7 @@
 <template>
   <ListPageShell :title="t('nav.products')">
     <template #query>
-      <QueryToolbar>
+      <SearchActionBar @reset="resetFilters" @search="search">
         <el-input v-model="filters.name" class="query-input" placeholder="名称" clearable />
         <el-input v-model="filters.code" class="query-input" placeholder="编码" clearable />
         <el-input v-model="filters.shortName" class="query-input" placeholder="简称" clearable />
@@ -16,86 +16,62 @@
         </el-select>
 
         <template #actions>
-          <el-button :icon="RefreshCw" circle @click="resetFilters" />
-          <el-button type="primary" @click="search">搜索</el-button>
           <el-button>导入</el-button>
           <el-button>导入结果</el-button>
           <PermissionButton type="primary" permission="product:create" @click="openCreateProduct">新增</PermissionButton>
         </template>
-      </QueryToolbar>
+      </SearchActionBar>
     </template>
 
-    <DataTableShell>
-      <template #toolbar>
-        <span v-if="selectedRows.length" class="table-selected-count">已选 {{ selectedRows.length }} 项</span>
-        <el-select v-model="tableDensity" class="table-density-select" size="small" placeholder="密度">
-          <el-option label="默认" value="default" />
-          <el-option label="紧凑" value="small" />
-          <el-option label="宽松" value="large" />
-        </el-select>
-        <el-dropdown trigger="click">
-          <el-button text :icon="SlidersHorizontal">列设置</el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item v-for="column in columnOptions" :key="column.key">
-                <el-checkbox v-model="visibleColumns[column.key]">{{ column.label }}</el-checkbox>
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+    <XuanBrowseTable
+      v-model:current-page="currentPage"
+      v-model:page-size="pageSize"
+      v-model:density="tableDensity"
+      page-code="inventory-products"
+      table-code="product-list"
+      :tenant-id="browseTenantId"
+      :user-id="browseUserId"
+      :data="pagedProducts"
+      :columns="productColumns"
+      :total="products.length"
+      :selected-count="selectedRows.length"
+      :actions-width="180"
+      @selection-change="selectedRows = $event"
+    >
+      <template #toolbar-actions>
         <el-button text @click="exportRows">导出</el-button>
         <el-button text type="danger" :disabled="!selectedRows.length" @click="openDeleteProducts(selectedRows)">批量删除</el-button>
       </template>
 
-      <el-table :data="pagedProducts" :size="tableDensity" height="520" border @selection-change="selectedRows = $event">
-        <template #empty>
-          <AppState type="empty" title="暂无商品" description="当前筛选条件下没有商品数据。" />
-        </template>
-        <el-table-column type="selection" width="46" />
-        <el-table-column v-if="visibleColumns.index" prop="index" label="序号" width="70" />
-        <el-table-column v-if="visibleColumns.code" prop="code" label="编码" width="120" />
-        <el-table-column v-if="visibleColumns.name" prop="name" label="名称" width="120" />
-        <el-table-column v-if="visibleColumns.factoryCode" prop="factoryCode" label="厂家编码" width="140" />
-        <el-table-column v-if="visibleColumns.factoryModel" prop="factoryModel" label="厂家型号" width="140" />
-        <el-table-column v-if="visibleColumns.factoryName" prop="factoryName" label="厂家名称" width="140" />
-        <el-table-column v-if="visibleColumns.supplier" prop="supplier" label="来源供应商" width="150" />
-        <el-table-column v-if="visibleColumns.type" label="商品类型" width="120">
-          <template #default>
-            <el-tag size="small">普通商品</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column v-if="visibleColumns.category" prop="category" label="分类" width="100" />
-        <el-table-column v-if="visibleColumns.unit" prop="unit" label="单位" width="90" />
-        <el-table-column v-if="visibleColumns.warehouse" prop="warehouse" label="默认仓库" width="120" />
-        <el-table-column v-if="visibleColumns.position" prop="position" label="默认库位" width="120" />
-        <el-table-column v-if="visibleColumns.price" prop="price" label="价格" width="90" />
-        <el-table-column v-if="visibleColumns.cost" prop="cost" label="成本" width="90" />
-        <el-table-column label="操作" fixed="right" width="180">
-          <template #default="{ row }">
-            <el-button link type="primary" @click="openProductDetail(row)">查看</el-button>
-            <el-button link type="primary" @click="openEditProduct(row)">编辑</el-button>
-            <el-button link type="danger" @click="openDeleteProducts([row])">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <template #pagination>
-        <span>共 {{ products.length }} 条</span>
-        <el-pagination
-          v-model:current-page="currentPage"
-          v-model:page-size="pageSize"
-          layout="sizes, prev, pager, next, jumper"
-          :total="products.length"
-          :page-sizes="[10, 20, 50]"
-        />
+      <template #cell-type>
+        <el-tag size="small">普通商品</el-tag>
       </template>
-    </DataTableShell>
+
+      <template #empty>
+        <AppState type="empty" title="暂无商品" description="当前筛选条件下没有商品数据。" />
+      </template>
+
+      <template #actions="{ row }">
+        <el-button link type="primary" @click="openProductDetail(row)">查看</el-button>
+        <el-button link type="primary" @click="openEditProduct(row)">编辑</el-button>
+        <el-button link type="danger" @click="openDeleteProducts([row])">删除</el-button>
+      </template>
+    </XuanBrowseTable>
 
     <DynamicFormDialog
       v-model="formVisible"
       :title="formMode === 'create' ? '新增商品' : '编辑商品'"
+      description="按业务使用顺序维护商品资料、库存策略、价格与扩展字段"
+      helper-text="拖动标题栏移动，拖动四角调整大小"
       :fields="productFields"
+      :sections="productFormSections"
       :model="productForm"
+      :custom-fields="productCustomFields"
+      variant="workspace"
+      width="96vw"
+      label-width="0"
+      label-position="top"
+      show-custom-fields
       @submit="submitProductForm"
     />
     <DetailDrawer
@@ -121,17 +97,18 @@
 import { computed, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
-import { ElMessage } from 'element-plus';
-import { RefreshCw, SlidersHorizontal } from 'lucide-vue-next';
-import AppState from '@/components/business/AppState.vue';
-import BatchConfirmDialog from '@/components/business/BatchConfirmDialog.vue';
-import DataTableShell from '@/components/business/DataTableShell.vue';
-import DetailDrawer from '@/components/business/DetailDrawer.vue';
-import DynamicFormDialog from '@/components/business/DynamicFormDialog.vue';
-import type { DynamicFormField } from '@/components/business/DynamicFormDialog.vue';
-import ListPageShell from '@/components/business/ListPageShell.vue';
-import PermissionButton from '@/components/business/PermissionButton.vue';
-import QueryToolbar from '@/components/business/QueryToolbar.vue';
+import { ElMessage } from 'element-plus/es/components/message/index';
+import AppState from '@/framework/components/AppState.vue';
+import BatchConfirmDialog from '@/framework/components/BatchConfirmDialog.vue';
+import DetailDrawer from '@/framework/components/DetailDrawer.vue';
+import DynamicFormDialog from '@/framework/components/DynamicFormDialog.vue';
+import type { DynamicCustomField, DynamicFormField, DynamicFormSection } from '@/framework/components/DynamicFormDialog.vue';
+import ListPageShell from '@/framework/components/ListPageShell.vue';
+import PermissionButton from '@/framework/components/PermissionButton.vue';
+import SearchActionBar from '@/framework/components/SearchActionBar.vue';
+import XuanBrowseTable, { type XuanBrowseTableColumn } from '@/framework/components/XuanBrowseTable.vue';
+import type { BrowseTableDensity } from '@/framework/components/browseTablePreferences';
+import { useAuthStore } from '@/stores/auth';
 
 defineOptions({ name: 'ProductManagementView' });
 
@@ -151,11 +128,12 @@ type ProductRow = {
   cost: string;
 };
 
-type ColumnKey = 'index' | 'code' | 'name' | 'factoryCode' | 'factoryModel' | 'factoryName' | 'supplier' | 'type' | 'category' | 'unit' | 'warehouse' | 'position' | 'price' | 'cost';
-
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
+const authStore = useAuthStore();
+const browseTenantId = computed(() => String(authStore.tenantId ?? '0'));
+const browseUserId = computed(() => authStore.currentUser?.username || 'anonymous');
 
 const filters = reactive({
   name: '',
@@ -166,29 +144,25 @@ const filters = reactive({
   status: '',
 });
 
-const columnOptions: Array<{ key: ColumnKey; label: string }> = [
-  { key: 'index', label: '序号' },
-  { key: 'code', label: '编码' },
-  { key: 'name', label: '名称' },
-  { key: 'factoryCode', label: '厂家编码' },
-  { key: 'factoryModel', label: '厂家型号' },
-  { key: 'factoryName', label: '厂家名称' },
-  { key: 'supplier', label: '来源供应商' },
-  { key: 'type', label: '商品类型' },
-  { key: 'category', label: '分类' },
-  { key: 'unit', label: '单位' },
-  { key: 'warehouse', label: '默认仓库' },
-  { key: 'position', label: '默认库位' },
-  { key: 'price', label: '价格' },
-  { key: 'cost', label: '成本' },
+const productColumns: Array<XuanBrowseTableColumn<ProductRow>> = [
+  { key: 'index', title: '序号', width: 70 },
+  { key: 'code', title: '编码', width: 120 },
+  { key: 'name', title: '名称', width: 120 },
+  { key: 'factoryCode', title: '厂家编码', width: 140 },
+  { key: 'factoryModel', title: '厂家型号', width: 140 },
+  { key: 'factoryName', title: '厂家名称', width: 140 },
+  { key: 'supplier', title: '来源供应商', width: 150 },
+  { key: 'type', title: '商品类型', width: 120 },
+  { key: 'category', title: '分类', width: 100 },
+  { key: 'unit', title: '单位', width: 90 },
+  { key: 'warehouse', title: '默认仓库', width: 120 },
+  { key: 'position', title: '默认库位', width: 120 },
+  { key: 'price', title: '价格', width: 90, align: 'right' },
+  { key: 'cost', title: '成本', width: 90, align: 'right' },
 ];
 
-const visibleColumns = reactive<Record<ColumnKey, boolean>>(Object.fromEntries(
-  columnOptions.map((column) => [column.key, true]),
-) as Record<ColumnKey, boolean>);
-
 const selectedRows = ref<ProductRow[]>([]);
-const tableDensity = ref(String(route.query.density || 'default'));
+const tableDensity = ref<BrowseTableDensity>((route.query.density as BrowseTableDensity) || 'default');
 const currentPage = ref(Number(route.query.page || 1));
 const pageSize = ref(Number(route.query.pageSize || 10));
 const formVisible = ref(false);
@@ -204,6 +178,13 @@ const productForm = reactive<Record<string, unknown>>({
   category: '',
   unit: '',
   warehouse: '',
+  position: '',
+  stockStrategy: '',
+  taxRate: '',
+  vip2Price: '',
+  retailPrice: '',
+  wholesalePrice: '',
+  vipPrice: '',
   price: 0,
   remark: '',
 });
@@ -226,6 +207,41 @@ const productFields: DynamicFormField[] = [
   { key: 'price', label: '价格', component: 'number', min: 0 },
   { key: 'remark', label: '备注', component: 'textarea', span: 24 },
 ];
+
+const productFormSections: DynamicFormSection[] = [
+  {
+    title: '商品资料',
+    fields: [
+      { key: 'code', label: '商品编码', required: true, placeholder: '请输入商品编码' },
+      { key: 'name', label: '商品名称', required: true, placeholder: '请输入商品名称' },
+      {
+        key: 'category',
+        label: '分类',
+        component: 'select',
+        required: true,
+        options: [
+          { label: '分类1', value: '分类1' },
+          { label: '分类2', value: '分类2' },
+        ],
+      },
+      { key: 'unit', label: '单位', required: true, placeholder: '请输入单位' },
+      { key: 'warehouse', label: '默认仓库', placeholder: '请输入默认仓库' },
+      { key: 'position', label: '默认库位', placeholder: '请输入默认库位' },
+      { key: 'taxRate', label: '税率', placeholder: '税率' },
+    ],
+  },
+  {
+    title: '客户类别售价',
+    fields: [
+      { key: 'vip2Price', label: 'vip2', placeholder: '' },
+      { key: 'retailPrice', label: '零售客户', placeholder: '' },
+      { key: 'wholesalePrice', label: '批发客户', placeholder: '' },
+      { key: 'vipPrice', label: 'VIP客户', placeholder: '' },
+    ],
+  },
+];
+
+const productCustomFields = ref<DynamicCustomField[]>([]);
 
 const productDetailItems = [
   { key: 'code', label: '编码' },
@@ -311,9 +327,17 @@ function openCreateProduct() {
     category: '',
     unit: '',
     warehouse: '',
+    position: '',
+    stockStrategy: '',
+    taxRate: '',
+    vip2Price: '',
+    retailPrice: '',
+    wholesalePrice: '',
+    vipPrice: '',
     price: 0,
     remark: '',
   });
+  productCustomFields.value = [];
   formVisible.value = true;
 }
 
@@ -326,9 +350,17 @@ function openEditProduct(row: ProductRow) {
     category: row.category,
     unit: row.unit,
     warehouse: row.warehouse === '-' ? '' : row.warehouse,
+    position: row.position === '-' ? '' : row.position,
+    stockStrategy: '',
+    taxRate: '',
+    vip2Price: '',
+    retailPrice: row.price,
+    wholesalePrice: '',
+    vipPrice: '',
     price: row.price,
     remark: '',
   });
+  productCustomFields.value = [];
   formVisible.value = true;
 }
 
@@ -348,6 +380,7 @@ function openDeleteProducts(rows: ProductRow[]) {
 
 function submitProductForm(value: Record<string, unknown>) {
   Object.assign(productForm, value);
+  productCustomFields.value = Array.isArray(value.customFields) ? value.customFields as DynamicCustomField[] : [];
   formVisible.value = false;
   ElMessage.success(formMode.value === 'create' ? '新增商品已保存' : '商品编辑已保存');
 }

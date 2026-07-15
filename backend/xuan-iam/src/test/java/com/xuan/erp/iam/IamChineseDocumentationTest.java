@@ -6,10 +6,12 @@ import com.xuan.erp.iam.interfaces.dto.IamAuthorizationSnapshotResponse;
 import com.xuan.erp.iam.interfaces.dto.IamCurrentMenuNodeResponse;
 import com.xuan.erp.iam.interfaces.dto.IamCurrentPermissionSnapshotResponse;
 import com.xuan.erp.iam.interfaces.dto.IamCurrentUserResponse;
+import com.xuan.erp.iam.interfaces.dto.IamUserPreferenceResponse;
 import com.xuan.erp.iam.interfaces.dto.IamLoginRequest;
 import com.xuan.erp.iam.interfaces.dto.IamLoginResponse;
 import com.xuan.erp.iam.interfaces.dto.IamUserResponse;
 import com.xuan.erp.iam.interfaces.dto.RebuildAuthorizationSnapshotRequest;
+import com.xuan.erp.iam.interfaces.dto.SaveIamUserPreferenceRequest;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.io.IOException;
@@ -66,7 +68,9 @@ class IamChineseDocumentationTest {
                 IamCurrentPermissionSnapshotResponse.class,
                 IamCurrentUserResponse.class,
                 IamUserResponse.class,
-                IamAuthorizationSnapshotResponse.class
+                IamAuthorizationSnapshotResponse.class,
+                IamUserPreferenceResponse.class,
+                SaveIamUserPreferenceRequest.class
         );
         List<String> missing = new ArrayList<>();
 
@@ -149,7 +153,8 @@ class IamChineseDocumentationTest {
                 com.xuan.erp.iam.interfaces.controller.IamPermissionController.class,
                 com.xuan.erp.iam.interfaces.controller.IamRoleController.class,
                 com.xuan.erp.iam.interfaces.controller.IamTenantBootstrapController.class,
-                com.xuan.erp.iam.interfaces.controller.IamUserController.class
+                com.xuan.erp.iam.interfaces.controller.IamUserController.class,
+                com.xuan.erp.iam.interfaces.controller.IamUserPreferenceController.class
         );
     }
 }

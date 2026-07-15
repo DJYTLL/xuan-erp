@@ -13,6 +13,7 @@ import com.xuan.erp.iam.interfaces.dto.IamCurrentPermissionSnapshotResponse;
 import com.xuan.erp.iam.interfaces.dto.IamCurrentUserResponse;
 import com.xuan.erp.iam.interfaces.dto.IamLoginRequest;
 import com.xuan.erp.iam.interfaces.dto.IamLoginResponse;
+import com.xuan.erp.iam.interfaces.dto.IamRefreshTokenRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.List;
@@ -48,6 +49,20 @@ public class IamAuthenticationController {
     public ApiResponse<IamLoginResponse> login(@RequestBody IamLoginRequest request) {
         return ApiResponse.success(IamAuthenticationAssembler.toResponse(
                 authenticationApplicationService.login(IamAuthenticationAssembler.toCommand(request))));
+    }
+
+    @Operation(summary = "刷新访问令牌", description = "使用 refresh token 轮换刷新令牌，并返回新的 Bearer 访问令牌")
+    @PostMapping("/api/iam/auth/refresh")
+    public ApiResponse<IamLoginResponse> refresh(@RequestBody IamRefreshTokenRequest request) {
+        return ApiResponse.success(IamAuthenticationAssembler.toResponse(
+                authenticationApplicationService.refresh(IamAuthenticationAssembler.toCommand(request))));
+    }
+
+    @Operation(summary = "退出登录", description = "撤销 refresh token，阻止后续续期；access token 等待自然过期")
+    @PostMapping("/api/iam/auth/logout")
+    public ApiResponse<Void> logout(@RequestBody IamRefreshTokenRequest request) {
+        authenticationApplicationService.logout(IamAuthenticationAssembler.toRevokeCommand(request));
+        return ApiResponse.success(null);
     }
 
     @Operation(summary = "查询当前用户", description = "返回当前 Bearer Token 解析出的轻量用户上下文")

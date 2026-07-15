@@ -5,3 +5,7 @@ menus:
     pageKey: tenant
     permissionCode: tenant:view
     note: 租户管理入口菜单，真实前端路由和 titleKey 在页面接入时补齐并保持同源
+  - code: tenant-plan-management
+    pageKey: tenant-plans
+    permissionCode: tenant-plan:view
+    note: 套餐管理入口菜单，对应前端 /system/tenant-plans

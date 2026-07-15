@@ -28,4 +28,22 @@ public final class IamPermissionPersistenceAssembler {
                 record.deleteReason(),
                 record.deletedAt());
     }
+
+    public static IamPermissionRecord toRecord(IamPermission permission) {
+        return new IamPermissionRecord(
+                permission.id(),
+                permission.code(),
+                permission.name(),
+                permission.serviceName(),
+                permission.menuCode(),
+                permission.description(),
+                permission.enabled(),
+                permission.createdBy(),
+                permission.createdAt(),
+                permission.updatedBy(),
+                permission.updatedAt(),
+                permission.deletedBy(),
+                permission.deleteReason(),
+                permission.deletedAt());
+    }
 }

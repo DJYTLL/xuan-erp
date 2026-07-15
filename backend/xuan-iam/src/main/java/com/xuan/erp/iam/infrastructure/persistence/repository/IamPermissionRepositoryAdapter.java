@@ -27,9 +27,25 @@ public class IamPermissionRepositoryAdapter implements IamPermissionRepository {
     }
 
     @Override
+    public Optional<IamPermission> findById(Long id) {
+        return Optional.ofNullable(mapper.findById(id))
+                .map(IamPermissionPersistenceAssembler::toDomain);
+    }
+
+    @Override
     public List<IamPermission> findActivePermissions() {
         return mapper.findActivePermissions().stream()
                 .map(IamPermissionPersistenceAssembler::toDomain)
                 .toList();
+    }
+
+    @Override
+    public IamPermission save(IamPermission permission) {
+        if (permission.id() == null) {
+            mapper.insert(IamPermissionPersistenceAssembler.toRecord(permission));
+            return findByCode(permission.code()).orElseThrow();
+        }
+        mapper.update(IamPermissionPersistenceAssembler.toRecord(permission));
+        return findById(permission.id()).orElseThrow();
     }
 }
