@@ -25,13 +25,25 @@ public class FeignTenantStatusGateway implements IamTenantStatusGateway {
         return Optional.ofNullable(data).map(this::toView);
     }
 
+    @Override
+    public Optional<IamTenantStatusView> findTenantStatusByCode(String tenantCode) {
+        ApiResponse<TenantStatusClientResponse> response = client.getTenantStatusByCode(tenantCode);
+        TenantStatusClientResponse data = response == null ? null : response.data();
+        return Optional.ofNullable(data).map(this::toView);
+    }
+
     private IamTenantStatusView toView(TenantStatusClientResponse response) {
         return new IamTenantStatusView(
                 response.tenantId(),
                 response.code(),
+                response.name(),
                 response.status(),
                 response.loginAllowed(),
                 response.loginDeniedReason(),
-                response.currentPlanExpiresAt());
+                response.currentPlanExpiresAt(),
+                response.permissionHash(),
+                response.iamInitTemplateCode(),
+                response.columnPermissionTemplateCodes(),
+                response.defaultColumnPermissionTemplateCode());
     }
 }

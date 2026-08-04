@@ -64,6 +64,12 @@
             plan_summary.current_plan_expires_at AS currentPlanExpiresAt,
             domain_summary.primary_domain_id AS primaryDomainId,
             domain_summary.primary_domain AS primaryDomain,
+            plan_summary.permission_sync_expected_hash AS permissionSyncExpectedHash,
+            plan_summary.permission_sync_status AS permissionSyncStatus,
+            plan_summary.permission_sync_last_checked_at AS permissionSyncLastCheckedAt,
+            plan_summary.permission_sync_last_synced_at AS permissionSyncLastSyncedAt,
+            plan_summary.permission_sync_last_error_code AS permissionSyncLastErrorCode,
+            plan_summary.permission_sync_last_error_message AS permissionSyncLastErrorMessage,
             COALESCE(history_summary.status_history_count, 0) AS statusHistoryCount,
             history_summary.latest_status_change_type AS latestStatusChangeType,
             history_summary.latest_status_changed_at AS latestStatusChangedAt
@@ -74,7 +80,13 @@
                 tenant_plan.id AS current_plan_id,
                 tenant_plan.code AS current_plan_code,
                 tenant_plan.name AS current_plan_name,
-                assignment.expires_at AS current_plan_expires_at
+                assignment.expires_at AS current_plan_expires_at,
+                assignment.permission_sync_expected_hash,
+                assignment.permission_sync_status,
+                assignment.permission_sync_last_checked_at,
+                assignment.permission_sync_last_synced_at,
+                assignment.permission_sync_last_error_code,
+                assignment.permission_sync_last_error_message
             FROM tenant_plan_assignment assignment
             JOIN tenant_plan tenant_plan ON tenant_plan.id = assignment.plan_id
             WHERE assignment.tenant_id = #{tenantId}

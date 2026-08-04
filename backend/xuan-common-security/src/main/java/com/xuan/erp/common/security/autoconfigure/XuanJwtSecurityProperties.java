@@ -1,6 +1,7 @@
 package com.xuan.erp.common.security.autoconfigure;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
 
 import java.net.URI;
 import java.time.Duration;
@@ -12,6 +13,7 @@ import java.time.Duration;
  * 这里不保存私钥、不保存密码，也不承载租户业务语义。</p>
  */
 @ConfigurationProperties(prefix = "xuan.security.jwt")
+@Validated
 public class XuanJwtSecurityProperties {
 
     /**
@@ -33,6 +35,16 @@ public class XuanJwtSecurityProperties {
      * IAM 发布 JWK 公钥集的地址。
      */
     private URI jwkSetUri;
+
+    /**
+     * IAM 服务名；业务服务可通过服务发现解析真实实例地址。
+     */
+    private String iamServiceName = "xuan-iam";
+
+    /**
+     * IAM 发布 JWK 公钥集的标准路径。
+     */
+    private String jwkSetPath = "/.well-known/jwks.json";
 
     /**
      * JWK 本地缓存配置。
@@ -71,6 +83,22 @@ public class XuanJwtSecurityProperties {
         this.jwkSetUri = jwkSetUri;
     }
 
+    public String getIamServiceName() {
+        return iamServiceName;
+    }
+
+    public void setIamServiceName(String iamServiceName) {
+        this.iamServiceName = iamServiceName;
+    }
+
+    public String getJwkSetPath() {
+        return jwkSetPath;
+    }
+
+    public void setJwkSetPath(String jwkSetPath) {
+        this.jwkSetPath = jwkSetPath;
+    }
+
     public Cache getCache() {
         return cache;
     }
@@ -85,9 +113,40 @@ public class XuanJwtSecurityProperties {
     public static class Cache {
 
         /**
+         * 正常 JWK 缓存时间；到期后会重新访问 IAM JWKS 端点。
+         */
+        private Duration positiveCacheTtl = Duration.ofMinutes(10);
+
+        /**
+         * IAM JWKS 端点不可用时，允许继续使用旧 JWK 的兜底时间。
+         */
+        private Duration staleCacheTtl = Duration.ofMinutes(30);
+
+        /**
          * 未知 kid 的负缓存时间，避免恶意 token 反复触发远程 JWK 刷新。
          */
         private Duration negativeCacheTtl = Duration.ofSeconds(30);
+
+        /**
+         * 后台定期刷新 JWKS 的时间间隔。
+         */
+        private Duration refreshInterval = Duration.ofMinutes(5);
+
+        public Duration getPositiveCacheTtl() {
+            return positiveCacheTtl;
+        }
+
+        public void setPositiveCacheTtl(Duration positiveCacheTtl) {
+            this.positiveCacheTtl = positiveCacheTtl;
+        }
+
+        public Duration getStaleCacheTtl() {
+            return staleCacheTtl;
+        }
+
+        public void setStaleCacheTtl(Duration staleCacheTtl) {
+            this.staleCacheTtl = staleCacheTtl;
+        }
 
         public Duration getNegativeCacheTtl() {
             return negativeCacheTtl;
@@ -95,6 +154,14 @@ public class XuanJwtSecurityProperties {
 
         public void setNegativeCacheTtl(Duration negativeCacheTtl) {
             this.negativeCacheTtl = negativeCacheTtl;
+        }
+
+        public Duration getRefreshInterval() {
+            return refreshInterval;
+        }
+
+        public void setRefreshInterval(Duration refreshInterval) {
+            this.refreshInterval = refreshInterval;
         }
     }
 }

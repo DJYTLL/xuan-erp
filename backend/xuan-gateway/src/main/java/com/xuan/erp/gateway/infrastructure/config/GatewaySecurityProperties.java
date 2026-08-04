@@ -2,6 +2,7 @@ package com.xuan.erp.gateway.infrastructure.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.time.Duration;
 import java.util.List;
 
 /**
@@ -42,6 +43,11 @@ public class GatewaySecurityProperties {
      * 然后拉取 `/.well-known/jwks.json` 公钥集合。</p>
      */
     private String iamServiceName = "xuan-iam";
+
+    /**
+     * 网关侧 JWK 本地缓存配置。
+     */
+    private JwkCache jwkCache = new JwkCache();
 
     /**
      * 匿名放行路径。
@@ -140,6 +146,14 @@ public class GatewaySecurityProperties {
      */
     public void setIamServiceName(String iamServiceName) {
         this.iamServiceName = iamServiceName;
+    }
+
+    public JwkCache getJwkCache() {
+        return jwkCache;
+    }
+
+    public void setJwkCache(JwkCache jwkCache) {
+        this.jwkCache = jwkCache == null ? new JwkCache() : jwkCache;
     }
 
     /**
@@ -271,6 +285,64 @@ public class GatewaySecurityProperties {
     }
 
     /**
+     * 网关侧 JWKS 缓存配置项。
+     */
+    public static class JwkCache {
+
+        /**
+         * 正常 JWK 缓存时间。
+         */
+        private Duration positiveCacheTtl = Duration.ofMinutes(10);
+
+        /**
+         * IAM JWKS 不可用时，允许旧 JWK 继续兜底的时间。
+         */
+        private Duration staleCacheTtl = Duration.ofMinutes(30);
+
+        /**
+         * 未知 kid 的负缓存时间。
+         */
+        private Duration negativeCacheTtl = Duration.ofSeconds(30);
+
+        /**
+         * 后台定期刷新 JWKS 的时间间隔。
+         */
+        private Duration refreshInterval = Duration.ofMinutes(5);
+
+        public Duration getPositiveCacheTtl() {
+            return positiveCacheTtl;
+        }
+
+        public void setPositiveCacheTtl(Duration positiveCacheTtl) {
+            this.positiveCacheTtl = positiveCacheTtl;
+        }
+
+        public Duration getStaleCacheTtl() {
+            return staleCacheTtl;
+        }
+
+        public void setStaleCacheTtl(Duration staleCacheTtl) {
+            this.staleCacheTtl = staleCacheTtl;
+        }
+
+        public Duration getNegativeCacheTtl() {
+            return negativeCacheTtl;
+        }
+
+        public void setNegativeCacheTtl(Duration negativeCacheTtl) {
+            this.negativeCacheTtl = negativeCacheTtl;
+        }
+
+        public Duration getRefreshInterval() {
+            return refreshInterval;
+        }
+
+        public void setRefreshInterval(Duration refreshInterval) {
+            this.refreshInterval = refreshInterval;
+        }
+    }
+
+    /**
      * 网关安全异常审计配置项。
      */
     public static class SecurityAudit {
@@ -366,6 +438,11 @@ public class GatewaySecurityProperties {
          */
         private String authority;
 
+        /**
+         * 访问这些路径允许使用的权限码列表。
+         */
+        private List<String> authorities = List.of();
+
         public List<String> getPaths() {
             return paths;
         }
@@ -380,6 +457,17 @@ public class GatewaySecurityProperties {
 
         public void setAuthority(String authority) {
             this.authority = authority;
+        }
+
+        public List<String> getAuthorities() {
+            if (authorities != null && !authorities.isEmpty()) {
+                return authorities;
+            }
+            return authority == null || authority.isBlank() ? List.of() : List.of(authority);
+        }
+
+        public void setAuthorities(List<String> authorities) {
+            this.authorities = authorities == null ? List.of() : authorities;
         }
     }
 }

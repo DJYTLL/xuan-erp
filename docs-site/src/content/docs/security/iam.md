@@ -28,6 +28,35 @@ IAM 是 Xuan ERP 的统一权限中心，集中管理用户、角色、权限、
 
 所有微服务的基础操作权限也要遵守统一模板：主资源默认使用 `view/create/update/delete`，生命周期默认使用 `enable/disable`，配置类资源默认使用 `<domain>-config:view` 和 `<domain>-config:manage`。如果某个服务为了兼容 V1 暂时保留旧权限码，必须在本服务文档和 seed 草稿里明确映射关系。
 
+## 套餐、模板、角色和按钮的权威链路
+
+租户能力必须沿同一条链路流转，不能让前端、套餐 seed、IAM 授权各自维护一套规则：
+
+```text
+套餐 feature_flags.iamInitTemplateCode
+-> IAM 初始化权限模板 iam_tenant_init_permission_template
+-> IAM 初始化角色模板 iam_tenant_init_role_template
+-> 租户模板绑定 iam_tenant_init_template_binding
+-> 租户权限池 iam_tenant_permission_entitlement
+-> 租户内角色 iam_role
+-> 角色权限 iam_role_permission
+-> 用户角色 iam_user_role
+-> 当前用户权限接口 /api/iam/permissions/current
+-> 前端菜单、路由和按钮
+```
+
+成熟的按钮权限控制不是把按钮清单静态写在前端，也不是只在前端隐藏按钮。成熟做法是：
+
+| 层级 | 职责 |
+| --- | --- |
+| IAM | 保存权限目录、菜单目录、租户权限池、角色授权和当前用户授权结果 |
+| 业务服务 | 每个接口声明并校验自己的权限码，不能信任前端隐藏按钮 |
+| Gateway | 做入口认证、租户上下文和基础拦截 |
+| 前端 | 只消费当前用户菜单和权限结果，控制菜单、路由和按钮展示 |
+| 测试/CI | 扫描页面按钮、路由 meta、接口权限和 seed/migration 是否一致 |
+
+因此，`iamInitTemplateCode` 的含义是“选择初始化授权模板”，不是“页面上展示一个套餐承诺”。当租户创建、套餐调整或模板切换时，IAM 必须先有稳定的租户模板绑定，再重新同步租户权限池、受管角色、角色权限、管理员角色绑定、租户菜单和授权快照；模板降级时要先减少租户权限池，再收回所有角色里超出权限池的旧授权。前端没有拿到权限时必须 fail-closed，只允许展示无需权限的公共动作。
+
 ## 权限清单与授权关系
 
 这两个概念必须分开：
@@ -110,6 +139,12 @@ IAM 不应该承载所有业务判断。比如销售单能不能审核，是 `xu
 前端路由权限 -> Gateway 认证 -> 业务服务接口权限 -> 业务资源权限 -> 列权限过滤 -> 审计日志
 ```
 
+## 登录、刷新和退出
+
+IAM 登录成功后返回 access token 和 refresh token。access token 用于日常请求，生命周期短；refresh token 用于换取下一组 token，服务端只保存哈希并在每次刷新成功后轮换。
+
+当前 logout 策略只撤销 refresh token：退出后前端应丢弃本地 access token 和 refresh token，后端会拒绝该 refresh token 后续刷新；已经签发的 access token 不进入 Redis 黑名单，等待自然过期。refresh 成功、refresh 失败、refresh token 重放命中和 logout 都必须写审计记录。
+
 ## 固定 JWK 与轮换
 
 IAM 使用 RSA 私钥签发访问令牌，并通过 `/.well-known/jwks.json` 对外发布对应公钥。Gateway 和各业务服务不持有私钥，它们只消费公钥并执行验签。
@@ -164,8 +199,9 @@ JWK 轮换建议按下面顺序执行：
 - `iam_menu`
 - `iam_permission`
 - `iam_authorization_snapshot`
+- `iam_role_permission`
 
-这一阶段不新增 Flyway migration，也不改历史迁移文件。前端先按现有契约完成动态菜单、路由权限和按钮权限接入，字段权限、数据范围和状态动作权限放到下一阶段继续落地。
+当前用户权限接口优先按实时角色权限计算，再输出给前端；授权快照作为持久化摘要和后续缓存演进基础。前端先按现有契约完成动态菜单、路由权限和按钮权限接入，字段权限、数据范围和状态动作权限放到下一阶段继续落地。
 
 
 

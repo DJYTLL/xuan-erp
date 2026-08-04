@@ -9,4 +9,8 @@ import java.util.Optional;
 public interface IamTenantStatusGateway {
 
     Optional<IamTenantStatusView> findTenantStatus(Long tenantId);
+
+    default Optional<IamTenantStatusView> findTenantStatusByCode(String tenantCode) {
+        return Optional.empty();
+    }
 }

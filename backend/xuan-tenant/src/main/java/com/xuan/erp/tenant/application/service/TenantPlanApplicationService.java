@@ -1,5 +1,8 @@
 package com.xuan.erp.tenant.application.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xuan.erp.common.exception.BusinessException;
 import com.xuan.erp.tenant.application.command.ChangeTenantPlanStatusCommand;
 import com.xuan.erp.tenant.application.command.CreateTenantPlanCommand;
@@ -7,12 +10,17 @@ import com.xuan.erp.tenant.application.command.DeleteTenantCommand;
 import com.xuan.erp.tenant.application.command.UpdateTenantPlanCommand;
 import com.xuan.erp.tenant.application.query.TenantPlanDetailView;
 import com.xuan.erp.tenant.domain.model.TenantPlan;
+import com.xuan.erp.tenant.domain.model.TenantPlanAssignment;
 import com.xuan.erp.tenant.domain.model.type.BillingCycle;
 import com.xuan.erp.tenant.domain.model.type.TenantPlanStatus;
+import com.xuan.erp.tenant.domain.repository.TenantPlanAssignmentRepository;
 import com.xuan.erp.tenant.domain.repository.TenantPlanRepository;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.LinkedHashSet;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 /**
  * 租户套餐应用服务，负责套餐的查询、创建、更新、启停用与删除。
@@ -21,12 +29,25 @@ import org.springframework.stereotype.Service;
 public class TenantPlanApplicationService {
 
     private final TenantPlanRepository tenantPlanRepository;
+    private final TenantPlanAssignmentRepository tenantPlanAssignmentRepository;
+    private final TenantPlanAssignmentApplicationService tenantPlanAssignmentApplicationService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * 注入租户套餐仓储。
      */
     public TenantPlanApplicationService(TenantPlanRepository tenantPlanRepository) {
+        this(tenantPlanRepository, null, null);
+    }
+
+    @Autowired
+    public TenantPlanApplicationService(
+            TenantPlanRepository tenantPlanRepository,
+            @Nullable TenantPlanAssignmentRepository tenantPlanAssignmentRepository,
+            @Nullable TenantPlanAssignmentApplicationService tenantPlanAssignmentApplicationService) {
         this.tenantPlanRepository = tenantPlanRepository;
+        this.tenantPlanAssignmentRepository = tenantPlanAssignmentRepository;
+        this.tenantPlanAssignmentApplicationService = tenantPlanAssignmentApplicationService;
     }
 
     /**
@@ -43,6 +64,28 @@ public class TenantPlanApplicationService {
      */
     public TenantPlanDetailView getPlan(Long planId) {
         return toDetailView(requirePlan(planId));
+    }
+
+    /**
+     * 查询当前使用指定 IAM 初始化模板编码的租户 ID。
+     */
+    public List<Long> findActiveTenantIdsByIamInitTemplateCode(String iamInitTemplateCode) {
+        if (tenantPlanAssignmentRepository == null) {
+            return List.of();
+        }
+        String templateCode = requireText(iamInitTemplateCode, "IAM 初始化模板编码不能为空");
+        LinkedHashSet<Long> tenantIds = new LinkedHashSet<>();
+        for (TenantPlan plan : tenantPlanRepository.findActivePlans()) {
+            if (!templateCode.equals(iamInitTemplateCode(plan))) {
+                continue;
+            }
+            for (TenantPlanAssignment assignment : tenantPlanAssignmentRepository.findActiveByPlanId(plan.id())) {
+                if (assignment.tenantId() != null && assignment.tenantId() > 0) {
+                    tenantIds.add(assignment.tenantId());
+                }
+            }
+        }
+        return tenantIds.stream().sorted().toList();
     }
 
     /**
@@ -108,6 +151,7 @@ public class TenantPlanApplicationService {
                 plan.deleteReason(),
                 plan.deletedAt()
         ));
+        publishIamTemplateSyncForActiveAssignments(saved);
         return toDetailView(saved);
     }
 
@@ -216,6 +260,47 @@ public class TenantPlanApplicationService {
                 plan.sortNo(),
                 plan.remark()
         );
+    }
+
+    private void publishIamTemplateSyncForActiveAssignments(TenantPlan plan) {
+        if (tenantPlanAssignmentRepository == null || tenantPlanAssignmentApplicationService == null) {
+            return;
+        }
+        String iamInitTemplateCode = tenantPlanAssignmentApplicationService.iamInitTemplateCode(plan);
+        List<String> columnPermissionTemplateCodes = tenantPlanAssignmentApplicationService.columnPermissionTemplateCodes(plan);
+        String defaultColumnPermissionTemplateCode = tenantPlanAssignmentApplicationService.defaultColumnPermissionTemplateCode(plan);
+        if (iamInitTemplateCode == null && columnPermissionTemplateCodes == null) {
+            return;
+        }
+        for (TenantPlanAssignment assignment : tenantPlanAssignmentRepository.findActiveByPlanId(plan.id())) {
+            tenantPlanAssignmentApplicationService.appendIamTemplateSyncRequest(
+                    assignment.tenantId(),
+                    plan.id(),
+                    assignment.id(),
+                    iamInitTemplateCode,
+                    columnPermissionTemplateCodes,
+                    defaultColumnPermissionTemplateCode,
+                    "system");
+        }
+    }
+
+    private String iamInitTemplateCode(TenantPlan plan) {
+        if (tenantPlanAssignmentApplicationService != null) {
+            return tenantPlanAssignmentApplicationService.iamInitTemplateCode(plan);
+        }
+        if (plan.featureFlagsJson() == null || plan.featureFlagsJson().isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode value = objectMapper.readTree(plan.featureFlagsJson()).path("iamInitTemplateCode");
+            if (!value.isTextual()) {
+                return null;
+            }
+            String text = value.asText();
+            return text == null || text.isBlank() ? null : text.trim();
+        } catch (JsonProcessingException error) {
+            throw new BusinessException("TENANT_PLAN_FEATURE_FLAGS_INVALID", "租户套餐功能标记不是合法 JSON");
+        }
     }
 
     /**

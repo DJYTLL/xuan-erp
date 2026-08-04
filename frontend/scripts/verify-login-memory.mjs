@@ -30,6 +30,8 @@ const loginProfilesSource = readFileSync(loginProfilesPath, 'utf8');
 const messagesSource = readFileSync(messagesPath, 'utf8');
 const appLayoutSource = readFileSync(appLayoutPath, 'utf8');
 const authStoreSource = readFileSync(authStorePath, 'utf8');
+const routerPath = resolve(frontendRoot, 'src/router/index.ts');
+const routerSource = readFileSync(routerPath, 'utf8');
 
 for (const marker of [
   '<RecentAccountSearchSelect',
@@ -150,13 +152,37 @@ for (const marker of [
   'logout-clear-device',
   'clearLoginProfiles',
   'ElMessageBox.confirm',
+  'authStore.tenantDisplayLabel',
 ]) {
   assert(appLayoutSource.includes(marker), `App layout should include ${marker}.`);
 }
 
 assert(
+  !appLayoutSource.includes("authStore.tenantId || 'default'"),
+  'App layout should not expose the internal tenant ID in the topbar.',
+);
+
+for (const marker of [
+  'tenantCode: (state)',
+  'tenantName: (state)',
+  'tenantDisplayLabel: (state)',
+]) {
+  assert(authStoreSource.includes(marker), `Auth store should expose ${marker}.`);
+}
+
+assert(
   !authStoreSource.includes('loadPermissionSnapshot'),
   'Auth store login should not load permission snapshot before the login page can save local recent-account history.',
+);
+
+assert(
+  !routerSource.includes('void auth.logout();'),
+  'Router guard should await logout when current-user or permission snapshot recovery fails, otherwise stale local session can keep redirecting the login page to dashboard.',
+);
+
+assert(
+  routerSource.includes('await auth.logout();'),
+  'Router guard should clear stale local session before returning to the login route.',
 );
 
 console.log('Verified login memory UI and storage contract.');

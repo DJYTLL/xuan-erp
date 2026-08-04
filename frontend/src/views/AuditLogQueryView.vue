@@ -87,7 +87,7 @@
       <el-table-column prop="errorCode" label="错误码" min-width="150" show-overflow-tooltip />
       <el-table-column label="操作" width="90" fixed="right">
         <template #default="{ row }">
-          <el-button link type="primary" @click="openDetail(row)">详情</el-button>
+          <PermissionButton link type="primary" permission="audit:log:view" no-permission-mode="disable" @click="openDetail(row)">详情</PermissionButton>
         </template>
       </el-table-column>
     </el-table>
@@ -123,6 +123,7 @@ import { getHttpErrorMessage } from '@/api/http-error';
 import { listAuditLogs } from '@/api/auditLogs';
 import AppState from '@/framework/components/AppState.vue';
 import ListPageShell from '@/framework/components/ListPageShell.vue';
+import PermissionButton from '@/framework/components/PermissionButton.vue';
 import SearchActionBar from '@/framework/components/SearchActionBar.vue';
 import XuanDateTimeRangePicker, { type DateRangeValue } from '@/framework/components/XuanDateTimeRangePicker.vue';
 import XuanDecimalInput from '@/framework/components/XuanDecimalInput.vue';

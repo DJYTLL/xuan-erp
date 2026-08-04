@@ -1,0 +1,374 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xuan.erp.iam.infrastructure.persistence.mapper.IamColumnPermissionManagementPersistenceMapper">
+
+    <select id="findEnabledResourceColumns" resultType="com.xuan.erp.iam.domain.model.IamResourceColumn">
+        SELECT id,
+               resource_key AS resourceKey,
+               column_key AS columnKey,
+               column_name AS columnName,
+               data_type AS dataType,
+               mask_type AS maskType,
+               is_enabled AS enabled,
+               sort_no AS sortNo
+        FROM iam_resource_column
+        WHERE deleted_at IS NULL
+          AND is_enabled = true
+        ORDER BY resource_key, sort_no, column_key
+    </select>
+
+    <select id="findTemplates" resultType="com.xuan.erp.iam.domain.model.IamColumnPermissionTemplate">
+        SELECT id,
+               tenant_id AS tenantId,
+               code,
+               name,
+               description,
+               is_enabled AS enabled
+        FROM iam_column_permission_template
+        WHERE deleted_at IS NULL
+          AND (
+              #{tenantId} IS NULL
+              OR tenant_id = #{tenantId}
+              OR tenant_id = 0
+          )
+          <if test="keyword != null and keyword != ''">
+          AND (code ILIKE CONCAT('%', #{keyword}, '%') OR name ILIKE CONCAT('%', #{keyword}, '%'))
+          </if>
+          <if test="enabled != null">
+          AND is_enabled = #{enabled}
+          </if>
+        ORDER BY tenant_id, code
+    </select>
+
+    <select id="findTemplateById" resultType="com.xuan.erp.iam.domain.model.IamColumnPermissionTemplate">
+        SELECT id,
+               tenant_id AS tenantId,
+               code,
+               name,
+               description,
+               is_enabled AS enabled
+        FROM iam_column_permission_template
+        WHERE id = #{templateId}
+          AND deleted_at IS NULL
+    </select>
+
+    <select id="findTemplateByTenantIdAndCode" resultType="com.xuan.erp.iam.domain.model.IamColumnPermissionTemplate">
+        SELECT id,
+               tenant_id AS tenantId,
+               code,
+               name,
+               description,
+               is_enabled AS enabled
+        FROM iam_column_permission_template
+        WHERE tenant_id = #{tenantId}
+          AND code = #{code}
+          AND deleted_at IS NULL
+          AND is_enabled = true
+    </select>
+
+    <select id="insertTemplate" resultType="java.lang.Long">
+        INSERT INTO iam_column_permission_template (
+            tenant_id, code, name, description, is_enabled, created_by, updated_by
+        )
+        VALUES (
+            #{tenantId}, #{code}, #{name}, #{description}, #{enabled}, #{operator}, #{operator}
+        )
+        RETURNING id
+    </select>
+
+    <update id="updateTemplate">
+        UPDATE iam_column_permission_template
+        SET name = #{name},
+            description = #{description},
+            is_enabled = #{enabled},
+            updated_by = #{operator},
+            updated_at = now()
+        WHERE id = #{templateId}
+          AND deleted_at IS NULL
+    </update>
+
+    <update id="setTemplateEnabled">
+        UPDATE iam_column_permission_template
+        SET is_enabled = #{enabled},
+            updated_by = #{operator},
+            updated_at = now()
+        WHERE id = #{templateId}
+          AND deleted_at IS NULL
+    </update>
+
+    <select id="findTemplateItems" resultType="com.xuan.erp.iam.domain.model.IamColumnPermissionTemplateItem">
+        SELECT template_item.id,
+               template_item.template_id AS templateId,
+               template_item.resource_column_id AS resourceColumnId,
+               resource_column.resource_key AS resourceKey,
+               resource_column.column_key AS columnKey,
+               resource_column.column_name AS columnName,
+               template_item.access_mode AS accessMode
+        FROM iam_column_permission_template_item template_item
+        JOIN iam_resource_column resource_column ON resource_column.id = template_item.resource_column_id
+        WHERE template_item.template_id = #{templateId}
+          AND template_item.deleted_at IS NULL
+          AND resource_column.deleted_at IS NULL
+        ORDER BY resource_column.resource_key, resource_column.sort_no, resource_column.column_key
+    </select>
+
+    <select id="findResourceColumnById" resultType="com.xuan.erp.iam.domain.model.IamResourceColumn">
+        SELECT id,
+               resource_key AS resourceKey,
+               column_key AS columnKey,
+               column_name AS columnName,
+               data_type AS dataType,
+               mask_type AS maskType,
+               is_enabled AS enabled,
+               sort_no AS sortNo
+        FROM iam_resource_column
+        WHERE id = #{resourceColumnId}
+          AND deleted_at IS NULL
+    </select>
+
+    <update id="disableTemplateItems">
+        UPDATE iam_column_permission_template_item
+        SET deleted_by = #{operator},
+            delete_reason = 'column-permission-template-items-replaced',
+            deleted_at = now(),
+            updated_by = #{operator},
+            updated_at = now()
+        WHERE template_id = #{templateId}
+          AND deleted_at IS NULL
+    </update>
+
+    <insert id="insertTemplateItem">
+        INSERT INTO iam_column_permission_template_item (
+            template_id, resource_column_id, access_mode, created_by, updated_by
+        )
+        VALUES (
+            #{templateId}, #{resourceColumnId}, #{accessMode}, #{operator}, #{operator}
+        )
+    </insert>
+
+    <select id="findTenantTemplateAssignments" resultType="com.xuan.erp.iam.domain.model.IamTenantColumnPermissionTemplateAssignment">
+        SELECT assignment.tenant_id AS tenantId,
+               assignment.template_id AS templateId,
+               template.code AS templateCode,
+               template.name AS templateName,
+               template.description AS templateDescription,
+               assignment.is_default AS defaultTemplate,
+               template.is_enabled AS templateEnabled
+        FROM iam_tenant_column_permission_template_assignment assignment
+        JOIN iam_column_permission_template template ON template.id = assignment.template_id
+        WHERE assignment.tenant_id = #{tenantId}
+          AND assignment.deleted_at IS NULL
+          AND template.deleted_at IS NULL
+        ORDER BY assignment.is_default DESC, template.code
+    </select>
+
+    <select id="existsTenantTemplateAssignment" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1
+            FROM iam_tenant_column_permission_template_assignment assignment
+            JOIN iam_column_permission_template template ON template.id = assignment.template_id
+            WHERE assignment.tenant_id = #{tenantId}
+              AND assignment.template_id = #{templateId}
+              AND assignment.deleted_at IS NULL
+              AND template.deleted_at IS NULL
+              AND template.is_enabled = true
+        )
+    </select>
+
+    <update id="disableTenantTemplateAssignments">
+        UPDATE iam_tenant_column_permission_template_assignment
+        SET deleted_by = #{operator},
+            delete_reason = 'tenant-column-permission-template-assignments-replaced',
+            deleted_at = now(),
+            updated_by = #{operator},
+            updated_at = now()
+        WHERE tenant_id = #{tenantId}
+          AND deleted_at IS NULL
+    </update>
+
+    <insert id="insertTenantTemplateAssignment">
+        INSERT INTO iam_tenant_column_permission_template_assignment (
+            tenant_id, template_id, is_default, created_by, updated_by
+        )
+        VALUES (
+            #{tenantId}, #{templateId}, #{defaultTemplate}, #{operator}, #{operator}
+        )
+    </insert>
+
+    <select id="findTenantAssignableColumnRules" resultType="com.xuan.erp.iam.domain.model.IamColumnPermissionTemplateItem">
+        SELECT DISTINCT ON (resource_column.id)
+               NULL::bigint AS id,
+               template_item.template_id AS templateId,
+               resource_column.id AS resourceColumnId,
+               resource_column.resource_key AS resourceKey,
+               resource_column.column_key AS columnKey,
+               resource_column.column_name AS columnName,
+               template_item.access_mode AS accessMode
+        FROM iam_tenant_column_permission_template_assignment assignment
+        JOIN iam_column_permission_template template
+          ON template.id = assignment.template_id
+         AND template.deleted_at IS NULL
+         AND template.is_enabled = true
+        JOIN iam_column_permission_template_item template_item
+          ON template_item.template_id = template.id
+         AND template_item.deleted_at IS NULL
+        JOIN iam_resource_column resource_column
+          ON resource_column.id = template_item.resource_column_id
+         AND resource_column.deleted_at IS NULL
+         AND resource_column.is_enabled = true
+        WHERE assignment.tenant_id = #{tenantId}
+          AND assignment.deleted_at IS NULL
+        ORDER BY resource_column.id,
+                 CASE template_item.access_mode
+                     WHEN 'VISIBLE' THEN 3
+                     WHEN 'MASKED' THEN 2
+                     ELSE 1
+                 END DESC,
+                 template_item.template_id
+    </select>
+
+    <select id="findRoleColumnPermissionRules" resultType="com.xuan.erp.iam.domain.model.IamRoleColumnPermissionRule">
+        SELECT rule.id,
+               rule.tenant_id AS tenantId,
+               rule.role_id AS roleId,
+               resource_column.id AS resourceColumnId,
+               resource_column.resource_key AS resourceKey,
+               resource_column.column_key AS columnKey,
+               resource_column.column_name AS columnName,
+               rule.access_mode AS accessMode
+        FROM iam_role_column_permission_rule rule
+        JOIN iam_resource_column resource_column
+          ON resource_column.id = rule.resource_column_id
+         AND resource_column.deleted_at IS NULL
+         AND resource_column.is_enabled = true
+        WHERE rule.tenant_id = #{tenantId}
+          AND rule.role_id = #{roleId}
+          AND rule.deleted_at IS NULL
+        ORDER BY resource_column.resource_key, resource_column.sort_no, resource_column.column_key
+    </select>
+
+    <update id="disableRoleColumnPermissionRules">
+        UPDATE iam_role_column_permission_rule
+        SET deleted_by = #{operator},
+            delete_reason = 'role-column-permission-rules-replaced',
+            deleted_at = now(),
+            updated_by = #{operator},
+            updated_at = now()
+        WHERE tenant_id = #{tenantId}
+          AND role_id = #{roleId}
+          AND deleted_at IS NULL
+    </update>
+
+    <insert id="insertRoleColumnPermissionRule">
+        INSERT INTO iam_role_column_permission_rule (
+            tenant_id, role_id, resource_column_id, access_mode, created_by, updated_by
+        )
+        VALUES (
+            #{tenantId}, #{roleId}, #{resourceColumnId}, #{accessMode}, #{operator}, #{operator}
+        )
+    </insert>
+
+    <update id="disableRoleColumnPermissionRulesOutsideTenantAssignments">
+        UPDATE iam_role_column_permission_rule rule
+        SET deleted_by = #{operator},
+            delete_reason = 'role-column-permission-rule-outside-tenant-assignment',
+            deleted_at = now(),
+            updated_by = #{operator},
+            updated_at = now()
+        WHERE rule.tenant_id = #{tenantId}
+          AND rule.deleted_at IS NULL
+          AND NOT EXISTS (
+              SELECT 1
+              FROM iam_tenant_column_permission_template_assignment assignment
+              JOIN iam_column_permission_template template
+                ON template.id = assignment.template_id
+               AND template.deleted_at IS NULL
+               AND template.is_enabled = true
+              JOIN iam_column_permission_template_item template_item
+                ON template_item.template_id = template.id
+               AND template_item.deleted_at IS NULL
+              WHERE assignment.tenant_id = rule.tenant_id
+                AND assignment.deleted_at IS NULL
+                AND template_item.resource_column_id = rule.resource_column_id
+                AND CASE template_item.access_mode
+                        WHEN 'VISIBLE' THEN 3
+                        WHEN 'MASKED' THEN 2
+                        ELSE 1
+                    END >= CASE rule.access_mode
+                        WHEN 'VISIBLE' THEN 3
+                        WHEN 'MASKED' THEN 2
+                        ELSE 1
+                    END
+          )
+    </update>
+
+    <select id="findRoleTemplateBinding" resultType="com.xuan.erp.iam.domain.model.IamRoleColumnPermissionTemplateBinding">
+        SELECT binding.tenant_id AS tenantId,
+               binding.role_id AS roleId,
+               binding.template_id AS templateId,
+               template.code AS templateCode,
+               template.name AS templateName
+        FROM iam_role_column_permission_template_binding binding
+        JOIN iam_column_permission_template template ON template.id = binding.template_id
+        WHERE binding.tenant_id = #{tenantId}
+          AND binding.role_id = #{roleId}
+          AND binding.deleted_at IS NULL
+          AND template.deleted_at IS NULL
+        LIMIT 1
+    </select>
+
+    <select id="findRoleBindingsByTemplateId" resultType="com.xuan.erp.iam.domain.model.IamRoleColumnPermissionTemplateBinding">
+        SELECT binding.tenant_id AS tenantId,
+               binding.role_id AS roleId,
+               binding.template_id AS templateId,
+               template.code AS templateCode,
+               template.name AS templateName
+        FROM iam_role_column_permission_template_binding binding
+        JOIN iam_column_permission_template template ON template.id = binding.template_id
+        WHERE binding.template_id = #{templateId}
+          AND binding.deleted_at IS NULL
+          AND template.deleted_at IS NULL
+        ORDER BY binding.tenant_id, binding.role_id
+    </select>
+
+    <update id="disableRoleTemplateBinding">
+        UPDATE iam_role_column_permission_template_binding
+        SET deleted_by = #{operator},
+            delete_reason = 'role-column-permission-template-replaced',
+            deleted_at = now(),
+            updated_by = #{operator},
+            updated_at = now()
+        WHERE tenant_id = #{tenantId}
+          AND role_id = #{roleId}
+          AND deleted_at IS NULL
+    </update>
+
+    <insert id="insertRoleTemplateBinding">
+        INSERT INTO iam_role_column_permission_template_binding (
+            tenant_id, role_id, template_id, created_by, updated_by
+        )
+        VALUES (
+            #{tenantId}, #{roleId}, #{templateId}, #{operator}, #{operator}
+        )
+    </insert>
+
+    <update id="disableRoleTemplateBindingsOutsideTenantAssignments">
+        UPDATE iam_role_column_permission_template_binding binding
+        SET deleted_by = #{operator},
+            delete_reason = 'role-column-permission-template-outside-tenant-assignment',
+            deleted_at = now(),
+            updated_by = #{operator},
+            updated_at = now()
+        WHERE binding.tenant_id = #{tenantId}
+          AND binding.deleted_at IS NULL
+          AND NOT EXISTS (
+              SELECT 1
+              FROM iam_tenant_column_permission_template_assignment assignment
+              WHERE assignment.tenant_id = binding.tenant_id
+                AND assignment.template_id = binding.template_id
+                AND assignment.deleted_at IS NULL
+          )
+    </update>
+</mapper>

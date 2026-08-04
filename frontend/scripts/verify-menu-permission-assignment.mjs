@@ -39,11 +39,13 @@ for (const marker of [
   'permission-node-count',
   'permission-related-tag',
   '页面依赖',
+  'ChevronRight',
+  'permission-expand-icon',
   'activePermissionItems',
   'toggleNodePermissions',
   'selectAllPermissions',
   'clearAllPermissions',
-  'height: min(640px, calc(100vh - 220px));',
+  'height: 100%;',
   'min-height: 0;',
   'overflow-y: auto;',
   'overscroll-behavior: contain;',
@@ -51,15 +53,29 @@ for (const marker of [
   assert(componentSource.includes(marker), `MenuPermissionAssignment should include ${marker}.`);
 }
 
+assert(
+  !componentSource.includes("{{ isExpanded(node.key) ? '⌄' : '›' }}"),
+  'MenuPermissionAssignment should use a stable icon component instead of font-dependent text arrows.',
+);
+
 for (const marker of [
-  '<el-dialog',
+  'visiblePermissionCodes',
+  'pruneInvisiblePermissionNodes',
+  'node.visiblePermissionCodes.length || node.children.length',
+]) {
+  assert(componentSource.includes(marker), `MenuPermissionAssignment should separate menu visibility with ${marker}.`);
+}
+
+for (const marker of [
   'role-grant-dialog',
   'MenuPermissionAssignment',
   'businessPageRequiredPermissionMap',
-  'listIamMenus',
+  'DynamicFormDialog',
+  ':render-form="false"',
   'menus.value',
   ':menus="menus"',
-  ':permissions="permissions"',
+  ':permissions="grantAvailablePermissions"',
+  'grantAvailablePermissions',
   ':page-required-permission-map="roleGrantRequiredPermissionMap"',
   'roleGrantRequiredPermissionMap',
   'v-model="selectedPermissionCodes"',
@@ -85,5 +101,15 @@ for (const marker of [
 ]) {
   assert(componentCenterSource.includes(marker), `Component center should preview ${marker}.`);
 }
+
+assert(
+  roleViewSource.includes('DynamicFormDialog'),
+  '角色授权页应使用组件中心 DynamicFormDialog 作为弹窗壳。',
+);
+
+assert(
+  roleViewSource.includes(':render-form="false"'),
+  '角色授权页应把权限分配内容放进组件中心 DynamicFormDialog 的无表单模式。',
+);
 
 console.log('Verified menu permission assignment component contract.');

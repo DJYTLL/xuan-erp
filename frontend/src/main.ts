@@ -19,6 +19,7 @@ import { ElPagination } from 'element-plus/es/components/pagination/index';
 import { ElPopover } from 'element-plus/es/components/popover/index';
 import { ElRadio } from 'element-plus/es/components/radio/index';
 import { ElRow } from 'element-plus/es/components/row/index';
+import { ElSegmented } from 'element-plus/es/components/segmented/index';
 import { ElSwitch } from 'element-plus/es/components/switch/index';
 import { ElTable, ElTableColumn } from 'element-plus/es/components/table/index';
 import { ElTag } from 'element-plus/es/components/tag/index';
@@ -32,6 +33,7 @@ import { installHttpErrorHandler } from './api/http-error';
 import { getUserPreference, saveUserPreference } from './api/preferences';
 import { appFrameworkConfig } from './app/frameworkConfig';
 import { frameworkPermissionCheckerKey } from './framework/auth/permissionChecker';
+import { listenAuthSessionRefreshed } from './framework/auth/sessionEvents';
 import { frameworkPreferenceAdapterKey } from './framework/preferences/preferenceAdapter';
 import { i18n } from './i18n';
 import { router } from './router';
@@ -69,6 +71,7 @@ const elementPlusComponents = [
   ElPopover,
   ElRadio,
   ElRow,
+  ElSegmented,
   ElSelect,
   ElSwitch,
   ElTable,
@@ -114,6 +117,17 @@ installHttpErrorHandler({
       router.push({ name: 'forbidden' });
     }
   },
+});
+
+listenAuthSessionRefreshed(async (session) => {
+  const authStore = useAuthStore(pinia);
+  const authorizationStore = useAuthorizationStore(pinia);
+  authStore.applySession(session);
+  try {
+    await authorizationStore.loadPermissionSnapshot();
+  } catch {
+    authorizationStore.clear();
+  }
 });
 
 app.mount('#app');

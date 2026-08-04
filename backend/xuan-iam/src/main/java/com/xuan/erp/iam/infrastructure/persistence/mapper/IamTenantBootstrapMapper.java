@@ -19,5 +19,6 @@ public interface IamTenantBootstrapMapper {
             @Param("adminDisplayName") String adminDisplayName,
             @Param("adminEmail") String adminEmail,
             @Param("adminPhone") String adminPhone,
+            @Param("iamInitTemplateCode") String iamInitTemplateCode,
             @Param("requestedBy") String requestedBy);
 }

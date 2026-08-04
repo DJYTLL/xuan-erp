@@ -12,6 +12,7 @@
             #{adminDisplayName},
             #{adminEmail},
             #{adminPhone},
+            #{iamInitTemplateCode},
             #{requestedBy}
         )
     </select>

@@ -7,6 +7,33 @@ spring:
   application:
     name: xuan-gateway
   cloud:
+    sentinel:
+      transport:
+        dashboard: ${XUAN_SENTINEL_DASHBOARD:127.0.0.1:9022}
+        port: ${XUAN_SENTINEL_PORT:8719}
+        client-ip: ${XUAN_SENTINEL_CLIENT_IP:127.0.0.1}
+      eager: true
+      datasource:
+        gw-flow:
+          nacos:
+            server-addr: ${spring.cloud.nacos.config.server-addr}
+            namespace: ${spring.cloud.nacos.config.namespace}
+            username: ${spring.cloud.nacos.username:nacos}
+            password: ${spring.cloud.nacos.password:nacos}
+            group-id: XUAN_ERP_GROUP
+            data-id: xuan-gateway-sentinel-gw-flow-rules.json
+            data-type: json
+            rule-type: gw-flow
+        gw-api-group:
+          nacos:
+            server-addr: ${spring.cloud.nacos.config.server-addr}
+            namespace: ${spring.cloud.nacos.config.namespace}
+            username: ${spring.cloud.nacos.username:nacos}
+            password: ${spring.cloud.nacos.password:nacos}
+            group-id: XUAN_ERP_GROUP
+            data-id: xuan-gateway-sentinel-gw-api-group-rules.json
+            data-type: json
+            rule-type: gw-api-group
     gateway:
       server:
         webflux:
@@ -44,6 +71,16 @@ xuan:
       issuer: xuan-iam
       audience: xuan-gateway
       iam-service-name: xuan-iam
+      # 网关侧 JWK 本地缓存配置，用于控制 IAM 公钥集合的拉取、兜底和刷新节奏。
+      jwk-cache:
+        # 正常 JWK 缓存时间，到期后会重新访问 IAM 的 JWKS Endpoint。
+        positive-cache-ttl: ${XUAN_GATEWAY_JWK_POSITIVE_CACHE_TTL:10m}
+        # IAM JWKS Endpoint 短暂不可用时，允许继续使用旧 JWK 的兜底时间。
+        stale-cache-ttl: ${XUAN_GATEWAY_JWK_STALE_CACHE_TTL:30m}
+        # 未知 kid 的负缓存时间，避免恶意 token 反复触发远程 JWK 刷新。
+        negative-cache-ttl: ${XUAN_GATEWAY_JWK_NEGATIVE_CACHE_TTL:30s}
+        # 后台定期刷新 JWKS 的时间间隔，用于提前感知 IAM 公钥轮换。
+        refresh-interval: ${XUAN_GATEWAY_JWK_REFRESH_INTERVAL:5m}
       public-paths:
         - /actuator/health
         - /actuator/health/**
@@ -56,8 +93,17 @@ xuan:
         - /api/iam/auth/login
         - /api/iam/auth/refresh
         - /.well-known/jwks.json
+      permission-rules:
+        # 列权限页面读取租户下拉选项：允许租户管理查看、平台列权限模板查看、角色列权限查看三种入口复用。
+        - paths:
+            - /api/tenants/column-permission-options
+          authorities:
+            - tenant:view
+            - iam-column-permission:view
+            - iam-role-column-permission:view
       cors:
         allowed-origins:
+          # 本地开发推荐固定访问 127.0.0.1；localhost 仍保留为兼容 Origin，避免跨域调试直接失败。
           - http://127.0.0.1:5173
           - http://localhost:5173
         allowed-methods:

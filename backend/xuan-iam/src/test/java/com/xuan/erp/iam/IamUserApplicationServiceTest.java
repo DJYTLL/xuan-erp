@@ -4,7 +4,9 @@ import com.xuan.erp.common.exception.BusinessException;
 import com.xuan.erp.iam.application.command.CreateIamUserCommand;
 import com.xuan.erp.iam.application.command.DisableIamUserCommand;
 import com.xuan.erp.iam.application.command.RebuildAuthorizationSnapshotCommand;
+import com.xuan.erp.iam.application.command.ResetIamUserPasswordCommand;
 import com.xuan.erp.iam.application.command.SetIamUserRolesCommand;
+import com.xuan.erp.iam.application.command.UpdateIamUserCommand;
 import com.xuan.erp.iam.application.query.IamAuthorizationSnapshotView;
 import com.xuan.erp.iam.application.query.IamUserRoleGrantView;
 import com.xuan.erp.iam.application.query.IamUserDetailView;
@@ -25,6 +27,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.springframework.security.crypto.factory.PasswordEncoderFactories;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -32,6 +36,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class IamUserApplicationServiceTest {
+
+    private static final PasswordEncoder PASSWORD_ENCODER = PasswordEncoderFactories.createDelegatingPasswordEncoder();
 
     @Test
     void createsUserWithTenantScopedCaseSensitiveUsername() {
@@ -41,43 +47,140 @@ class IamUserApplicationServiceTest {
         IamUserDetailView first = service.createUser(new CreateIamUserCommand(
                 1001L,
                 " Admin ",
-                "{bcrypt}hash",
+                "Passw0rd!",
                 "管理员",
                 "admin@example.com",
                 "13800000000",
-                "首个账号"));
+                "首个账号",
+                "security-admin"));
         IamUserDetailView second = service.createUser(new CreateIamUserCommand(
                 1001L,
                 "admin",
-                "{bcrypt}hash2",
+                "Passw0rd!",
                 "小写管理员",
                 null,
                 null,
-                null));
+                null,
+                "security-admin"));
 
         assertEquals("Admin", first.username());
         assertEquals("admin", second.username());
         assertEquals(0L, first.authVersion());
         assertTrue(first.enabled());
+        assertTrue(PASSWORD_ENCODER.matches("Passw0rd!", userRepository.store.get(first.id()).passwordHash()));
     }
 
     @Test
     void rejectsDuplicateUsernameInSameTenant() {
         InMemoryIamUserRepository userRepository = new InMemoryIamUserRepository();
         IamUserApplicationService service = service(userRepository);
-        service.createUser(new CreateIamUserCommand(1001L, "admin", "{bcrypt}hash", "管理员", null, null, null));
+        service.createUser(new CreateIamUserCommand(1001L, "admin", "Passw0rd!", "管理员", null, null, null, "security-admin"));
 
         BusinessException error = assertThrows(BusinessException.class,
-                () -> service.createUser(new CreateIamUserCommand(1001L, "admin", "{bcrypt}another", "重复账号", null, null, null)));
+                () -> service.createUser(new CreateIamUserCommand(1001L, "admin", "Passw0rd!", "重复账号", null, null, null, "security-admin")));
 
         assertEquals("IAM_USERNAME_EXISTS", error.code());
+    }
+
+    @Test
+    void updatesUserProfileWithoutChangingUsernameOrPassword() {
+        InMemoryIamUserRepository userRepository = new InMemoryIamUserRepository();
+        IamUserApplicationService service = service(userRepository);
+        Long userId = service.createUser(new CreateIamUserCommand(1001L, "buyer", "Passw0rd!", "采购员", null, null, null, "security-admin")).id();
+        String originalPasswordHash = userRepository.store.get(userId).passwordHash();
+
+        IamUserDetailView updated = service.updateUser(userId, new UpdateIamUserCommand(
+                1001L,
+                "高级采购员",
+                "buyer@example.com",
+                "13900000000",
+                false,
+                "临时停用",
+                "security-admin"));
+
+        IamUser saved = userRepository.store.get(userId);
+        assertEquals("buyer", saved.username());
+        assertEquals(originalPasswordHash, saved.passwordHash());
+        assertEquals("高级采购员", updated.displayName());
+        assertEquals("buyer@example.com", updated.email());
+        assertEquals("13900000000", updated.phone());
+        assertFalse(updated.enabled());
+        assertEquals(1L, updated.authVersion());
+    }
+
+    @Test
+    void resetsPasswordAndIncrementsAuthVersion() {
+        InMemoryIamUserRepository userRepository = new InMemoryIamUserRepository();
+        IamUserApplicationService service = service(userRepository);
+        Long userId = service.createUser(new CreateIamUserCommand(1001L, "buyer", "OldPassw0rd!", "采购员", null, null, null, "security-admin")).id();
+        String originalPasswordHash = userRepository.store.get(userId).passwordHash();
+
+        IamUserDetailView updated = service.resetPassword(userId, new ResetIamUserPasswordCommand(
+                1001L,
+                "NewPassw0rd!",
+                "security-admin"));
+
+        IamUser saved = userRepository.store.get(userId);
+        assertEquals(1L, updated.authVersion());
+        assertFalse(originalPasswordHash.equals(saved.passwordHash()));
+        assertTrue(PASSWORD_ENCODER.matches("NewPassw0rd!", saved.passwordHash()));
+        assertEquals("security-admin", saved.updatedBy());
+    }
+
+    @Test
+    void resetsTenantAdminPasswordByTenantId() {
+        InMemoryIamUserRepository userRepository = new InMemoryIamUserRepository();
+        IamUserApplicationService service = service(userRepository);
+        IamUser admin = userRepository.save(user(1L, 1001L, "admin", 3L));
+        userRepository.save(user(2L, 1001L, "buyer", 1L));
+        String originalPasswordHash = admin.passwordHash();
+
+        IamUserDetailView updated = service.resetTenantAdminPassword(1001L, new ResetIamUserPasswordCommand(
+                1001L,
+                "NewAdminPassw0rd!",
+                "platform-admin"));
+
+        IamUser saved = userRepository.store.get(admin.id());
+        assertEquals(admin.id(), updated.id());
+        assertEquals("admin", updated.username());
+        assertEquals(4L, updated.authVersion());
+        assertFalse(originalPasswordHash.equals(saved.passwordHash()));
+        assertTrue(PASSWORD_ENCODER.matches("NewAdminPassw0rd!", saved.passwordHash()));
+        assertEquals("platform-admin", saved.updatedBy());
+    }
+
+    @Test
+    void rejectsResettingTenantAdminPasswordWhenAdminUserMissing() {
+        InMemoryIamUserRepository userRepository = new InMemoryIamUserRepository();
+        IamUserApplicationService service = service(userRepository);
+        userRepository.save(user(2L, 1001L, "buyer", 1L));
+
+        BusinessException error = assertThrows(BusinessException.class,
+                () -> service.resetTenantAdminPassword(1001L, new ResetIamUserPasswordCommand(
+                        1001L,
+                        "NewAdminPassw0rd!",
+                        "platform-admin")));
+
+        assertEquals("IAM_TENANT_ADMIN_NOT_FOUND", error.code());
+    }
+
+    @Test
+    void rejectsResettingPlatformUserPassword() {
+        InMemoryIamUserRepository userRepository = new InMemoryIamUserRepository();
+        IamUserApplicationService service = service(userRepository);
+        userRepository.save(user(1L, 0L, "super_admin", 2L));
+
+        BusinessException error = assertThrows(BusinessException.class,
+                () -> service.resetPassword(1L, new ResetIamUserPasswordCommand(0L, "NewPassw0rd!", "security-admin")));
+
+        assertEquals("IAM_PLATFORM_USER_ROLE_READ_ONLY", error.code());
     }
 
     @Test
     void disablesUserAndIncrementsAuthVersion() {
         InMemoryIamUserRepository userRepository = new InMemoryIamUserRepository();
         IamUserApplicationService service = service(userRepository);
-        Long userId = service.createUser(new CreateIamUserCommand(1001L, "admin", "{bcrypt}hash", "管理员", null, null, null)).id();
+        Long userId = service.createUser(new CreateIamUserCommand(1001L, "admin", "Passw0rd!", "管理员", null, null, null, "security-admin")).id();
 
         IamUserDetailView disabled = service.disableUser(userId, new DisableIamUserCommand("离职停用", "security-admin"));
 
@@ -106,7 +209,8 @@ class IamUserApplicationServiceTest {
                 userRepository,
                 new InMemoryRoleRepository(),
                 rolePermissionRepository,
-                new InMemoryAuthorizationSnapshotRepository());
+                new InMemoryAuthorizationSnapshotRepository(),
+                PASSWORD_ENCODER);
         userRepository.save(user(1L, 0L, "super_admin", 2L));
         rolePermissionRepository.userRoleIds.put(1L, List.of(10L));
 
@@ -139,8 +243,9 @@ class IamUserApplicationServiceTest {
                 userRepository,
                 roleRepository,
                 rolePermissionRepository,
-                snapshotRepository);
-        Long userId = service.createUser(new CreateIamUserCommand(1001L, "buyer", "{bcrypt}hash", "采购员", null, null, null)).id();
+                snapshotRepository,
+                PASSWORD_ENCODER);
+        Long userId = service.createUser(new CreateIamUserCommand(1001L, "buyer", "Passw0rd!", "采购员", null, null, null, "security-admin")).id();
         IamRole buyerRole = roleRepository.save(role(10L, 1001L, "buyer"));
         IamRole viewerRole = roleRepository.save(role(11L, 1001L, "viewer"));
         rolePermissionRepository.rolePermissionCodes.put(buyerRole.id(), List.of("procurement:view"));
@@ -178,7 +283,7 @@ class IamUserApplicationServiceTest {
         assertEquals(List.of(1L, 3L), view.roleIds());
         assertEquals(List.of("iam:update", "iam:view"), view.permissionCodes());
         assertEquals(List.of("system", "workbench"), view.menuCodes());
-        assertEquals("iam:update,iam:view|system,workbench|1,3", view.snapshotHash());
+        assertEquals(64, view.snapshotHash().length());
     }
 
     private static final class InMemoryIamUserRepository implements IamUserRepository {
@@ -249,7 +354,8 @@ class IamUserApplicationServiceTest {
                 userRepository,
                 new InMemoryRoleRepository(),
                 new InMemoryRolePermissionRepository(),
-                new InMemoryAuthorizationSnapshotRepository());
+                new InMemoryAuthorizationSnapshotRepository(),
+                PASSWORD_ENCODER);
     }
 
     private static IamUser user(Long id, Long tenantId, String username, long authVersion) {
@@ -346,6 +452,10 @@ class IamUserApplicationServiceTest {
 
         @Override
         public void replaceRolePermissions(Long tenantId, Long roleId, List<Long> permissionIds, String operator) {
+        }
+
+        @Override
+        public void removeRolePermissionsOutsideTenantEntitlements(Long tenantId, String operator) {
         }
 
         @Override

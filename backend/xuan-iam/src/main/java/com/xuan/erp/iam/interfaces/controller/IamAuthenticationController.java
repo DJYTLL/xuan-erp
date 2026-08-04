@@ -69,13 +69,17 @@ public class IamAuthenticationController {
     @GetMapping("/api/iam/auth/current-user")
     public ApiResponse<IamCurrentUserResponse> currentUser(Authentication authentication) {
         CurrentUser currentUser = requireCurrentUser(authentication);
-        return ApiResponse.success(IamAuthenticationAssembler.toCurrentUserResponse(currentUser));
+        authenticationApplicationService.validateCurrentTenantStatus(currentUser);
+        return ApiResponse.success(IamAuthenticationAssembler.toCurrentUserResponse(
+                currentUser,
+                authenticationApplicationService.resolveCurrentTenantDisplay(currentUser)));
     }
 
     @Operation(summary = "查询当前用户菜单树", description = "返回当前登录用户可见菜单树")
     @GetMapping("/api/iam/menus/current")
     public ApiResponse<List<IamCurrentMenuNodeResponse>> currentMenus(Authentication authentication) {
         CurrentUser currentUser = requireCurrentUser(authentication);
+        authenticationApplicationService.validateCurrentTenantStatus(currentUser);
         return ApiResponse.success(IamCurrentAuthorizationAssembler.toMenuTreeResponse(
                 currentAuthorizationApplicationService.getCurrentPermissionSnapshot(currentUser).menus()));
     }
@@ -84,6 +88,7 @@ public class IamAuthenticationController {
     @GetMapping("/api/iam/permissions/current")
     public ApiResponse<IamCurrentPermissionSnapshotResponse> currentPermissions(Authentication authentication) {
         CurrentUser currentUser = requireCurrentUser(authentication);
+        authenticationApplicationService.validateCurrentTenantStatus(currentUser);
         return ApiResponse.success(IamCurrentAuthorizationAssembler.toResponse(
                 currentAuthorizationApplicationService.getCurrentPermissionSnapshot(currentUser)));
     }

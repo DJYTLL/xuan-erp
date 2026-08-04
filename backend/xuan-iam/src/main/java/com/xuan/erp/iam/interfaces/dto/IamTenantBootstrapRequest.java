@@ -2,6 +2,7 @@ package com.xuan.erp.iam.interfaces.dto;
 
 import com.xuan.erp.iam.application.command.BootstrapTenantAdminCommand;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.util.List;
 
 /**
  * IAM 租户初始化请求体。
@@ -18,7 +19,15 @@ public record IamTenantBootstrapRequest(
         @Schema(description = "租户管理员邮箱", example = "admin@example.com")
         String adminEmail,
         @Schema(description = "租户管理员手机号", example = "13800000000")
-        String adminPhone
+        String adminPhone,
+        @Schema(description = "IAM 租户初始化权限模板编码", example = "basic")
+        String iamInitTemplateCode,
+        @Schema(description = "套餐绑定的平台列权限模板编码列表", example = "[\"tenant-basic\", \"iam-user-basic\"]")
+        List<String> columnPermissionTemplateCodes,
+        @Schema(description = "套餐绑定的默认列权限模板编码", example = "tenant-basic")
+        String defaultColumnPermissionTemplateCode,
+        @Schema(description = "Tenant 按当前套餐权限边界计算出的权限指纹")
+        String permissionHash
 ) {
 
     public BootstrapTenantAdminCommand toCommand() {

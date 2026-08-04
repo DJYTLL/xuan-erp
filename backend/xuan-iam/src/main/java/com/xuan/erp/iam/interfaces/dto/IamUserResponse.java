@@ -21,11 +21,11 @@ public record IamUserResponse(
         @Schema(description = "手机号", example = "13800000000")
         String phone,
         @Schema(description = "是否启用", example = "true")
-        boolean enabled,
+        Boolean enabled,
         @Schema(description = "账号是否未锁定", example = "true")
-        boolean accountNonLocked,
+        Boolean accountNonLocked,
         @Schema(description = "权限版本", example = "1")
-        long authVersion,
+        Long authVersion,
         @Schema(description = "备注", example = "默认管理员账号")
         String remark,
         @Schema(description = "创建时间")

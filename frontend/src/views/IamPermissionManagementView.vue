@@ -5,7 +5,7 @@
         <el-input v-model="keyword" class="query-input" placeholder="搜索权限码 / 名称 / 服务 / 菜单" clearable />
         <template #actions>
           <el-button :icon="RefreshCw" circle @click="loadPermissionPage" />
-          <PermissionButton type="primary" permission="iam:create" @click="openCreate">新增权限</PermissionButton>
+          <PermissionButton type="primary" permission="iam-permission:create" @click="openCreate">新增权限</PermissionButton>
         </template>
       </QueryToolbar>
     </template>
@@ -56,58 +56,27 @@
           </el-table-column>
           <el-table-column label="操作" width="210" fixed="right">
             <template #default="{ row }">
-              <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
-              <el-button link :type="row.enabled ? 'warning' : 'success'" @click="togglePermission(row)">
+              <PermissionButton link type="primary" permission="iam-permission:update" no-permission-mode="disable" @click="openEdit(row)">编辑</PermissionButton>
+              <PermissionButton link :type="row.enabled ? 'warning' : 'success'" permission="iam-permission:update" no-permission-mode="disable" @click="togglePermission(row)">
                 {{ row.enabled ? '停用' : '启用' }}
-              </el-button>
+              </PermissionButton>
             </template>
           </el-table-column>
         </el-table>
       </section>
     </div>
 
-    <el-dialog v-model="dialogVisible" :title="editingPermission ? '编辑权限' : '新增权限'" width="680px">
-      <el-form label-position="top">
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="权限码">
-              <el-input v-model="form.code" :disabled="Boolean(editingPermission)" placeholder="iam:role:update" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="名称">
-              <el-input v-model="form.name" placeholder="角色修改" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="来源服务">
-              <el-input v-model="form.serviceName" placeholder="xuan-iam" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="所属菜单">
-              <el-select v-model="form.menuCode" filterable clearable placeholder="选择菜单">
-                <el-option
-                  v-for="item in menuSelectOptions"
-                  :key="item.code"
-                  :label="item.label"
-                  :value="item.code"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="24">
-            <el-form-item label="说明">
-              <el-input v-model="form.description" type="textarea" placeholder="权限用途说明" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitPermission">保存</el-button>
-      </template>
-    </el-dialog>
+    <DynamicFormDialog
+      v-model="dialogVisible"
+      :title="editingPermission ? '编辑权限' : '新增权限'"
+      :fields="permissionFormFields"
+      :sections="permissionFormSections"
+      :model="form"
+      size="md"
+      label-position="top"
+      :confirm-permission="editingPermission ? 'iam-permission:update' : 'iam-permission:create'"
+      @submit="submitPermission"
+    />
   </ListPageShell>
 </template>
 
@@ -117,11 +86,13 @@ import { ElMessage } from 'element-plus/es/components/message/index';
 import { RefreshCw } from 'lucide-vue-next';
 import {
   createIamPermission,
-  listIamMenus,
+  listIamMenuOptions,
   listIamPermissions,
   setIamPermissionEnabled,
   updateIamPermission,
 } from '@/api/iamAdmin';
+import DynamicFormDialog from '@/framework/components/DynamicFormDialog.vue';
+import type { DynamicFormField, DynamicFormSection } from '@/framework/components/DynamicFormDialog.vue';
 import ListPageShell from '@/framework/components/ListPageShell.vue';
 import NavigationMenuTree, { type NavigationMenuTreeNode } from '@/framework/components/NavigationMenuTree.vue';
 import PermissionButton from '@/framework/components/PermissionButton.vue';
@@ -247,12 +218,60 @@ const filteredPermissionRows = computed(() => {
 
 const menuSelectOptions = computed<MenuSelectOption[]>(() => flattenMenuOptions(null));
 
+const permissionFormFields = computed<DynamicFormField[]>(() => [
+  {
+    key: 'code',
+    label: '权限码',
+    placeholder: 'iam:role:update',
+    required: true,
+    disabled: Boolean(editingPermission.value),
+    span: 12,
+  },
+  {
+    key: 'name',
+    label: '名称',
+    placeholder: '角色修改',
+    required: true,
+    span: 12,
+  },
+  {
+    key: 'serviceName',
+    label: '来源服务',
+    placeholder: 'xuan-iam',
+    required: true,
+    span: 12,
+  },
+  {
+    key: 'menuCode',
+    label: '所属菜单',
+    component: 'select',
+    placeholder: '选择菜单',
+    clearable: true,
+    options: menuSelectOptions.value.map((item) => ({ label: item.label, value: item.code })),
+    span: 12,
+  },
+  {
+    key: 'description',
+    label: '说明',
+    component: 'textarea',
+    placeholder: '权限用途说明',
+    span: 24,
+  },
+]);
+
+const permissionFormSections = computed<DynamicFormSection[]>(() => [
+  {
+    title: '权限信息',
+    fields: permissionFormFields.value,
+  },
+]);
+
 onMounted(loadPermissionPage);
 
 async function loadPermissionPage() {
   loading.value = true;
   try {
-    const [nextMenus, nextPermissions] = await Promise.all([listIamMenus(), listIamPermissions()]);
+    const [nextMenus, nextPermissions] = await Promise.all([listIamMenuOptions(), listIamPermissions()]);
     menus.value = nextMenus;
     permissions.value = nextPermissions;
   } finally {
@@ -345,7 +364,8 @@ function openEdit(row: IamPermission) {
   dialogVisible.value = true;
 }
 
-async function submitPermission() {
+async function submitPermission(value: Record<string, unknown>) {
+  Object.assign(form, value);
   if (editingPermission.value) {
     await updateIamPermission(editingPermission.value.id, form);
   } else {

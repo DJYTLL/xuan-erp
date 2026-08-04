@@ -8,6 +8,8 @@ import java.util.List;
 public record IamRolePermissionGrantView(
         Long tenantId,
         Long roleId,
-        List<String> permissionCodes
+        List<String> permissionCodes,
+        List<String> availablePermissionCodes,
+        List<IamAssignablePermissionView> availablePermissions
 ) {
 }

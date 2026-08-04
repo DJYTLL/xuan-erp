@@ -7,8 +7,11 @@ import com.xuan.erp.iam.application.query.IamCurrentPermissionSnapshotView;
 import com.xuan.erp.iam.domain.model.IamAuthorizationSnapshot;
 import com.xuan.erp.iam.domain.model.IamMenu;
 import com.xuan.erp.iam.domain.repository.IamAuthorizationSnapshotRepository;
+import com.xuan.erp.iam.domain.repository.IamColumnPermissionRepository;
 import com.xuan.erp.iam.domain.repository.IamMenuRepository;
 import com.xuan.erp.iam.domain.repository.IamPermissionRepository;
+import com.xuan.erp.iam.domain.repository.IamRolePermissionRepository;
+import com.xuan.erp.iam.domain.repository.IamTenantPermissionEntitlementRepository;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -16,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Stream;
 import org.springframework.stereotype.Service;
@@ -31,14 +35,23 @@ public class IamCurrentAuthorizationApplicationService {
     private final IamMenuRepository menuRepository;
     private final IamPermissionRepository permissionRepository;
     private final IamAuthorizationSnapshotRepository snapshotRepository;
+    private final IamColumnPermissionRepository columnPermissionRepository;
+    private final IamRolePermissionRepository rolePermissionRepository;
+    private final IamTenantPermissionEntitlementRepository tenantPermissionEntitlementRepository;
 
     public IamCurrentAuthorizationApplicationService(
             IamMenuRepository menuRepository,
             IamPermissionRepository permissionRepository,
-            IamAuthorizationSnapshotRepository snapshotRepository) {
+            IamAuthorizationSnapshotRepository snapshotRepository,
+            IamColumnPermissionRepository columnPermissionRepository,
+            IamRolePermissionRepository rolePermissionRepository,
+            IamTenantPermissionEntitlementRepository tenantPermissionEntitlementRepository) {
         this.menuRepository = menuRepository;
         this.permissionRepository = permissionRepository;
         this.snapshotRepository = snapshotRepository;
+        this.columnPermissionRepository = columnPermissionRepository;
+        this.rolePermissionRepository = rolePermissionRepository;
+        this.tenantPermissionEntitlementRepository = tenantPermissionEntitlementRepository;
     }
 
     public IamCurrentPermissionSnapshotView getCurrentPermissionSnapshot(CurrentUser currentUser) {
@@ -48,6 +61,7 @@ public class IamCurrentAuthorizationApplicationService {
 
         IamAuthorizationSnapshot snapshot = snapshotRepository.findByTenantIdAndUserId(currentUser.tenantId(), currentUser.userId())
                 .orElse(null);
+        List<Long> roleIds = rolePermissionRepository.findRoleIdsByUserId(currentUser.tenantId(), currentUser.userId());
         List<String> permissionCodes = activePermissionCodes(snapshot, currentUser);
         Set<String> permissionCodeSet = new LinkedHashSet<>(permissionCodes);
         Set<String> menuCodeSet = activeMenuCodes(snapshot, permissionCodeSet);
@@ -56,11 +70,28 @@ public class IamCurrentAuthorizationApplicationService {
                 buildMenuTree(menuCodeSet),
                 permissionCodes,
                 permissionCodes,
-                snapshot == null ? Map.of() : snapshot.columnSettings(),
+                activeColumnPermissions(snapshot, currentUser, roleIds),
                 Map.of(),
                 List.of(),
                 Map.of(),
                 snapshot == null ? currentUser.authVersion() : snapshot.authVersion());
+    }
+
+    private Map<String, Map<String, String>> activeColumnPermissions(
+            IamAuthorizationSnapshot snapshot,
+            CurrentUser currentUser,
+            List<Long> roleIds) {
+        if (isSuperAdmin(currentUser)) {
+            return snapshot == null ? Map.of() : snapshot.columnSettings();
+        }
+        if (currentUser.tenantId() != null && currentUser.tenantId() > 0) {
+            Map<String, Map<String, String>> merged = columnPermissionRepository
+                    .findMergedColumnPermissionsByRoleIds(currentUser.tenantId(), roleIds);
+            if (!merged.isEmpty()) {
+                return merged;
+            }
+        }
+        return snapshot == null ? Map.of() : snapshot.columnSettings();
     }
 
     private List<String> activePermissionCodes(IamAuthorizationSnapshot snapshot, CurrentUser currentUser) {
@@ -70,7 +101,7 @@ public class IamCurrentAuthorizationApplicationService {
         if (isSuperAdmin(currentUser)) {
             return sortedPermissionCodesWithWildcard(activePermissionCodes);
         }
-        Collection<String> preferredSource = snapshot == null ? currentUser.permissions() : snapshot.permissionCodes();
+        Collection<String> preferredSource = preferredPermissionSource(snapshot, currentUser);
         List<String> filtered = preferredSource.stream()
                 .filter(code -> code != null && !code.isBlank())
                 .map(String::trim)
@@ -79,23 +110,55 @@ public class IamCurrentAuthorizationApplicationService {
                 .sorted()
                 .toList();
         if (snapshot != null) {
-            return filtered;
+            return trimByTenantEntitlements(currentUser, filtered);
         }
         if (!filtered.isEmpty()) {
-            return filtered;
+            return trimByTenantEntitlements(currentUser, filtered);
         }
-        return currentUser.permissions().stream()
+        List<String> fallback = currentUser.permissions().stream()
                 .filter(code -> code != null && !code.isBlank())
                 .map(String::trim)
+                .filter(code -> activePermissionCodes.isEmpty() || activePermissionCodes.contains(code))
                 .distinct()
                 .sorted()
                 .toList();
+        return trimByTenantEntitlements(currentUser, fallback);
+    }
+
+    private Collection<String> preferredPermissionSource(IamAuthorizationSnapshot snapshot, CurrentUser currentUser) {
+        List<String> rolePermissionCodes = rolePermissionRepository.findPermissionCodesByUserId(currentUser.tenantId(), currentUser.userId());
+        List<Long> roleIds = rolePermissionRepository.findRoleIdsByUserId(currentUser.tenantId(), currentUser.userId());
+        if (!roleIds.isEmpty() || !rolePermissionCodes.isEmpty()) {
+            return rolePermissionCodes;
+        }
+        return snapshot == null ? currentUser.permissions() : snapshot.permissionCodes();
     }
 
     private boolean isSuperAdmin(CurrentUser currentUser) {
-        return currentUser.roles().contains("super_admin")
+        return Long.valueOf(0L).equals(currentUser.tenantId())
+                && (currentUser.roles().contains("super_admin")
                 || currentUser.permissions().contains("*")
-                || (Long.valueOf(0L).equals(currentUser.tenantId()) && PLATFORM_SUPER_ADMIN_USERNAMES.contains(currentUser.username()));
+                || PLATFORM_SUPER_ADMIN_USERNAMES.contains(currentUser.username()));
+    }
+
+    private List<String> trimByTenantEntitlements(CurrentUser currentUser, List<String> permissionCodes) {
+        if (currentUser.tenantId() == null || currentUser.tenantId() <= 0 || permissionCodes.isEmpty()) {
+            return permissionCodes;
+        }
+        Set<String> entitledPermissionCodes = tenantPermissionEntitlementRepository
+                .findPermissionCodesByTenantId(currentUser.tenantId())
+                .stream()
+                .filter(code -> code != null && !code.isBlank())
+                .map(String::trim)
+                .collect(LinkedHashSet::new, LinkedHashSet::add, LinkedHashSet::addAll);
+        if (entitledPermissionCodes.isEmpty()) {
+            return List.of();
+        }
+        return permissionCodes.stream()
+                .filter(entitledPermissionCodes::contains)
+                .distinct()
+                .sorted()
+                .toList();
     }
 
     private List<String> sortedPermissionCodesWithWildcard(Set<String> activePermissionCodes) {
@@ -109,19 +172,17 @@ public class IamCurrentAuthorizationApplicationService {
                 .filter(menu -> menu.enabled())
                 .sorted(Comparator.comparingInt(IamMenu::sortNo).thenComparing(IamMenu::code))
                 .toList();
-        Set<String> permissionDerivedMenuCodes = permissionDerivedMenuCodes(activeMenus, permissionCodeSet);
-        if (snapshot != null && snapshot.menuCodes() != null && !snapshot.menuCodes().isEmpty()) {
-            Set<String> menuCodes = new LinkedHashSet<>(snapshot.menuCodes());
-            menuCodes.addAll(permissionDerivedMenuCodes);
-            includeParentMenus(activeMenus, menuCodes);
-            return menuCodes;
-        }
-        Set<String> menuCodes = new LinkedHashSet<>(permissionDerivedMenuCodes);
+        Set<String> menuCodes = permissionDerivedMenuCodes(activeMenus, permissionCodeSet);
         includeParentMenus(activeMenus, menuCodes);
         return menuCodes;
     }
 
     private Set<String> permissionDerivedMenuCodes(List<IamMenu> activeMenus, Set<String> permissionCodeSet) {
+        if (permissionCodeSet.contains("*")) {
+            return activeMenus.stream()
+                    .map(IamMenu::code)
+                    .collect(LinkedHashSet::new, LinkedHashSet::add, LinkedHashSet::addAll);
+        }
         return activeMenus.stream()
                 .filter(menu -> menu.permissionCode() == null || menu.permissionCode().isBlank() || permissionCodeSet.contains(menu.permissionCode()))
                 .map(IamMenu::code)
@@ -163,6 +224,7 @@ public class IamCurrentAuthorizationApplicationService {
         }
         return roots.stream()
                 .map(menu -> toMenuNode(menu, childrenByParentId))
+                .filter(Objects::nonNull)
                 .toList();
     }
 
@@ -170,7 +232,11 @@ public class IamCurrentAuthorizationApplicationService {
         List<IamCurrentMenuNodeView> children = childrenByParentId.getOrDefault(menu.id(), List.of()).stream()
                 .sorted(Comparator.comparingInt(IamMenu::sortNo).thenComparing(IamMenu::code))
                 .map(child -> toMenuNode(child, childrenByParentId))
+                .filter(Objects::nonNull)
                 .toList();
+        if ((menu.path() == null || menu.path().isBlank()) && children.isEmpty()) {
+            return null;
+        }
         return new IamCurrentMenuNodeView(
                 menu.code(),
                 menu.title(),

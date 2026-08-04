@@ -1,6 +1,7 @@
 package com.xuan.erp.tenant.application.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xuan.erp.common.exception.BusinessException;
 import com.xuan.erp.tenant.application.command.TenantAdminBootstrapCommand;
@@ -193,7 +194,7 @@ public class TenantProvisionApplicationService {
         TenantProvisionTask task = requireTask(taskId);
         TenantProvisionTaskStep step = requireStep(taskId, stepKey);
 
-        taskRepository.save(new TenantProvisionTask(
+        TenantProvisionTask retriedTask = taskRepository.save(new TenantProvisionTask(
                 task.id(),
                 task.tenantId(),
                 task.taskKey(),
@@ -218,7 +219,7 @@ public class TenantProvisionApplicationService {
                 task.deletedAt()
         ));
 
-        taskStepRepository.save(new TenantProvisionTaskStep(
+        TenantProvisionTaskStep retriedStep = taskStepRepository.save(new TenantProvisionTaskStep(
                 step.id(),
                 step.tenantId(),
                 step.provisionTaskId(),
@@ -243,6 +244,15 @@ public class TenantProvisionApplicationService {
                 step.deleteReason(),
                 step.deletedAt()
         ));
+
+        if (IAM_BOOTSTRAP_STEP_KEY.equals(retriedStep.stepKey())) {
+            appendIamBootstrapRequestedEvent(
+                    retriedTask,
+                    retriedStep,
+                    adminBootstrapCommandFromStepRequest(retriedStep),
+                    normalizedOperator,
+                    now);
+        }
     }
 
     public void retryOutboxEvent(Long eventId, String operator, String reason) {
@@ -505,6 +515,19 @@ public class TenantProvisionApplicationService {
             if (adminBootstrapCommand.adminPhone() != null) {
                 payload.put("adminPhone", adminBootstrapCommand.adminPhone());
             }
+            if (adminBootstrapCommand.iamInitTemplateCode() != null) {
+                payload.put("iamInitTemplateCode", adminBootstrapCommand.iamInitTemplateCode());
+            }
+            if (adminBootstrapCommand.columnPermissionTemplateCodes() != null) {
+                payload.put("columnPermissionTemplateCodes", adminBootstrapCommand.columnPermissionTemplateCodes());
+            }
+            if (adminBootstrapCommand.defaultColumnPermissionTemplateCode() != null) {
+                payload.put("defaultColumnPermissionTemplateCode", adminBootstrapCommand.defaultColumnPermissionTemplateCode());
+            }
+            payload.put("permissionHash", TenantPermissionSyncFingerprint.hash(
+                    adminBootstrapCommand.iamInitTemplateCode(),
+                    adminBootstrapCommand.columnPermissionTemplateCodes(),
+                    adminBootstrapCommand.defaultColumnPermissionTemplateCode()));
         }
         payload.put("occurredAt", now.toString());
         payload.put("sourceService", SOURCE_SERVICE);
@@ -603,6 +626,49 @@ public class TenantProvisionApplicationService {
         return value == null || value.isBlank() ? null : value.trim();
     }
 
+    private String textOrNull(Object value) {
+        return value == null ? null : textOrNull(String.valueOf(value));
+    }
+
+    private TenantAdminBootstrapCommand adminBootstrapCommandFromStepRequest(TenantProvisionTaskStep step) {
+        Map<String, Object> payload = jsonObjectOrEmpty(step.requestPayloadJson());
+        String adminUsername = textOrNull(payload.get("adminUsername"));
+        String adminPasswordHash = textOrNull(payload.get("adminPasswordHash"));
+        String adminDisplayName = textOrNull(payload.get("adminDisplayName"));
+        String adminEmail = textOrNull(payload.get("adminEmail"));
+        String adminPhone = textOrNull(payload.get("adminPhone"));
+        String iamInitTemplateCode = textOrNull(payload.get("iamInitTemplateCode"));
+        List<String> columnPermissionTemplateCodes = stringList(payload.get("columnPermissionTemplateCodes"));
+        String defaultColumnPermissionTemplateCode = textOrNull(payload.get("defaultColumnPermissionTemplateCode"));
+        if (adminUsername == null && adminPasswordHash == null && adminDisplayName == null
+                && adminEmail == null && adminPhone == null && iamInitTemplateCode == null
+                && columnPermissionTemplateCodes == null && defaultColumnPermissionTemplateCode == null) {
+            return null;
+        }
+        return new TenantAdminBootstrapCommand(
+                adminUsername,
+                adminPasswordHash,
+                adminDisplayName,
+                adminEmail,
+                adminPhone,
+                iamInitTemplateCode,
+                columnPermissionTemplateCodes,
+                defaultColumnPermissionTemplateCode
+        );
+    }
+
+    private Map<String, Object> jsonObjectOrEmpty(String payloadJson) {
+        if (payloadJson == null || payloadJson.isBlank()) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(payloadJson, new TypeReference<>() {
+            });
+        } catch (JsonProcessingException error) {
+            throw new IllegalStateException("failed to parse tenant provisioning request payload", error);
+        }
+    }
+
     private String callbackResultPayload(TenantProvisionCallbackCommand command) {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("eventId", requireText(command.eventId(), "回执事件 ID 不能为空"));
@@ -642,11 +708,30 @@ public class TenantProvisionApplicationService {
             if (adminBootstrapCommand.adminPhone() != null) {
                 payload.put("adminPhone", adminBootstrapCommand.adminPhone());
             }
+            if (adminBootstrapCommand.iamInitTemplateCode() != null) {
+                payload.put("iamInitTemplateCode", adminBootstrapCommand.iamInitTemplateCode());
+            }
+            if (adminBootstrapCommand.columnPermissionTemplateCodes() != null) {
+                payload.put("columnPermissionTemplateCodes", adminBootstrapCommand.columnPermissionTemplateCodes());
+            }
+            if (adminBootstrapCommand.defaultColumnPermissionTemplateCode() != null) {
+                payload.put("defaultColumnPermissionTemplateCode", adminBootstrapCommand.defaultColumnPermissionTemplateCode());
+            }
         }
         try {
             return objectMapper.writeValueAsString(payload);
         } catch (JsonProcessingException error) {
             throw new IllegalStateException("failed to serialize tenant provisioning payload", error);
         }
+    }
+
+    private List<String> stringList(Object value) {
+        if (!(value instanceof List<?> items)) {
+            return null;
+        }
+        return items.stream()
+                .map(this::textOrNull)
+                .filter(item -> item != null && !item.isBlank())
+                .toList();
     }
 }

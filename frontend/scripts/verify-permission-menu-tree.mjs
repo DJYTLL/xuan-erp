@@ -66,7 +66,7 @@ const treeComponentSource = read('src/framework/components/NavigationMenuTree.vu
 const navigationSource = read('src/config/navigation.ts');
 
 assertIncludes(packageSource, 'verify:permission-menu-tree', 'package.json should expose permission menu tree verification.');
-assertIncludes(permissionViewSource, 'listIamMenus', 'Permission management should load IAM menus for menu tree grouping.');
+assertIncludes(permissionViewSource, 'listIamMenuOptions', 'Permission management should load IAM menu options for menu tree grouping.');
 assertIncludes(permissionViewSource, 'NavigationMenuTree', 'Permission management should use the shared navigation menu tree component.');
 assertIncludes(permissionViewSource, 'selectedMenuCode', 'Permission management should filter permissions by selected menu node.');
 assertIncludes(permissionViewSource, 'UNASSIGNED_MENU_NODE', 'Permission management should group permissions without menuCode.');
@@ -118,16 +118,38 @@ try {
     'Sales management should aggregate product, inventory, warehouse and party permissions as page dependencies.',
   );
 
+  const restoredNavigationDependencies = new Map([
+    ['party', ['party:view', 'party:create', 'party:update', 'party:delete', 'party:import', 'party:export']],
+    ['warehouse', ['warehouse:view', 'warehouse:create', 'warehouse:update', 'warehouse:delete', 'warehouse:import', 'warehouse:export']],
+    ['inventory', ['inventory:view', 'inventory:create', 'inventory:update', 'inventory:delete', 'inventory:audit', 'inventory:import', 'inventory:export']],
+    ['sales', ['sales:view', 'sales:create', 'sales:update', 'sales:delete', 'sales:audit', 'sales:import', 'sales:export']],
+    ['finance', ['finance:view', 'finance:create', 'finance:update', 'finance:delete', 'finance:audit', 'finance:import', 'finance:export']],
+    ['document', ['document:view', 'document:create', 'document:update', 'document:delete', 'document:export']],
+    ['manufacturing', ['manufacturing:view', 'manufacturing:create', 'manufacturing:update', 'manufacturing:delete', 'manufacturing:audit', 'manufacturing:import', 'manufacturing:export']],
+    ['report', ['query:view', 'query:create', 'query:update', 'query:delete', 'query:export']],
+  ]);
+
+  for (const [menuCode, expectedCodes] of restoredNavigationDependencies) {
+    const dependencyCodes = collectBusinessPageRequiredPermissionCodes([menuCode]);
+    assert(
+      expectedCodes.every((code) => dependencyCodes.includes(code)),
+      `${menuCode} should expose restored navigation page operation permissions.`,
+    );
+  }
+
   const systemPageDependencies = new Map([
-    ['iam-menu-management', ['iam:view', 'iam:create', 'iam:update']],
-    ['iam-permission-management', ['iam:view', 'iam:create', 'iam:update']],
-    ['iam-role-management', ['iam:view', 'iam:create', 'iam:update']],
-    ['iam-user-management', ['iam:view', 'iam:create', 'iam:update', 'iam:delete']],
-    ['iam-init-template-management', ['iam:view', 'iam:create', 'iam:update']],
+    ['iam-menu-management', ['iam-menu:view', 'iam-menu:create', 'iam-menu:update']],
+    ['iam-permission-management', ['iam-permission:view', 'iam-permission:create', 'iam-permission:update']],
+    ['iam-role-management', ['iam-role:view', 'iam-role:create', 'iam-role:update']],
+    ['iam-user-management', ['iam-user:view', 'iam-user:create', 'iam-user:update', 'iam-user:reset-password', 'iam-user:delete']],
+    ['iam-init-template-management', ['iam-init-template:view', 'iam-init-template:create', 'iam-init-template:update']],
     ['tenant-management', [
       'tenant:view',
       'tenant:create',
       'tenant:update',
+      'tenant:enable',
+      'tenant:disable',
+      'tenant:delete',
       'tenant-plan:view',
       'tenant-plan:assign',
       'tenant-provision:view',
@@ -137,7 +159,7 @@ try {
     ['audit-logs', ['audit:log:view']],
     ['audit-interface-costs', ['audit:interface-cost:view']],
     ['audit-sql-rankings', ['audit:sql-ranking:view']],
-    ['components', ['iam:view']],
+    ['components', ['component-center:view']],
   ]);
 
   for (const [menuCode, expectedCodes] of systemPageDependencies) {

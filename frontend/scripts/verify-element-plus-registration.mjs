@@ -17,6 +17,7 @@ function assertIncludes(source, marker, message) {
 
 const mainSource = read('src/main.ts');
 const layoutSource = read('src/layouts/AppLayout.vue');
+const columnPermissionSource = read('src/views/IamColumnPermissionManagementView.vue');
 
 if (layoutSource.includes('<el-radio-group')) {
   assertIncludes(
@@ -26,4 +27,12 @@ if (layoutSource.includes('<el-radio-group')) {
   );
 }
 
-console.log('Verified Element Plus radio components are installed through ElRadio.');
+if (columnPermissionSource.includes('<el-segmented')) {
+  assertIncludes(
+    mainSource,
+    'ElSegmented,',
+    'main.ts should register ElSegmented because the column permission rule dialog uses el-segmented.',
+  );
+}
+
+console.log('Verified Element Plus components are registered for current app usage.');

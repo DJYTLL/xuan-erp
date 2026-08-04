@@ -82,7 +82,15 @@ class TenantProvisionApplicationServiceTest {
                 "tenant:create:acme",
                 "idem-provision-1",
                 "system",
-                new TenantAdminBootstrapCommand("admin", "{noop}pwd", "租户管理员", null, null)
+                new TenantAdminBootstrapCommand(
+                        "admin",
+                        "{noop}pwd",
+                        "租户管理员",
+                        null,
+                        null,
+                        "standard",
+                        List.of("tenant-basic", "iam-user-basic"),
+                        "tenant-basic")
         );
 
         List<TenantOutboxEvent> events = new ArrayList<>(outboxRepository.store.values());
@@ -92,6 +100,9 @@ class TenantProvisionApplicationServiceTest {
         assertEquals("xuan-tenant-event", events.get(1).topic());
         assertTrue(events.get(1).payloadJson().contains("\"provisionStep\":\"IAM_BOOTSTRAP\""));
         assertTrue(events.get(1).payloadJson().contains("\"adminUsername\":\"admin\""));
+        assertTrue(events.get(1).payloadJson().contains("\"iamInitTemplateCode\":\"standard\""));
+        assertTrue(events.get(1).payloadJson().contains("\"columnPermissionTemplateCodes\":[\"tenant-basic\",\"iam-user-basic\"]"));
+        assertTrue(events.get(1).payloadJson().contains("\"defaultColumnPermissionTemplateCode\":\"tenant-basic\""));
         assertFalse(events.get(1).payloadJson().contains("\"adminPasswordHash\""));
         assertFalse(events.get(1).payloadJson().contains("\"adminPassword\""));
     }
@@ -402,13 +413,14 @@ class TenantProvisionApplicationServiceTest {
     }
 
     @Test
-    void retryTaskMovesTaskAndStepBackToRunningState() {
+    void retryTaskMovesTaskAndStepBackToRunningStateAndAppendsIamBootstrapRequestedEvent() {
         InMemoryTenantProvisionTaskRepository taskRepository = new InMemoryTenantProvisionTaskRepository();
         InMemoryTenantProvisionTaskStepRepository stepRepository = new InMemoryTenantProvisionTaskStepRepository();
+        InMemoryTenantOutboxEventRepository outboxRepository = new InMemoryTenantOutboxEventRepository();
         TenantProvisionApplicationService service = new TenantProvisionApplicationService(
                 taskRepository,
                 stepRepository,
-                new NoOpTenantOutboxEventRepository()
+                outboxRepository
         );
 
         TenantProvisionTask task = taskRepository.save(new TenantProvisionTask(
@@ -444,7 +456,9 @@ class TenantProvisionApplicationServiceTest {
                 ProvisionTaskStepStatus.FAILED,
                 1,
                 "idem-101",
-                "{}",
+                """
+                        {"tenantId":101,"adminUsername":"admin","adminPasswordHash":"{noop}pwd","adminDisplayName":"租户管理员"}
+                        """,
                 "{}",
                 0,
                 3,
@@ -467,6 +481,16 @@ class TenantProvisionApplicationServiceTest {
         assertEquals(ProvisionTaskStepStatus.RUNNING, retriedStep.status());
         assertEquals("ops", retriedStep.updatedBy());
         assertNotNull(retriedStep.startedAt());
+        List<TenantOutboxEvent> events = new ArrayList<>(outboxRepository.store.values());
+        assertEquals(1, events.size());
+        TenantOutboxEvent event = events.getFirst();
+        assertEquals("TenantIamBootstrapRequested", event.eventType());
+        assertEquals(OutboxEventStatus.PENDING, event.status());
+        assertTrue(event.payloadJson().contains("\"tenantId\":101"));
+        assertTrue(event.payloadJson().contains("\"taskKey\":\"tenant:create:acme\""));
+        assertTrue(event.payloadJson().contains("\"provisionStep\":\"IAM_BOOTSTRAP\""));
+        assertTrue(event.payloadJson().contains("\"idempotencyKey\":\"idem-101\""));
+        assertTrue(event.payloadJson().contains("\"adminUsername\":\"admin\""));
     }
 
     @Test

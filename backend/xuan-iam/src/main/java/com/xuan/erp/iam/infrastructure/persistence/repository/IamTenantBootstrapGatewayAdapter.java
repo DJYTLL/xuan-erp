@@ -24,6 +24,7 @@ public class IamTenantBootstrapGatewayAdapter implements IamTenantBootstrapGatew
             String adminDisplayName,
             String adminEmail,
             String adminPhone,
+            String iamInitTemplateCode,
             String requestedBy) {
         Integer insertedCount = mapper.bootstrapTenant(
                 tenantId,
@@ -32,6 +33,7 @@ public class IamTenantBootstrapGatewayAdapter implements IamTenantBootstrapGatew
                 adminDisplayName,
                 adminEmail,
                 adminPhone,
+                iamInitTemplateCode,
                 requestedBy);
         return insertedCount == null ? 0 : insertedCount;
     }

@@ -19,22 +19,54 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class CachingJwkKeyProvider {
 
+    private static final Duration DEFAULT_POSITIVE_CACHE_TTL = Duration.ofMinutes(10);
+    private static final Duration DEFAULT_STALE_CACHE_TTL = Duration.ofMinutes(30);
     private static final Duration DEFAULT_NEGATIVE_CACHE_TTL = Duration.ofSeconds(30);
+    private static final Duration DEFAULT_REFRESH_INTERVAL = Duration.ofMinutes(5);
 
     private final JwkSetFetcher jwkSetFetcher;
+    private final Duration positiveCacheTtl;
+    private final Duration staleCacheTtl;
     private final Duration negativeCacheTtl;
+    private final Duration refreshInterval;
     private final Clock clock;
     private final Map<String, Instant> negativeKidCache = new ConcurrentHashMap<>();
 
-    private volatile JWKSet cachedJwkSet;
+    private volatile CacheEntry cachedJwkSet;
+    private volatile Instant lastRefreshAttemptAt;
 
     public CachingJwkKeyProvider(JwkSetFetcher jwkSetFetcher) {
-        this(jwkSetFetcher, DEFAULT_NEGATIVE_CACHE_TTL, Clock.systemUTC());
+        this(
+                jwkSetFetcher,
+                DEFAULT_POSITIVE_CACHE_TTL,
+                DEFAULT_STALE_CACHE_TTL,
+                DEFAULT_NEGATIVE_CACHE_TTL,
+                DEFAULT_REFRESH_INTERVAL,
+                Clock.systemUTC());
     }
 
     public CachingJwkKeyProvider(JwkSetFetcher jwkSetFetcher, Duration negativeCacheTtl, Clock clock) {
+        this(
+                jwkSetFetcher,
+                DEFAULT_POSITIVE_CACHE_TTL,
+                DEFAULT_STALE_CACHE_TTL,
+                negativeCacheTtl,
+                DEFAULT_REFRESH_INTERVAL,
+                clock);
+    }
+
+    public CachingJwkKeyProvider(
+            JwkSetFetcher jwkSetFetcher,
+            Duration positiveCacheTtl,
+            Duration staleCacheTtl,
+            Duration negativeCacheTtl,
+            Duration refreshInterval,
+            Clock clock) {
         this.jwkSetFetcher = Objects.requireNonNull(jwkSetFetcher, "jwkSetFetcher must not be null");
-        this.negativeCacheTtl = requirePositive(negativeCacheTtl);
+        this.positiveCacheTtl = requirePositive(positiveCacheTtl, "positiveCacheTtl");
+        this.staleCacheTtl = requireNotNegative(staleCacheTtl, "staleCacheTtl");
+        this.negativeCacheTtl = requirePositive(negativeCacheTtl, "negativeCacheTtl");
+        this.refreshInterval = requirePositive(refreshInterval, "refreshInterval");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
     }
 
@@ -49,43 +81,81 @@ public class CachingJwkKeyProvider {
             return Mono.error(signatureInvalid("kid must not be blank"));
         }
         String requiredKid = kid;
-        JWKSet current = cachedJwkSet;
-        if (containsKid(current, requiredKid)) {
-            return Mono.just(current);
+        CacheEntry current = cachedJwkSet;
+        Instant now = Instant.now(clock);
+        if (containsKid(current, requiredKid) && current.isFresh(now, positiveCacheTtl)) {
+            return Mono.just(current.jwkSet());
         }
         if (isNegativeCached(requiredKid)) {
             return Mono.error(signatureInvalid("No JWK found for kid: " + requiredKid));
         }
         return current == null
                 ? loadThenRefreshIfNeeded(requiredKid)
-                : refreshAndRequireKid(requiredKid);
+                : refreshAndRequireKid(requiredKid, current);
+    }
+
+    /**
+     * 达到刷新间隔后预热一次 JWKS 缓存。
+     *
+     * <p>该方法供后台调度器调用。刷新失败不会清空旧缓存，避免 IAM 短暂不可用时扩大影响。</p>
+     *
+     * @return 当前有效或刚刷新的 JWK Set；未到刷新时间时直接返回当前缓存
+     */
+    public Mono<JWKSet> refreshIfDue() {
+        CacheEntry current = cachedJwkSet;
+        Instant now = Instant.now(clock);
+        if (current != null && !isRefreshDue(now)) {
+            return Mono.just(current.jwkSet());
+        }
+        lastRefreshAttemptAt = now;
+        return fetchAndCache();
     }
 
     private Mono<JWKSet> loadThenRefreshIfNeeded(String kid) {
-        return fetchAndCache()
+        return refresh()
                 .flatMap(jwkSet -> containsKid(jwkSet, kid)
                         ? Mono.just(jwkSet)
-                        : refreshAndRequireKid(kid))
+                        : missingKid(kid))
                 .onErrorMap(this::shouldWrapAsUnavailable, this::unavailable);
     }
 
-    private Mono<JWKSet> refreshAndRequireKid(String kid) {
-        return fetchAndCache()
+    private Mono<JWKSet> refreshAndRequireKid(String kid, CacheEntry staleCandidate) {
+        return refresh()
                 .flatMap(jwkSet -> {
                     if (containsKid(jwkSet, kid)) {
                         negativeKidCache.remove(kid);
                         return Mono.just(jwkSet);
                     }
-                    negativeKidCache.put(kid, Instant.now(clock).plus(negativeCacheTtl));
-                    return Mono.error(signatureInvalid("No JWK found for kid: " + kid));
+                    return missingKid(kid);
                 })
+                .onErrorResume(throwable -> staleOrError(kid, staleCandidate, throwable))
                 .onErrorMap(this::shouldWrapAsUnavailable, this::unavailable);
+    }
+
+    private Mono<JWKSet> refresh() {
+        lastRefreshAttemptAt = Instant.now(clock);
+        return fetchAndCache();
     }
 
     private Mono<JWKSet> fetchAndCache() {
         return jwkSetFetcher.fetch()
                 .map(JWKSet::toPublicJWKSet)
-                .doOnNext(jwkSet -> cachedJwkSet = jwkSet);
+                .doOnNext(jwkSet -> cachedJwkSet = new CacheEntry(jwkSet, Instant.now(clock)));
+    }
+
+    private Mono<JWKSet> staleOrError(String kid, CacheEntry staleCandidate, Throwable throwable) {
+        if (throwable instanceof JwtValidationException || throwable instanceof JwkSetUnavailableException) {
+            return Mono.error(throwable);
+        }
+        if (shouldUseStale(staleCandidate, kid)) {
+            return Mono.just(staleCandidate.jwkSet());
+        }
+        return Mono.error(throwable);
+    }
+
+    private Mono<JWKSet> missingKid(String kid) {
+        negativeKidCache.put(kid, Instant.now(clock).plus(negativeCacheTtl));
+        return Mono.error(signatureInvalid("No JWK found for kid: " + kid));
     }
 
     private boolean isNegativeCached(String kid) {
@@ -100,6 +170,15 @@ public class CachingJwkKeyProvider {
         return false;
     }
 
+    private boolean isRefreshDue(Instant now) {
+        Instant lastAttempt = lastRefreshAttemptAt;
+        return lastAttempt == null || !lastAttempt.plus(refreshInterval).isAfter(now);
+    }
+
+    private boolean shouldUseStale(CacheEntry entry, String kid) {
+        return containsKid(entry, kid) && entry.isStaleUsable(Instant.now(clock), positiveCacheTtl, staleCacheTtl);
+    }
+
     private boolean shouldWrapAsUnavailable(Throwable throwable) {
         return !(throwable instanceof JwtValidationException)
                 && !(throwable instanceof JwkSetUnavailableException);
@@ -107,6 +186,10 @@ public class CachingJwkKeyProvider {
 
     private JwkSetUnavailableException unavailable(Throwable throwable) {
         return new JwkSetUnavailableException("JWKS Endpoint is unavailable", throwable);
+    }
+
+    private static boolean containsKid(CacheEntry entry, String kid) {
+        return entry != null && containsKid(entry.jwkSet(), kid);
     }
 
     private static boolean containsKid(JWKSet jwkSet, String kid) {
@@ -117,11 +200,31 @@ public class CachingJwkKeyProvider {
         return new JwtValidationException(JwtValidationException.Reason.SIGNATURE_INVALID, message);
     }
 
-    private static Duration requirePositive(Duration duration) {
-        Objects.requireNonNull(duration, "negativeCacheTtl must not be null");
+    private static Duration requirePositive(Duration duration, String name) {
+        Objects.requireNonNull(duration, name + " must not be null");
         if (duration.isZero() || duration.isNegative()) {
-            throw new IllegalArgumentException("negativeCacheTtl must be positive");
+            throw new IllegalArgumentException(name + " must be positive");
         }
         return duration;
+    }
+
+    private static Duration requireNotNegative(Duration duration, String name) {
+        Objects.requireNonNull(duration, name + " must not be null");
+        if (duration.isNegative()) {
+            throw new IllegalArgumentException(name + " must not be negative");
+        }
+        return duration;
+    }
+
+    private record CacheEntry(JWKSet jwkSet, Instant fetchedAt) {
+
+        private boolean isFresh(Instant now, Duration positiveCacheTtl) {
+            return fetchedAt.plus(positiveCacheTtl).isAfter(now);
+        }
+
+        private boolean isStaleUsable(Instant now, Duration positiveCacheTtl, Duration staleCacheTtl) {
+            Instant staleExpiresAt = fetchedAt.plus(positiveCacheTtl).plus(staleCacheTtl);
+            return staleExpiresAt.isAfter(now);
+        }
     }
 }

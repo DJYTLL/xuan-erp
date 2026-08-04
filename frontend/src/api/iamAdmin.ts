@@ -1,16 +1,30 @@
 import { http } from './http';
 import type { ApiResponse } from '@/types/auth';
 import type {
+  IamColumnPermissionTemplate,
+  IamColumnPermissionTemplateItem,
+  IamColumnPermissionTemplateItemPayload,
+  IamColumnPermissionTemplatePayload,
   IamMenu,
   IamMenuPayload,
   IamPermission,
   IamPermissionPayload,
+  IamResourceColumn,
   IamRole,
+  IamRoleColumnPermissionRule,
+  IamRoleColumnPermissionRulePayload,
+  IamRoleColumnPermissionTemplateBinding,
+  IamRoleColumnPermissionTemplatePayload,
+  IamTenantColumnPermissionTemplateAssignment,
+  IamTenantColumnPermissionTemplateAssignmentPayload,
   IamRolePayload,
   IamRolePermissionGrant,
   IamTenantInitTemplate,
   IamTenantInitTemplatePayload,
   IamUser,
+  IamTenantAdminPasswordResetPayload,
+  IamUserPasswordResetPayload,
+  IamUserPayload,
   IamUserRoleGrant,
 } from '@/types/iamAdmin';
 
@@ -23,6 +37,11 @@ function unwrap<T>(body: ApiResponse<T> | T): T {
 
 export async function listIamMenus(): Promise<IamMenu[]> {
   const response = await http.get<ApiResponse<IamMenu[]> | IamMenu[]>('/api/iam/menus');
+  return unwrap<IamMenu[]>(response.data);
+}
+
+export async function listIamMenuOptions(): Promise<IamMenu[]> {
+  const response = await http.get<ApiResponse<IamMenu[]> | IamMenu[]>('/api/iam/menus/options');
   return unwrap<IamMenu[]>(response.data);
 }
 
@@ -110,6 +129,38 @@ export async function listIamUsers(tenantId: number): Promise<IamUser[]> {
   return unwrap<IamUser[]>(response.data);
 }
 
+export async function createIamUser(payload: IamUserPayload): Promise<IamUser> {
+  const response = await http.post<ApiResponse<IamUser> | IamUser>('/api/iam/users', payload);
+  return unwrap<IamUser>(response.data);
+}
+
+export async function updateIamUser(userId: number, payload: IamUserPayload): Promise<IamUser> {
+  const response = await http.put<ApiResponse<IamUser> | IamUser>(`/api/iam/users/${userId}`, payload);
+  return unwrap<IamUser>(response.data);
+}
+
+export async function resetIamUserPassword(
+  userId: number,
+  payload: IamUserPasswordResetPayload,
+): Promise<IamUser> {
+  const response = await http.post<ApiResponse<IamUser> | IamUser>(
+    `/api/iam/users/${userId}/reset-password`,
+    payload,
+  );
+  return unwrap<IamUser>(response.data);
+}
+
+export async function resetIamTenantAdminPassword(
+  tenantId: number,
+  payload: IamTenantAdminPasswordResetPayload,
+): Promise<IamUser> {
+  const response = await http.post<ApiResponse<IamUser> | IamUser>(
+    `/api/iam/users/tenants/${tenantId}/admin/reset-password`,
+    payload,
+  );
+  return unwrap<IamUser>(response.data);
+}
+
 export async function getIamUserRoles(tenantId: number, userId: number): Promise<IamUserRoleGrant> {
   const response = await http.get<ApiResponse<IamUserRoleGrant> | IamUserRoleGrant>(
     `/api/iam/users/${userId}/roles`,
@@ -169,4 +220,143 @@ export async function setIamTenantInitTemplatePermissions(
     { permissionCodes, operator },
   );
   return unwrap<IamTenantInitTemplate>(response.data);
+}
+
+export async function listIamResourceColumns(): Promise<IamResourceColumn[]> {
+  const response = await http.get<ApiResponse<IamResourceColumn[]> | IamResourceColumn[]>(
+    '/api/iam/column-permissions/resources',
+  );
+  return unwrap<IamResourceColumn[]>(response.data);
+}
+
+export async function listIamColumnPermissionTemplates(params: {
+  tenantId?: number;
+  keyword?: string;
+  enabled?: boolean;
+} = {}): Promise<IamColumnPermissionTemplate[]> {
+  const response = await http.get<ApiResponse<IamColumnPermissionTemplate[]> | IamColumnPermissionTemplate[]>(
+    '/api/iam/column-permissions/templates',
+    { params },
+  );
+  return unwrap<IamColumnPermissionTemplate[]>(response.data);
+}
+
+export async function createIamColumnPermissionTemplate(
+  payload: IamColumnPermissionTemplatePayload,
+): Promise<IamColumnPermissionTemplate> {
+  const response = await http.post<ApiResponse<IamColumnPermissionTemplate> | IamColumnPermissionTemplate>(
+    '/api/iam/column-permissions/templates',
+    payload,
+  );
+  return unwrap<IamColumnPermissionTemplate>(response.data);
+}
+
+export async function updateIamColumnPermissionTemplate(
+  templateId: number,
+  payload: IamColumnPermissionTemplatePayload,
+): Promise<IamColumnPermissionTemplate> {
+  const response = await http.put<ApiResponse<IamColumnPermissionTemplate> | IamColumnPermissionTemplate>(
+    `/api/iam/column-permissions/templates/${templateId}`,
+    payload,
+  );
+  return unwrap<IamColumnPermissionTemplate>(response.data);
+}
+
+export async function setIamColumnPermissionTemplateEnabled(
+  templateId: number,
+  enabled: boolean,
+  operator?: string,
+): Promise<IamColumnPermissionTemplate> {
+  const action = enabled ? 'enable' : 'disable';
+  const response = await http.post<ApiResponse<IamColumnPermissionTemplate> | IamColumnPermissionTemplate>(
+    `/api/iam/column-permissions/templates/${templateId}/${action}`,
+    null,
+    { params: { operator } },
+  );
+  return unwrap<IamColumnPermissionTemplate>(response.data);
+}
+
+export async function getIamColumnPermissionTemplateItems(
+  templateId: number,
+): Promise<IamColumnPermissionTemplateItem[]> {
+  const response = await http.get<ApiResponse<IamColumnPermissionTemplateItem[]> | IamColumnPermissionTemplateItem[]>(
+    `/api/iam/column-permissions/templates/${templateId}/items`,
+  );
+  return unwrap<IamColumnPermissionTemplateItem[]>(response.data);
+}
+
+export async function setIamColumnPermissionTemplateItems(
+  templateId: number,
+  items: IamColumnPermissionTemplateItemPayload[],
+  operator?: string,
+): Promise<IamColumnPermissionTemplateItem[]> {
+  const response = await http.put<ApiResponse<IamColumnPermissionTemplateItem[]> | IamColumnPermissionTemplateItem[]>(
+    `/api/iam/column-permissions/templates/${templateId}/items`,
+    { items, operator },
+  );
+  return unwrap<IamColumnPermissionTemplateItem[]>(response.data);
+}
+
+export async function listIamTenantColumnPermissionTemplates(
+  tenantId: number,
+): Promise<IamTenantColumnPermissionTemplateAssignment[]> {
+  const response = await http.get<ApiResponse<IamTenantColumnPermissionTemplateAssignment[]> | IamTenantColumnPermissionTemplateAssignment[]>(
+    `/api/iam/column-permissions/tenants/${tenantId}/templates`,
+  );
+  return unwrap<IamTenantColumnPermissionTemplateAssignment[]>(response.data);
+}
+
+export async function setIamTenantColumnPermissionTemplates(
+  tenantId: number,
+  payload: IamTenantColumnPermissionTemplateAssignmentPayload,
+): Promise<IamTenantColumnPermissionTemplateAssignment[]> {
+  const response = await http.put<ApiResponse<IamTenantColumnPermissionTemplateAssignment[]> | IamTenantColumnPermissionTemplateAssignment[]>(
+    `/api/iam/column-permissions/tenants/${tenantId}/templates`,
+    payload,
+  );
+  return unwrap<IamTenantColumnPermissionTemplateAssignment[]>(response.data);
+}
+
+export async function getIamRoleColumnPermissions(
+  tenantId: number,
+  roleId: number,
+): Promise<IamRoleColumnPermissionRule[]> {
+  const response = await http.get<ApiResponse<IamRoleColumnPermissionRule[]> | IamRoleColumnPermissionRule[]>(
+    `/api/iam/column-permissions/roles/${roleId}/column-permissions`,
+    { params: { tenantId } },
+  );
+  return unwrap<IamRoleColumnPermissionRule[]>(response.data);
+}
+
+export async function setIamRoleColumnPermissions(
+  roleId: number,
+  payload: IamRoleColumnPermissionRulePayload,
+): Promise<IamRoleColumnPermissionRule[]> {
+  const response = await http.put<ApiResponse<IamRoleColumnPermissionRule[]> | IamRoleColumnPermissionRule[]>(
+    `/api/iam/column-permissions/roles/${roleId}/column-permissions`,
+    payload,
+  );
+  return unwrap<IamRoleColumnPermissionRule[]>(response.data);
+}
+
+export async function getIamRoleColumnPermissionTemplate(
+  tenantId: number,
+  roleId: number,
+): Promise<IamRoleColumnPermissionTemplateBinding | null> {
+  const response = await http.get<ApiResponse<IamRoleColumnPermissionTemplateBinding | null> | IamRoleColumnPermissionTemplateBinding | null>(
+    `/api/iam/column-permissions/roles/${roleId}/column-permission-template`,
+    { params: { tenantId } },
+  );
+  return unwrap<IamRoleColumnPermissionTemplateBinding | null>(response.data);
+}
+
+export async function setIamRoleColumnPermissionTemplate(
+  roleId: number,
+  payload: IamRoleColumnPermissionTemplatePayload,
+): Promise<IamRoleColumnPermissionTemplateBinding> {
+  const response = await http.put<ApiResponse<IamRoleColumnPermissionTemplateBinding> | IamRoleColumnPermissionTemplateBinding>(
+    `/api/iam/column-permissions/roles/${roleId}/column-permission-template`,
+    payload,
+  );
+  return unwrap<IamRoleColumnPermissionTemplateBinding>(response.data);
 }

@@ -18,6 +18,17 @@ public interface IamRolePermissionRepository {
     void replaceRolePermissions(Long tenantId, Long roleId, List<Long> permissionIds, String operator);
 
     /**
+     * 确保租户管理员成员拥有指定管理员角色。
+     */
+    default void grantRoleToTenantAdmins(Long tenantId, Long roleId, String operator) {
+    }
+
+    /**
+     * 租户权限池缩减后，软删除所有超出当前租户权限池的角色授权。
+     */
+    void removeRolePermissionsOutsideTenantEntitlements(Long tenantId, String operator);
+
+    /**
      * 查询拥有指定角色的有效用户主键。
      */
     List<Long> findUserIdsByRoleId(Long tenantId, Long roleId);

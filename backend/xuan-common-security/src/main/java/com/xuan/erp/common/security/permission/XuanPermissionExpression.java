@@ -47,7 +47,7 @@ public class XuanPermissionExpression {
     }
 
     private boolean has(CurrentUser currentUser, String permission) {
-        if (isSuperAdmin(currentUser)) {
+        if (isSuperAdmin(currentUser) || currentUser.hasPermission("*")) {
             return true;
         }
         return permissionSnapshotProvider.load(currentUser, accessToken()).has(permission);

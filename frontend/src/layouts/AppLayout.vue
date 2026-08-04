@@ -3,7 +3,13 @@
     <aside class="app-sidebar">
       <div class="sidebar-head">
         <AppLogo />
-        <button class="shell-icon-button sidebar-collapse" type="button" aria-label="折叠菜单" @click="collapseSidebar">
+        <button
+          v-if="!isCompactViewport && !isMobileViewport"
+          class="shell-icon-button sidebar-collapse"
+          type="button"
+          aria-label="折叠菜单"
+          @click="collapseSidebar"
+        >
           <PanelLeftOpen v-if="isSidebarCollapsed" :size="16" />
           <PanelLeftClose v-else :size="16" />
         </button>
@@ -27,7 +33,7 @@
                 :class="{ 'is-active': isMenuItemActive(item), 'is-muted': item.disabled }"
                 :title="item.title"
                 type="button"
-                @click="handleMenuClick(item)"
+                @click="handleMenuClick(item, $event)"
               >
                 <span class="icon-box">
                   <component :is="item.icon" v-if="item.icon" :size="16" />
@@ -79,34 +85,6 @@
                   </li>
                 </ul>
               </Transition>
-
-              <div v-if="isSidebarCollapsed && hasChildren(item)" class="sidebar-flyout" @click.stop>
-                <strong class="sidebar-flyout-title">{{ item.title }}</strong>
-                <ul class="sidebar-flyout-list">
-                  <li v-for="child in item.children" :key="child.key">
-                    <button
-                      class="sidebar-flyout-item"
-                      :class="{ 'is-active': isMenuItemActive(child), 'is-muted': child.disabled }"
-                      type="button"
-                      @click="handleFlyoutMenuClick(child)"
-                    >
-                      {{ child.title }}
-                    </button>
-                    <ul v-if="hasChildren(child)" class="sidebar-flyout-sublist">
-                      <li v-for="grandchild in child.children" :key="grandchild.key">
-                        <button
-                          class="sidebar-flyout-item child"
-                          :class="{ 'is-active': isMenuItemActive(grandchild), 'is-muted': grandchild.disabled }"
-                          type="button"
-                          @click="handleFlyoutMenuClick(grandchild)"
-                        >
-                          {{ grandchild.title }}
-                        </button>
-                      </li>
-                    </ul>
-                  </li>
-                </ul>
-              </div>
             </li>
           </ul>
         </div>
@@ -115,25 +93,64 @@
       <div class="sidebar-footer">{{ frameworkConfig.shell.footerText }}</div>
     </aside>
 
+    <div v-if="showSidebarFlyout" class="sidebar-flyout sidebar-flyout-panel" @click.stop>
+      <strong class="sidebar-flyout-title">{{ compactFlyoutItem?.title }}</strong>
+      <ul class="sidebar-flyout-list">
+        <li v-for="child in compactFlyoutChildren" :key="child.key">
+          <button
+            class="sidebar-flyout-item"
+            :class="{ 'is-active': isMenuItemActive(child), 'is-muted': child.disabled }"
+            type="button"
+            @click="handleFlyoutMenuClick(child)"
+          >
+            {{ child.title }}
+          </button>
+          <ul v-if="hasChildren(child)" class="sidebar-flyout-sublist">
+            <li v-for="grandchild in child.children" :key="grandchild.key">
+              <button
+                class="sidebar-flyout-item child"
+                :class="{ 'is-active': isMenuItemActive(grandchild), 'is-muted': grandchild.disabled }"
+                type="button"
+                @click="handleFlyoutMenuClick(grandchild)"
+              >
+                {{ grandchild.title }}
+              </button>
+            </li>
+          </ul>
+        </li>
+      </ul>
+    </div>
+
     <section class="app-main">
       <header class="app-topbar">
-        <nav class="breadcrumb" aria-label="breadcrumb">
-          <template v-for="(item, index) in breadcrumbItems" :key="`${item.title}-${index}`">
-            <RouterLink
-              v-if="item.path && index < breadcrumbItems.length - 1"
-              class="breadcrumb-link"
-              :to="item.path"
-            >
-              {{ item.title }}
-            </RouterLink>
-            <span v-else :aria-current="index === breadcrumbItems.length - 1 ? 'page' : undefined">{{ item.title }}</span>
-            <span v-if="index < breadcrumbItems.length - 1" class="breadcrumb-separator">/</span>
-          </template>
-        </nav>
+        <div class="topbar-leading">
+          <button
+            v-if="isMobileViewport"
+            class="shell-icon-button mobile-nav-toggle"
+            type="button"
+            aria-label="打开导航菜单"
+            @click="mobileNavVisible = true"
+          >
+            <PanelLeftOpen :size="16" />
+          </button>
+          <nav class="breadcrumb" aria-label="breadcrumb">
+            <template v-for="(item, index) in breadcrumbItems" :key="`${item.title}-${index}`">
+              <RouterLink
+                v-if="item.path && index < breadcrumbItems.length - 1"
+                class="breadcrumb-link"
+                :to="item.path"
+              >
+                {{ item.title }}
+              </RouterLink>
+              <span v-else :aria-current="index === breadcrumbItems.length - 1 ? 'page' : undefined">{{ item.title }}</span>
+              <span v-if="index < breadcrumbItems.length - 1" class="breadcrumb-separator">/</span>
+            </template>
+          </nav>
+        </div>
 
         <div class="topbar-actions">
           <span v-if="frameworkConfig.shell.showTenant" class="tenant-pill">
-            {{ t(frameworkConfig.shell.tenantLabelKey) }} {{ authStore.tenantId || 'default' }}
+            {{ t(frameworkConfig.shell.tenantLabelKey) }} {{ authStore.tenantDisplayLabel }}
           </span>
           <LanguageSwitcher />
           <ThemeSwitcher />
@@ -211,6 +228,72 @@
       </main>
     </section>
 
+    <el-drawer v-model="mobileNavVisible" title="导航菜单" direction="ltr" size="280px" class="mobile-nav-shell">
+      <nav class="mobile-nav" aria-label="mobile navigation">
+        <ul class="menu-root">
+          <li v-for="item in filteredMenuGroups" :key="`${item.key}-mobile`" class="menu-item-l1">
+            <button
+              class="menu-label l1"
+              :class="{ 'is-active': isMenuItemActive(item), 'is-muted': item.disabled }"
+              :title="item.title"
+              type="button"
+              @click="handleMenuClick(item, $event)"
+            >
+              <span class="icon-box">
+                <component :is="item.icon" v-if="item.icon" :size="16" />
+              </span>
+              <span class="label-text">{{ item.title }}</span>
+              <ChevronRight
+                v-if="hasChildren(item)"
+                class="chevron"
+                :class="{ rotated: isMenuExpanded(item) }"
+                :size="15"
+              />
+            </button>
+
+            <Transition name="slide-down">
+              <ul v-if="hasChildren(item) && isMenuExpanded(item)" class="submenu-l2">
+                <li v-for="child in item.children" :key="`${child.key}-mobile`">
+                  <button
+                    class="menu-label l2"
+                    :class="{ 'is-active': isMenuItemActive(child), 'is-muted': child.disabled }"
+                    :title="child.title"
+                    type="button"
+                    @click="handleMenuClick(child)"
+                  >
+                    <span v-if="!hasChildren(child)" class="menu-dot" />
+                    <span class="label-text">{{ child.title }}</span>
+                    <ChevronRight
+                      v-if="hasChildren(child)"
+                      class="chevron"
+                      :class="{ rotated: isMenuExpanded(child) }"
+                      :size="14"
+                    />
+                  </button>
+
+                  <Transition name="slide-down">
+                    <ul v-if="hasChildren(child) && isMenuExpanded(child)" class="submenu-l3">
+                      <li v-for="grandchild in child.children" :key="`${grandchild.key}-mobile`">
+                        <button
+                          class="menu-label l3"
+                          :class="{ 'is-active': isMenuItemActive(grandchild), 'is-muted': grandchild.disabled }"
+                          :title="grandchild.title"
+                          type="button"
+                          @click="handleMenuClick(grandchild)"
+                        >
+                          <span class="label-text">{{ grandchild.title }}</span>
+                        </button>
+                      </li>
+                    </ul>
+                  </Transition>
+                </li>
+              </ul>
+            </Transition>
+          </li>
+        </ul>
+      </nav>
+    </el-drawer>
+
     <el-drawer v-model="layoutSettingsVisible" title="布局设置" direction="rtl" size="320px">
       <div class="settings-panel">
         <label class="settings-row">
@@ -258,7 +341,7 @@ import AppLogo from '@/components/app/AppLogo.vue';
 import LanguageSwitcher from '@/components/app/LanguageSwitcher.vue';
 import ThemeSwitcher from '@/components/app/ThemeSwitcher.vue';
 import { getUserPreference, saveUserPreference } from '@/api/preferences';
-import { createNavigationMenu, type MenuNode } from '@/config/navigation';
+import { createNavigationMenu, filterNavigationMenuByPermission, type MenuNode } from '@/config/navigation';
 import { useAuthStore } from '@/stores/auth';
 import { useAuthorizationStore } from '@/stores/authorization';
 import { useSettingsStore } from '@/stores/settings';
@@ -294,7 +377,10 @@ const authStore = useAuthStore();
 const authorizationStore = useAuthorizationStore();
 const settingsStore = useSettingsStore();
 
-const menuGroups = computed(() => createNavigationMenu(authorizationStore.menus, t));
+const menuGroups = computed(() => filterNavigationMenuByPermission(
+  createNavigationMenu(authorizationStore.menus, t),
+  canAccessMenuRoute,
+));
 const filteredMenuGroups = computed(() => {
   const keyword = menuSearchKeyword.value.trim().toLowerCase();
   if (!keyword) {
@@ -303,7 +389,12 @@ const filteredMenuGroups = computed(() => {
   return filterMenuTree(menuGroups.value, keyword);
 });
 const openKeys = ref<string[]>([]);
-const isSidebarCollapsed = ref(false);
+const manualSidebarCollapsed = ref(false);
+const isCompactViewport = ref(false);
+const isMobileViewport = ref(false);
+const mobileNavVisible = ref(false);
+const compactFlyoutItem = ref<MenuNode | null>(null);
+const isSidebarCollapsed = computed(() => manualSidebarCollapsed.value || isCompactViewport.value);
 const menuSearchKeyword = ref('');
 const layoutSettingsVisible = ref(false);
 const routeLoading = ref(false);
@@ -339,6 +430,13 @@ const breadcrumbItems = computed<BreadcrumbItem[]>(() => {
   }
   return resolveBreadcrumbItems(route);
 });
+const compactFlyoutChildren = computed(() => compactFlyoutItem.value?.children || []);
+const showSidebarFlyout = computed(() => (
+  isSidebarCollapsed.value
+  && !isMobileViewport.value
+  && compactFlyoutItem.value !== null
+  && hasChildren(compactFlyoutItem.value)
+));
 
 function resolveBreadcrumbItems(currentRoute: RouteLocationNormalizedLoaded): BreadcrumbItem[] {
   const breadcrumb = currentRoute.meta.breadcrumb;
@@ -359,7 +457,15 @@ const cachedRouteNames = computed(() => [...new Set(openTabs.value
   .filter((name): name is string => typeof name === 'string' && name.length > 0))]);
 
 function collapseSidebar() {
-  isSidebarCollapsed.value = !isSidebarCollapsed.value;
+  if (isMobileViewport.value) {
+    mobileNavVisible.value = true;
+    return;
+  }
+  if (isCompactViewport.value) {
+    return;
+  }
+  compactFlyoutItem.value = null;
+  manualSidebarCollapsed.value = !manualSidebarCollapsed.value;
 }
 
 function isMenuOpen(key: string) {
@@ -367,9 +473,6 @@ function isMenuOpen(key: string) {
 }
 
 function toggleMenu(key: string) {
-  if (isSidebarCollapsed.value) {
-    isSidebarCollapsed.value = false;
-  }
   if (isMenuOpen(key)) {
     openKeys.value = openKeys.value.filter((item) => item !== key);
   } else {
@@ -389,6 +492,16 @@ function filterMenuTree(items: MenuNode[], keyword: string): MenuNode[] {
   return result;
 }
 
+function canAccessMenuRoute(item: MenuNode) {
+  if (!item.path) {
+    return true;
+  }
+  if (!isKnownNavigableRoute(item.path)) {
+    return false;
+  }
+  return authorizationStore.hasRoutePermission(resolveRoutePermissionMeta(item.path).permission as string | string[] | undefined);
+}
+
 function firstNavigableMenu(items: MenuNode[]): MenuNode | null {
   for (const item of items) {
     if (item.path && !item.disabled) {
@@ -405,7 +518,7 @@ function firstNavigableMenu(items: MenuNode[]): MenuNode | null {
 async function handleMenuSearchEnter() {
   const target = firstNavigableMenu(filteredMenuGroups.value);
   if (target?.path) {
-    await router.push(target.path);
+    await navigateToMenuPath(target.path);
   }
 }
 
@@ -417,16 +530,25 @@ function isMenuExpanded(item: MenuNode) {
   return !isSidebarCollapsed.value && (isMenuOpen(item.key) || Boolean(menuSearchKeyword.value.trim()));
 }
 
-async function handleMenuClick(item: MenuNode) {
+async function handleMenuClick(item: MenuNode, event?: MouseEvent) {
+  const previousFlyoutKey = compactFlyoutItem.value?.key;
+  compactFlyoutItem.value = null;
+  if (isSidebarCollapsed.value && hasChildren(item)) {
+    event?.stopPropagation();
+  }
   if (item.disabled) {
     return;
   }
   if (hasChildren(item)) {
+    if (isSidebarCollapsed.value) {
+      compactFlyoutItem.value = previousFlyoutKey === item.key ? null : item;
+      return;
+    }
     toggleMenu(item.key);
     return;
   }
   if (item.path) {
-    await router.push(item.path);
+    await navigateToMenuPath(item.path);
   }
 }
 
@@ -434,11 +556,47 @@ async function handleFlyoutMenuClick(item: MenuNode) {
   if (item.disabled || !item.path) {
     return;
   }
-  await router.push(item.path);
+  await navigateToMenuPath(item.path);
+}
+
+async function navigateToMenuPath(path: string) {
+  compactFlyoutItem.value = null;
+  await router.push(path);
+  if (isMobileViewport.value) {
+    mobileNavVisible.value = false;
+  }
 }
 
 function getRouteMetaByPath(path: string) {
   return router.resolve(path).meta;
+}
+
+function resolveRoutePermissionMeta(path: string) {
+  const resolved = router.resolve(path);
+  const routeRecord = router.getRoutes().find((item) => item.path === resolved.path);
+  const redirect = routeRecord?.redirect;
+  if (typeof redirect === 'string') {
+    return router.resolve(redirect).meta;
+  }
+  if (redirect && typeof redirect === 'object' && 'path' in redirect && typeof redirect.path === 'string') {
+    return router.resolve(redirect.path).meta;
+  }
+  return resolved.meta;
+}
+
+function isKnownNavigableRoute(path: string) {
+  const resolved = router.resolve(path);
+  return resolved.matched.length > 0
+    && resolved.name !== 'catchAll'
+    && resolved.name !== 'forbidden'
+    && !resolved.meta.public;
+}
+
+function canAccessRoutePath(path: string) {
+  if (!isKnownNavigableRoute(path)) {
+    return false;
+  }
+  return authorizationStore.hasRoutePermission(resolveRoutePermissionMeta(path).permission as string | string[] | undefined);
 }
 
 function resolveLocalizedText(titleKey?: string, fallback?: unknown) {
@@ -471,10 +629,10 @@ function makeTab(path: string): PageTab {
 
 function sanitizeTabs(tabs: PageTab[]) {
   const routePaths = new Set(router.getRoutes()
-    .filter((item) => !item.meta.public && item.path !== '/')
+    .filter((item) => !item.meta.public && item.path !== '/' && item.name !== 'catchAll' && item.name !== 'forbidden')
     .map((item) => router.resolve(item.path).path));
   const cleaned = [dashboardTab.value, ...tabs]
-    .filter((tab) => tab && typeof tab.path === 'string' && routePaths.has(tab.path))
+    .filter((tab) => tab && typeof tab.path === 'string' && routePaths.has(tab.path) && canAccessRoutePath(tab.path))
     .map((tab) => (tab.path === frameworkConfig.routes.homePath ? dashboardTab.value : makeTab(tab.path)));
   return cleaned.filter((tab, index, array) => array.findIndex((item) => item.path === tab.path) === index);
 }
@@ -500,7 +658,12 @@ async function restoreTabsFromPreference() {
     persistTabs();
     if (route.path === frameworkConfig.routes.homePath && preference.activePath && preference.activePath !== route.path) {
       const resolved = router.resolve(preference.activePath);
-      if (!resolved.meta.public && resolved.matched.length) {
+      if (
+        openTabs.value.some((tab) => tab.path === resolved.path)
+        && canAccessRoutePath(resolved.path)
+        && !resolved.meta.public
+        && resolved.matched.length
+      ) {
         await router.replace(resolved.path);
       }
     }
@@ -523,9 +686,13 @@ function saveTabsPreference() {
   if (!shouldSaveTabsPreferenceRemotely()) {
     return;
   }
+  const activePath = isKnownNavigableRoute(route.path)
+    && openTabs.value.some((tab) => tab.path === route.path)
+    ? route.path
+    : frameworkConfig.routes.homePath;
   const preference: ShellTabsPreference = {
     tabs: openTabs.value,
-    activePath: route.path,
+    activePath,
     scrollPositions: scrollPositions.value,
   };
   saveUserPreference(OPEN_TABS_PREFERENCE_KEY, preference).catch(() => {
@@ -542,7 +709,7 @@ function hasActiveChild(item: MenuNode): boolean {
 }
 
 function isMenuItemActive(item: MenuNode): boolean {
-  if (item.path && route.path === item.path) {
+  if (item.path && normalizeNavigablePath(item.path) === normalizeNavigablePath(route.path)) {
     return true;
   }
   return hasActiveChild(item);
@@ -550,6 +717,12 @@ function isMenuItemActive(item: MenuNode): boolean {
 
 function addCurrentRouteTab() {
   if (route.meta.public || route.path === '/') {
+    return;
+  }
+  if (!isKnownNavigableRoute(route.path)) {
+    return;
+  }
+  if (!authorizationStore.hasRoutePermission(route.meta.permission as string | string[] | undefined)) {
     return;
   }
   if (!openTabs.value.some((tab) => tab.path === route.path)) {
@@ -725,13 +898,34 @@ function handleContentScroll() {
   }, 160);
 }
 
+function syncViewportState() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  isMobileViewport.value = window.innerWidth <= 720;
+  isCompactViewport.value = window.innerWidth <= 1040 && !isMobileViewport.value;
+  if (isMobileViewport.value || !isSidebarCollapsed.value) {
+    compactFlyoutItem.value = null;
+  }
+  if (!isMobileViewport.value) {
+    mobileNavVisible.value = false;
+  }
+}
+
+function handleWindowClick() {
+  hideTabContextMenu();
+  compactFlyoutItem.value = null;
+}
+
 onMounted(async () => {
+  syncViewportState();
   await settingsStore.loadRemotePreferences();
   settingsStore.applyTheme();
   await restoreTabsFromPreference();
   addCurrentRouteTab();
   restoreContentScroll();
-  window.addEventListener('click', hideTabContextMenu);
+  window.addEventListener('click', handleWindowClick);
+  window.addEventListener('resize', syncViewportState);
 });
 
 onBeforeUnmount(() => {
@@ -740,13 +934,14 @@ onBeforeUnmount(() => {
   if (scrollSaveTimer) {
     window.clearTimeout(scrollSaveTimer);
   }
-  window.removeEventListener('click', hideTabContextMenu);
+  window.removeEventListener('click', handleWindowClick);
+  window.removeEventListener('resize', syncViewportState);
 });
 
 watch(
   menuGroups,
   (items) => {
-    openKeys.value = collectActiveMenuKeys(items, route.path);
+    openKeys.value = mergeOpenMenuKeys(openKeys.value, items, route.path);
   },
   { immediate: true },
 );
@@ -757,6 +952,8 @@ watch(
     if (previousPath) {
       saveContentScroll(previousPath);
     }
+    compactFlyoutItem.value = null;
+    mobileNavVisible.value = false;
     routeLoading.value = true;
     window.setTimeout(() => {
       routeLoading.value = false;
@@ -766,7 +963,7 @@ watch(
       restoreContentScroll(currentPath);
       saveTabsPreference();
     }
-    openKeys.value = collectActiveMenuKeys(menuGroups.value, currentPath);
+    openKeys.value = mergeOpenMenuKeys(openKeys.value, menuGroups.value, currentPath);
   },
   { immediate: true },
 );
@@ -822,10 +1019,38 @@ function collectActiveMenuKeys(items: MenuNode[], currentPath: string) {
   return activeKeys;
 }
 
+function mergeOpenMenuKeys(currentOpenKeys: string[], items: MenuNode[], currentPath: string) {
+  const validOpenKeySet = new Set(collectExpandableMenuKeys(items));
+  return [...new Set([
+    ...currentOpenKeys.filter((key) => validOpenKeySet.has(key)),
+    ...collectActiveMenuKeys(items, currentPath),
+  ])];
+}
+
+function collectExpandableMenuKeys(items: MenuNode[]): string[] {
+  return items.flatMap((item) => [
+    ...(item.children?.length ? [item.key] : []),
+    ...collectExpandableMenuKeys(item.children || []),
+  ]);
+}
+
 function isMenuItemActiveForPath(item: MenuNode, currentPath: string): boolean {
-  if (item.path && currentPath.startsWith(item.path)) {
+  if (item.path && normalizeNavigablePath(item.path) === normalizeNavigablePath(currentPath)) {
     return true;
   }
   return Boolean(item.children?.some((child) => isMenuItemActiveForPath(child, currentPath)));
+}
+
+function normalizeNavigablePath(path: string) {
+  const resolved = router.resolve(path);
+  const routeRecord = router.getRoutes().find((item) => item.path === resolved.path);
+  const redirect = routeRecord?.redirect;
+  if (typeof redirect === 'string') {
+    return router.resolve(redirect).path;
+  }
+  if (redirect && typeof redirect === 'object' && 'path' in redirect && typeof redirect.path === 'string') {
+    return router.resolve(redirect.path).path;
+  }
+  return resolved.path;
 }
 </script>

@@ -8,6 +8,8 @@ import java.util.Set;
  *
  * @param userId 当前登录用户 ID
  * @param tenantId 当前访问租户 ID
+ * @param tenantCode 当前访问租户编码
+ * @param tenantName 当前访问租户名称
  * @param username 当前登录用户名
  * @param roles 角色编码集合
  * @param authVersion 授权快照版本
@@ -19,6 +21,10 @@ public record IamCurrentUserResponse(
         Long userId,
         @Schema(description = "当前访问租户 ID", example = "1001")
         Long tenantId,
+        @Schema(description = "当前访问租户编码", example = "default")
+        String tenantCode,
+        @Schema(description = "当前访问租户名称", example = "默认租户")
+        String tenantName,
         @Schema(description = "当前登录用户名", example = "admin")
         String username,
         @Schema(description = "角色编码集合")

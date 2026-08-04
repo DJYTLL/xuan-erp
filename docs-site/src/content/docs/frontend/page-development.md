@@ -45,7 +45,7 @@ OpenFeign、LoadBalancer、`@LoadBalanced` 都属于后端服务间通信实现�
 - API 请求统一走 `src/utils/request.ts`。
 - Token 注入、401 刷新、重试逻辑集中处理。
 - 页面错误提示统一使用 `useApiError()`，禁止页面里散落 `try/catch + ElMessage`。
-- 新增、编辑、删除、审核、导入、导出、打印等按钮必须加权限控制。
+- 新增、编辑、删除、查看、审核、导入、导出、打印等按钮必须加权限控制；默认使用统一 `PermissionButton` 和当前用户 `buttonPermissions`，不能用裸 `el-button` 绕过权限快照。
 - 文案统一走 i18n，常用命名空间包括 `nav.*`、`page.*`、`action.*`、`field.*`、`message.*`、`placeholder.*`。
 - 页面结构复用 `page-shell`、`page-header`、`page-title`、`table-card`、`table-pagination`。
 - 后端分页页面不要只做前端当前页搜索；大数据搜索应放到后端或搜索索引。
@@ -61,6 +61,7 @@ OpenFeign、LoadBalancer、`@LoadBalanced` 都属于后端服务间通信实现�
 - menu seed。
 - 必要 migration。
 - 列权限定义。
+- 角色授权页可选权限必须来自后端返回的租户权限池，不能在前端直接拿全量权限清单给普通租户分配。
 - `RoleManagement.vue`、`PermissionManagement.vue`、`ColumnPermissionManagement.vue` 映射。
 - 回归测试，确保不进入“未映射页面”。
 

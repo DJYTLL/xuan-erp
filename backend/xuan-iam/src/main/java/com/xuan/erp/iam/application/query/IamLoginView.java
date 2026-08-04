@@ -10,6 +10,8 @@ import java.time.OffsetDateTime;
  * @param accessTokenExpiresAt 访问令牌过期时间
  * @param refreshToken 已签发的刷新令牌明文，仅返回给客户端一次
  * @param refreshTokenExpiresAt 刷新令牌过期时间
+ * @param tenantCode 当前登录租户编码，用于前端展示
+ * @param tenantName 当前登录租户名称，用于前端展示
  * @param currentUser 当前登录用户轻量身份信息
  */
 public record IamLoginView(
@@ -17,6 +19,8 @@ public record IamLoginView(
         OffsetDateTime accessTokenExpiresAt,
         String refreshToken,
         OffsetDateTime refreshTokenExpiresAt,
+        String tenantCode,
+        String tenantName,
         CurrentUser currentUser
 ) {
 }

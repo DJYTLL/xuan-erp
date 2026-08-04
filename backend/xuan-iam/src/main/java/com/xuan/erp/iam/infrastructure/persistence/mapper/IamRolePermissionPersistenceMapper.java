@@ -30,6 +30,19 @@ public interface IamRolePermissionPersistenceMapper {
             @Param("operator") String operator);
 
     /**
+     * 幂等授予租户管理员成员指定管理员角色。
+     */
+    int insertTenantAdminUserRole(
+            @Param("tenantId") Long tenantId,
+            @Param("roleId") Long roleId,
+            @Param("operator") String operator);
+
+    /**
+     * 软删除超出当前租户权限池的角色授权。
+     */
+    int removeRolePermissionsOutsideTenantEntitlements(@Param("tenantId") Long tenantId, @Param("operator") String operator);
+
+    /**
      * 查询拥有指定角色的有效用户主键。
      */
     List<Long> findUserIdsByRoleId(@Param("tenantId") Long tenantId, @Param("roleId") Long roleId);

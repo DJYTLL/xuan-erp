@@ -6,9 +6,13 @@ import com.xuan.erp.tenant.interfaces.controller.TenantInternalStatusController;
 import com.xuan.erp.tenant.interfaces.controller.TenantPlanAssignmentController;
 import com.xuan.erp.tenant.interfaces.controller.TenantPlanController;
 import com.xuan.erp.tenant.interfaces.controller.TenantScopedConfigController;
+import com.xuan.erp.tenant.infrastructure.config.TenantSecurityConfiguration;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.lang.reflect.Method;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -22,12 +26,15 @@ class TenantControllerContractTest {
     @Test
     void tenantControllerMethodsExposeExpectedPermissionCodes() throws Exception {
         assertEquals("@xuanPermission.has('tenant:view')", permission(TenantController.class.getDeclaredMethod("listTenants", long.class, long.class)));
+        assertEquals("@xuanPermission.hasAny('tenant:view', 'iam-column-permission:view', 'iam-role-column-permission:view')",
+                permission(TenantController.class.getDeclaredMethod("listColumnPermissionTenants", long.class, long.class)));
         assertEquals("@xuanPermission.has('tenant:view')", permission(TenantController.class.getDeclaredMethod("getTenant", Long.class)));
         assertEquals("@xuanPermission.has('tenant:create')", permission(TenantController.class.getDeclaredMethod("createTenant", com.xuan.erp.tenant.interfaces.dto.CreateTenantRequest.class)));
         assertEquals("@xuanPermission.has('tenant:update')", permission(TenantController.class.getDeclaredMethod("updateTenant", Long.class, com.xuan.erp.tenant.interfaces.dto.UpdateTenantRequest.class)));
-        assertEquals("@xuanPermission.has('tenant:lifecycle')", permission(TenantController.class.getDeclaredMethod("enableTenant", Long.class, com.xuan.erp.tenant.interfaces.dto.ChangeTenantStatusRequest.class)));
-        assertEquals("@xuanPermission.has('tenant:lifecycle')", permission(TenantController.class.getDeclaredMethod("disableTenant", Long.class, com.xuan.erp.tenant.interfaces.dto.ChangeTenantStatusRequest.class)));
+        assertEquals("@xuanPermission.has('tenant:enable')", permission(TenantController.class.getDeclaredMethod("enableTenant", Long.class, com.xuan.erp.tenant.interfaces.dto.ChangeTenantStatusRequest.class)));
+        assertEquals("@xuanPermission.has('tenant:disable')", permission(TenantController.class.getDeclaredMethod("disableTenant", Long.class, com.xuan.erp.tenant.interfaces.dto.ChangeTenantStatusRequest.class)));
         assertEquals("@xuanPermission.has('tenant:delete')", permission(TenantController.class.getDeclaredMethod("deleteTenant", Long.class, com.xuan.erp.tenant.interfaces.dto.DeleteRequest.class)));
+        assertEquals("@xuanPermission.has('tenant-plan:assign')", permission(TenantController.class.getDeclaredMethod("repairTenantPermissionSync", Long.class)));
     }
 
     @Test
@@ -97,6 +104,81 @@ class TenantControllerContractTest {
         assertEquals("/{tenantId}/status", getMapping.value()[0]);
         assertEquals("tenantId", getStatus.getParameters()[0].getAnnotation(PathVariable.class).value());
         assertEquals(null, getStatus.getAnnotation(PreAuthorize.class));
+
+        Method getStatusByCode = TenantInternalStatusController.class.getDeclaredMethod("getTenantStatusByCode", String.class);
+        GetMapping getByCodeMapping = getStatusByCode.getAnnotation(GetMapping.class);
+        assertNotNull(getByCodeMapping);
+        assertEquals("/by-code/{tenantCode}/status", getByCodeMapping.value()[0]);
+        assertEquals("tenantCode", getStatusByCode.getParameters()[0].getAnnotation(PathVariable.class).value());
+        assertEquals(null, getStatusByCode.getAnnotation(PreAuthorize.class));
+    }
+
+    @Test
+    void tenantRuntimeEnablesIamPermissionSnapshotChecks() throws Exception {
+        String config = Files.readString(Path.of("src/main/resources/application.yml"));
+
+        assertNotNull(config);
+        org.junit.jupiter.api.Assertions.assertTrue(config.contains("permission:"));
+        org.junit.jupiter.api.Assertions.assertTrue(config.contains("enabled: ${XUAN_SECURITY_PERMISSION_ENABLED:true}"));
+        org.junit.jupiter.api.Assertions.assertTrue(config.contains("iam-service-name: ${XUAN_SECURITY_PERMISSION_IAM_SERVICE_NAME:xuan-iam}"));
+        org.junit.jupiter.api.Assertions.assertTrue(config.contains("iam-snapshot-path: ${XUAN_SECURITY_PERMISSION_IAM_SNAPSHOT_PATH:/api/iam/permissions/current}"));
+        org.junit.jupiter.api.Assertions.assertFalse(config.contains("http://127.0.0.1:8101/api/iam/permissions/current"));
+        org.junit.jupiter.api.Assertions.assertFalse(config.contains("http://xuan-iam:8101/api/iam/permissions/current"));
+    }
+
+    @Test
+    void tenantRuntimeEnablesIamJwkDiscoveryChecks() throws Exception {
+        String config = Files.readString(Path.of("src/main/resources/application.yml"));
+
+        assertNotNull(config);
+        org.junit.jupiter.api.Assertions.assertTrue(config.contains("jwt:"));
+        org.junit.jupiter.api.Assertions.assertTrue(config.contains("iam-service-name: ${XUAN_SECURITY_JWT_IAM_SERVICE_NAME:xuan-iam}"));
+        org.junit.jupiter.api.Assertions.assertTrue(config.contains("jwk-set-path: ${XUAN_SECURITY_JWT_JWK_SET_PATH:/.well-known/jwks.json}"));
+        org.junit.jupiter.api.Assertions.assertFalse(config.contains("http://127.0.0.1:8101/.well-known/jwks.json"));
+        org.junit.jupiter.api.Assertions.assertFalse(config.contains("http://xuan-iam:8101/.well-known/jwks.json"));
+    }
+
+    @Test
+    void tenantSecurityConfigurationEnablesMethodSecurity() {
+        assertNotNull(TenantSecurityConfiguration.class.getAnnotation(EnableMethodSecurity.class));
+    }
+
+    @Test
+    void tenantSecurityAllowsIamToResolveTenantStatusByCodeBeforeLogin() throws Exception {
+        String securityConfiguration = Files.readString(Path.of(
+                "src/main/java/com/xuan/erp/tenant/infrastructure/config/TenantSecurityConfiguration.java"));
+
+        org.junit.jupiter.api.Assertions.assertTrue(securityConfiguration.contains("\"/internal/tenants/*/status\""));
+        org.junit.jupiter.api.Assertions.assertTrue(securityConfiguration.contains("\"/internal/tenants/by-code/*/status\""));
+    }
+
+    @Test
+    void tenantResponseExposesPermissionSyncStatusForFrontend() throws Exception {
+        String response = Files.readString(Path.of("src/main/java/com/xuan/erp/tenant/interfaces/dto/TenantResponse.java"));
+        String detailView = Files.readString(Path.of("src/main/java/com/xuan/erp/tenant/application/query/TenantDetailView.java"));
+        String internalStatus = Files.readString(Path.of("src/main/java/com/xuan/erp/tenant/application/query/TenantInternalStatusView.java"));
+
+        org.junit.jupiter.api.Assertions.assertTrue(response.contains("String permissionSyncStatus"));
+        org.junit.jupiter.api.Assertions.assertTrue(response.contains("String permissionSyncStatusLabel"));
+        org.junit.jupiter.api.Assertions.assertTrue(response.contains("OffsetDateTime permissionSyncLastCheckedAt"));
+        org.junit.jupiter.api.Assertions.assertTrue(response.contains("OffsetDateTime permissionSyncLastSyncedAt"));
+        org.junit.jupiter.api.Assertions.assertTrue(response.contains("String permissionSyncLastErrorMessage"));
+        org.junit.jupiter.api.Assertions.assertTrue(detailView.contains("String permissionSyncExpectedHash"));
+        org.junit.jupiter.api.Assertions.assertTrue(detailView.contains("String permissionSyncStatus"));
+        org.junit.jupiter.api.Assertions.assertTrue(internalStatus.contains("String permissionHash"));
+        org.junit.jupiter.api.Assertions.assertTrue(internalStatus.contains("String iamInitTemplateCode"));
+        org.junit.jupiter.api.Assertions.assertTrue(internalStatus.contains("List<String> columnPermissionTemplateCodes"));
+    }
+
+    @Test
+    void tenantSecurityAcceptsDirectBearerTokenAsWellAsGatewayIdentityHeaders() throws Exception {
+        String securityConfiguration = Files.readString(Path.of(
+                "src/main/java/com/xuan/erp/tenant/infrastructure/config/TenantSecurityConfiguration.java"));
+
+        org.junit.jupiter.api.Assertions.assertTrue(securityConfiguration.contains("BusinessJwtAuthenticationFilter"));
+        org.junit.jupiter.api.Assertions.assertTrue(securityConfiguration.contains("ObjectProvider<BusinessJwtAuthenticationFilter>"));
+        org.junit.jupiter.api.Assertions.assertTrue(securityConfiguration.contains("addFilterAfter(jwtFilter, SecurityContextHolderFilter.class)"));
+        org.junit.jupiter.api.Assertions.assertTrue(securityConfiguration.contains("addFilterAfter(gatewayIdentityAuthenticationFilter, BusinessJwtAuthenticationFilter.class)"));
     }
 
     private static String permission(Method method) {

@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xuan.erp.iam.infrastructure.persistence.mapper.IamTenantPermissionEntitlementPersistenceMapper">
+
+    <select id="findPermissionCodesByTenantId" resultType="java.lang.String">
+        SELECT permission.code
+        FROM iam_tenant_permission_entitlement entitlement
+        JOIN iam_permission permission ON permission.id = entitlement.permission_id
+        WHERE entitlement.tenant_id = #{tenantId}
+          AND entitlement.deleted_at IS NULL
+          AND entitlement.is_enabled = true
+          AND permission.deleted_at IS NULL
+          AND permission.is_enabled = true
+        ORDER BY permission.code
+    </select>
+
+    <select id="findTenantIdsByInitTemplateCode" resultType="java.lang.Long">
+        WITH latest_bootstrap_template AS (
+            SELECT DISTINCT ON (event.tenant_id)
+                   event.tenant_id,
+                   NULLIF(event.payload ->> 'iamInitTemplateCode', '') AS init_template_code
+            FROM iam_outbox_event event
+            WHERE event.event_type = 'IamTenantBootstrapped'
+              AND event.tenant_id &gt; 0
+              AND jsonb_exists(event.payload, 'iamInitTemplateCode')
+            ORDER BY event.tenant_id, event.updated_at DESC, event.created_at DESC, event.id DESC
+        ),
+        candidate_tenant AS (
+            SELECT binding.tenant_id
+            FROM iam_tenant_init_template_binding binding
+            WHERE binding.init_template_code = #{initTemplateCode}
+              AND binding.deleted_at IS NULL
+              AND binding.is_enabled = true
+            UNION
+            SELECT latest_bootstrap_template.tenant_id
+            FROM latest_bootstrap_template
+            WHERE latest_bootstrap_template.init_template_code = #{initTemplateCode}
+            UNION
+            SELECT entitlement.tenant_id
+            FROM iam_tenant_permission_entitlement entitlement
+            WHERE entitlement.init_template_code = #{initTemplateCode}
+              AND entitlement.deleted_at IS NULL
+              AND entitlement.is_enabled = true
+        )
+        SELECT DISTINCT tenant_id
+        FROM candidate_tenant
+        ORDER BY tenant_id
+    </select>
+
+    <select id="nextEntitlementVersion" resultType="long">
+        SELECT COALESCE(MAX(entitlement_version), 0) + 1
+        FROM iam_tenant_permission_entitlement
+        WHERE tenant_id = #{tenantId}
+    </select>
+
+    <update id="disableTenantEntitlements">
+        UPDATE iam_tenant_permission_entitlement
+        SET deleted_by = #{operator},
+            delete_reason = 'tenant permission entitlement replaced',
+            deleted_at = now(),
+            updated_by = #{operator},
+            updated_at = now()
+        WHERE tenant_id = #{tenantId}
+          AND deleted_at IS NULL
+    </update>
+
+    <insert id="upsertTenantInitTemplateBinding">
+        INSERT INTO iam_tenant_init_template_binding (
+            tenant_id, init_template_code, last_entitlement_version,
+            is_enabled, created_by, updated_by
+        )
+        VALUES (
+            #{tenantId}, #{initTemplateCode}, #{entitlementVersion},
+            true, #{operator}, #{operator}
+        )
+        ON CONFLICT (tenant_id) WHERE deleted_at IS NULL DO UPDATE
+        SET init_template_code = EXCLUDED.init_template_code,
+            last_entitlement_version = EXCLUDED.last_entitlement_version,
+            is_enabled = true,
+            updated_by = EXCLUDED.updated_by,
+            updated_at = now()
+    </insert>
+
+    <insert id="insertTenantEntitlement">
+        INSERT INTO iam_tenant_permission_entitlement (
+            tenant_id, init_template_code, permission_id, entitlement_version,
+            is_enabled, created_by, updated_by
+        )
+        SELECT #{tenantId}, #{initTemplateCode}, #{permissionId}, #{entitlementVersion},
+               true, #{operator}, #{operator}
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM iam_tenant_permission_entitlement existing
+            WHERE existing.tenant_id = #{tenantId}
+              AND existing.permission_id = #{permissionId}
+              AND existing.deleted_at IS NULL
+        )
+    </insert>
+</mapper>

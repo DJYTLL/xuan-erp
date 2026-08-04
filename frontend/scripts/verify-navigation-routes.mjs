@@ -8,7 +8,15 @@ const routerSource = readFileSync(resolve(currentDir, '../src/router/index.ts'),
 const expectedMenuPaths = [
   '/workbench',
   '/product',
+  '/party',
+  '/warehouse',
+  '/inventory',
   '/procurement',
+  '/sales',
+  '/finance',
+  '/document',
+  '/manufacturing',
+  '/report',
   '/system',
   '/system/iam/menus',
   '/system/iam/permissions',
@@ -31,17 +39,6 @@ if (missing.length > 0) {
   process.exit(1);
 }
 
-const removedPlaceholderRoutePaths = [
-  '/party',
-  '/warehouse',
-  '/inventory',
-  '/sales',
-  '/finance',
-  '/document',
-  '/manufacturing',
-  '/report',
-];
-const remainingPlaceholderPaths = removedPlaceholderRoutePaths.filter((path) => hasRouteFor(path));
 const placeholderMarkers = [
   'ModulePlaceholderView',
   "name: 'party-placeholder'",
@@ -55,13 +52,12 @@ const placeholderMarkers = [
 ];
 const remainingPlaceholderMarkers = placeholderMarkers.filter((marker) => routerSource.includes(marker));
 
-if (remainingPlaceholderPaths.length > 0 || remainingPlaceholderMarkers.length > 0) {
+if (remainingPlaceholderMarkers.length > 0) {
   console.error([
-    'Frontend placeholder navigation routes should be removed.',
-    remainingPlaceholderPaths.length > 0 ? `Remaining placeholder paths: ${remainingPlaceholderPaths.join(', ')}` : '',
+    'Frontend placeholder navigation components should be removed.',
     remainingPlaceholderMarkers.length > 0 ? `Remaining placeholder markers: ${remainingPlaceholderMarkers.join(', ')}` : '',
   ].filter(Boolean).join('\n'));
   process.exit(1);
 }
 
-console.log(`Verified ${expectedMenuPaths.length} real IAM menu paths are covered and placeholder navigation routes are removed.`);
+console.log(`Verified ${expectedMenuPaths.length} IAM menu paths are covered by real frontend routes.`);

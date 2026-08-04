@@ -56,4 +56,21 @@ class XuanPermissionExpressionTest {
         assertThat(expression.has("tenant:delete")).isTrue();
         assertThat(loads).hasValue(0);
     }
+
+    // 测试网关或 IAM 快照下发的 * 通配权限在业务服务 @xuanPermission 中也能生效。
+    @Test
+    void letsWildcardPermissionBypassRemoteSnapshot() {
+        AtomicInteger loads = new AtomicInteger();
+        CurrentUser currentUser = new CurrentUser(1L, 0L, "platform-admin", Set.of(), 1L, Set.of("*"));
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(currentUser, "access-token", Set.of()));
+        XuanPermissionExpression expression = new XuanPermissionExpression((user, accessToken) -> {
+            loads.incrementAndGet();
+            return PermissionSnapshot.empty(user);
+        });
+
+        assertThat(expression.has("iam-role-column-permission:view")).isTrue();
+        assertThat(expression.hasAny("tenant:view", "iam-role-column-permission:view")).isTrue();
+        assertThat(loads).hasValue(0);
+    }
 }

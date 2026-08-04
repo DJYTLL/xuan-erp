@@ -31,7 +31,7 @@
           />
         </label>
         <template #actions>
-          <el-button :icon="ExternalLink" @click="openSkyWalking">SkyWalking</el-button>
+          <PermissionButton :icon="ExternalLink" permission="audit:interface-cost:view" no-permission-mode="disable" @click="openSkyWalking">SkyWalking</PermissionButton>
         </template>
       </SearchActionBar>
     </template>
@@ -49,7 +49,7 @@
       <el-table-column prop="traceId" label="Trace ID" min-width="220" show-overflow-tooltip />
       <el-table-column label="操作" width="120" fixed="right">
         <template #default="{ row }">
-          <el-button link type="primary" @click="openTrace(row.traceId)">Span 明细</el-button>
+          <PermissionButton link type="primary" permission="audit:interface-cost:view" no-permission-mode="disable" @click="openTrace(row.traceId)">Span 明细</PermissionButton>
         </template>
       </el-table-column>
     </el-table>
@@ -98,6 +98,7 @@ import { getHttpErrorMessage } from '@/api/http-error';
 import { getInterfaceTrace, listInterfaceTraces } from '@/api/observability';
 import AppState from '@/framework/components/AppState.vue';
 import ListPageShell from '@/framework/components/ListPageShell.vue';
+import PermissionButton from '@/framework/components/PermissionButton.vue';
 import SearchActionBar from '@/framework/components/SearchActionBar.vue';
 import XuanDateTimeRangePicker, { type DateRangeValue } from '@/framework/components/XuanDateTimeRangePicker.vue';
 import XuanDecimalInput from '@/framework/components/XuanDecimalInput.vue';

@@ -65,6 +65,11 @@ public final class TenantAssembler {
                 view.currentPlanExpiresAt(),
                 view.primaryDomainId(),
                 view.primaryDomain(),
+                syncStatus(view.permissionSyncStatus()),
+                syncStatusLabel(view.permissionSyncStatus()),
+                view.permissionSyncLastCheckedAt(),
+                view.permissionSyncLastSyncedAt(),
+                view.permissionSyncLastErrorMessage(),
                 view.statusHistoryCount(),
                 view.latestStatusChangeType(),
                 view.latestStatusChangedAt()
@@ -75,10 +80,28 @@ public final class TenantAssembler {
         return new TenantInternalStatusResponse(
                 view.tenantId(),
                 view.code(),
+                view.name(),
                 view.status(),
                 view.loginAllowed(),
                 view.loginDeniedReason(),
-                view.currentPlanExpiresAt()
+                view.currentPlanExpiresAt(),
+                view.permissionHash(),
+                view.iamInitTemplateCode(),
+                view.columnPermissionTemplateCodes(),
+                view.defaultColumnPermissionTemplateCode()
         );
+    }
+
+    private static String syncStatus(String status) {
+        return status == null || status.isBlank() ? "PENDING_REPAIR" : status.trim();
+    }
+
+    private static String syncStatusLabel(String status) {
+        return switch (syncStatus(status)) {
+            case "SYNCED" -> "正常";
+            case "REPAIRING" -> "修复中";
+            case "FAILED" -> "待修复";
+            default -> "待修复";
+        };
     }
 }

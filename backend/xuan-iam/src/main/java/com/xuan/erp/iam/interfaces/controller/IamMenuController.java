@@ -34,15 +34,22 @@ public class IamMenuController {
         this.menuApplicationService = menuApplicationService;
     }
 
+    @Operation(summary = "查询菜单选项", description = "供权限、初始化模板和列权限配置页选择菜单或页面，不开放菜单管理写能力")
+    @PreAuthorize("hasAnyAuthority('iam-menu:view', 'iam-column-permission:view', 'iam-role-column-permission:view', 'iam-permission:view', 'iam-init-template:view')")
+    @GetMapping("/options")
+    public ApiResponse<List<IamMenu>> listMenuOptions() {
+        return ApiResponse.success(menuApplicationService.listMenus());
+    }
+
     @Operation(summary = "查询菜单清单", description = "查询 IAM 中维护的全局菜单定义")
-    @PreAuthorize("hasAuthority('iam:view')")
+    @PreAuthorize("hasAuthority('iam-menu:view')")
     @GetMapping
     public ApiResponse<List<IamMenu>> listMenus() {
         return ApiResponse.success(menuApplicationService.listMenus());
     }
 
     @Operation(summary = "新增菜单", description = "新增 IAM 全局菜单定义")
-    @PreAuthorize("hasAuthority('iam:create')")
+    @PreAuthorize("hasAuthority('iam-menu:create')")
     @PostMapping
     public ApiResponse<IamMenu> createMenu(@RequestBody CreateIamMenuRequest request) {
         return ApiResponse.success(menuApplicationService.createMenu(new CreateIamMenuCommand(
@@ -57,7 +64,7 @@ public class IamMenuController {
     }
 
     @Operation(summary = "修改菜单", description = "修改 IAM 全局菜单展示字段和启用状态")
-    @PreAuthorize("hasAuthority('iam:update')")
+    @PreAuthorize("hasAuthority('iam-menu:update')")
     @PutMapping("/{menuId}")
     public ApiResponse<IamMenu> updateMenu(
             @Parameter(description = "菜单 ID")
@@ -75,7 +82,7 @@ public class IamMenuController {
     }
 
     @Operation(summary = "启用菜单", description = "启用 IAM 全局菜单")
-    @PreAuthorize("hasAuthority('iam:update')")
+    @PreAuthorize("hasAuthority('iam-menu:update')")
     @PostMapping("/{menuId}/enable")
     public ApiResponse<IamMenu> enableMenu(
             @Parameter(description = "菜单 ID")
@@ -84,7 +91,7 @@ public class IamMenuController {
     }
 
     @Operation(summary = "停用菜单", description = "停用 IAM 全局菜单")
-    @PreAuthorize("hasAuthority('iam:update')")
+    @PreAuthorize("hasAuthority('iam-menu:update')")
     @PostMapping("/{menuId}/disable")
     public ApiResponse<IamMenu> disableMenu(
             @Parameter(description = "菜单 ID")

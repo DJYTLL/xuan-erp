@@ -72,7 +72,11 @@ public class GatewaySecurityAuditReporter {
     }
 
     private String requestId(ServerWebExchange exchange) {
-        return exchange.getRequest().getHeaders().getFirst(HEADER_REQUEST_ID);
+        String requestId = exchange.getRequest().getHeaders().getFirst(HEADER_REQUEST_ID);
+        if (requestId != null && !requestId.isBlank()) {
+            return requestId;
+        }
+        return exchange.getRequest().getHeaders().getFirst(GatewayRequestHeaderWebFilter.TRACE_ID_HEADER);
     }
 
     private String userAgent(ServerWebExchange exchange) {

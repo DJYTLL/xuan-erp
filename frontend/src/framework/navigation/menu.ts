@@ -118,6 +118,25 @@ export function createNavigationMenu(
     .filter((item): item is MenuNode => Boolean(item));
 }
 
+export function filterNavigationMenuByPermission(
+  items: MenuNode[],
+  canAccess: (item: MenuNode) => boolean,
+): MenuNode[] {
+  const result: MenuNode[] = [];
+  for (const item of items) {
+    const children = item.children ? filterNavigationMenuByPermission(item.children, canAccess) : [];
+    const selfAllowed = item.path ? canAccess(item) : false;
+    if (selfAllowed || children.length) {
+      result.push({
+        ...item,
+        path: selfAllowed ? item.path : undefined,
+        children,
+      });
+    }
+  }
+  return result;
+}
+
 export function createNavigationPermissionTree(
   nodes: FrameworkMenuSourceNode[],
   t: NavigationTranslator,

@@ -6,7 +6,15 @@
         <el-input v-model="keyword" class="query-input" placeholder="搜索角色编码 / 名称" clearable />
         <template #actions>
           <el-button :icon="RefreshCw" circle @click="loadRoles" />
-          <PermissionButton type="primary" permission="iam:create" @click="openCreate">新增角色</PermissionButton>
+          <PermissionButton
+            type="primary"
+            permission="iam-role:create"
+            no-permission-mode="disable"
+            :disabled-reason="tenantId <= 0 ? '平台级角色当前不支持页面新增' : ''"
+            @click="openCreate"
+          >
+            新增角色
+          </PermissionButton>
         </template>
       </QueryToolbar>
     </template>
@@ -22,74 +30,79 @@
       </el-table-column>
       <el-table-column label="操作" width="260" fixed="right">
         <template #default="{ row }">
-          <el-button
+          <PermissionButton
             link
             type="primary"
+            permission="iam-role:update"
+            no-permission-mode="disable"
             :title="grantActionHint(row)"
             @click="openGrant(row)"
           >
             授权
-          </el-button>
-          <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
-          <el-button link :type="row.enabled ? 'warning' : 'success'" @click="toggleRole(row)">
+          </PermissionButton>
+          <PermissionButton
+            link
+            type="primary"
+            permission="iam-role:update"
+            no-permission-mode="disable"
+            :disabled-reason="row.tenantId <= 0 ? '平台级角色当前不支持编辑' : ''"
+            @click="openEdit(row)"
+          >
+            编辑
+          </PermissionButton>
+          <PermissionButton
+            link
+            :type="row.enabled ? 'warning' : 'success'"
+            permission="iam-role:update"
+            no-permission-mode="disable"
+            :disabled-reason="row.tenantId <= 0 ? '平台级角色当前不支持启停' : ''"
+            @click="toggleRole(row)"
+          >
             {{ row.enabled ? '停用' : '启用' }}
-          </el-button>
+          </PermissionButton>
         </template>
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="dialogVisible" :title="editingRole ? '编辑角色' : '新增角色'" width="640px">
-      <el-form label-position="top">
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="租户 ID">
-              <el-input-number v-model="form.tenantId" :disabled="Boolean(editingRole)" :min="0" controls-position="right" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="角色编码">
-              <el-input v-model="form.code" :disabled="Boolean(editingRole)" placeholder="tenant_operator" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="角色名称">
-              <el-input v-model="form.name" placeholder="租户操作员" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="24">
-            <el-form-item label="说明">
-              <el-input v-model="form.description" type="textarea" placeholder="角色用途说明" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitRole">保存</el-button>
-      </template>
-    </el-dialog>
+    <DynamicFormDialog
+      v-model="dialogVisible"
+      :title="editingRole ? '编辑角色' : '新增角色'"
+      description="按角色基础信息维护权限对象"
+      :fields="roleFormFields"
+      :sections="roleFormSections"
+      :model="form"
+      size="lg"
+      label-position="top"
+      :confirm-permission="roleDialogConfirmPermission"
+      @submit="submitRole"
+    />
 
-    <el-dialog
+    <DynamicFormDialog
       v-model="grantVisible"
-      class="role-grant-dialog"
+      class="role-grant-dialog role-grant-dialog--assignment"
       :title="grantDialogTitle"
-      width="1080px"
-      top="6vh"
-      destroy-on-close
+      :render-form="false"
+      description="按菜单树维护当前角色可分配的页面和按钮权限"
+      helper-text="拖动标题栏移动，拖动右下角调整大小"
+      variant="workspace"
+      size="lg"
+      workspace-size="lg"
+      confirm-text="保存授权"
+      :confirm-permission="'iam-role:update'"
+      :confirm-disabled-reason="grantReadonly ? '平台级角色当前仅支持查看' : ''"
+      @submit="submitGrant"
     >
-      <p v-if="grantReadonly" class="grant-readonly-note">平台级角色当前仅支持查看权限分配结果</p>
-      <MenuPermissionAssignment
-        v-model="selectedPermissionCodes"
-        :menus="menus"
-        :permissions="permissions"
-        :page-required-permission-map="roleGrantRequiredPermissionMap"
-        :readonly="grantReadonly"
-      />
-      <template #footer>
-        <el-button @click="grantVisible = false">取消</el-button>
-        <el-button type="primary" :disabled="grantReadonly" @click="submitGrant">保存授权</el-button>
+      <template #body>
+        <p v-if="grantReadonly" class="grant-readonly-note">平台级角色当前仅支持查看权限分配结果</p>
+        <MenuPermissionAssignment
+          v-model="selectedPermissionCodes"
+          :menus="menus"
+          :permissions="grantAvailablePermissions"
+          :page-required-permission-map="roleGrantRequiredPermissionMap"
+          :readonly="grantReadonly"
+        />
       </template>
-    </el-dialog>
+    </DynamicFormDialog>
   </ListPageShell>
 </template>
 
@@ -100,13 +113,13 @@ import { RefreshCw } from 'lucide-vue-next';
 import {
   createIamRole,
   getIamRolePermissions,
-  listIamMenus,
-  listIamPermissions,
   listIamRoles,
   setIamRoleEnabled,
   setIamRolePermissions,
   updateIamRole,
 } from '@/api/iamAdmin';
+import DynamicFormDialog from '@/framework/components/DynamicFormDialog.vue';
+import type { DynamicFormField, DynamicFormSection } from '@/framework/components/DynamicFormDialog.vue';
 import ListPageShell from '@/framework/components/ListPageShell.vue';
 import MenuPermissionAssignment from '@/framework/components/MenuPermissionAssignment.vue';
 import PermissionButton from '@/framework/components/PermissionButton.vue';
@@ -114,7 +127,13 @@ import QueryToolbar from '@/framework/components/QueryToolbar.vue';
 import { businessPageRequiredPermissionMap } from '@/config/businessPageRequiredPermissions';
 import { useAuthStore } from '@/stores/auth';
 import { useAuthorizationStore } from '@/stores/authorization';
-import type { IamMenu, IamPermission, IamRole, IamRolePayload } from '@/types/iamAdmin';
+import type { CurrentMenuNode } from '@/types/auth';
+import type {
+  IamMenu,
+  IamPermission,
+  IamRole,
+  IamRolePayload,
+} from '@/types/iamAdmin';
 
 defineOptions({ name: 'IamRoleManagementView' });
 
@@ -132,8 +151,8 @@ const editingRole = ref<IamRole | null>(null);
 const grantingRole = ref<IamRole | null>(null);
 const grantReadonly = ref(false);
 const selectedPermissionCodes = ref<string[]>([]);
-const form = reactive<IamRolePayload>({
-  tenantId: tenantId.value,
+const grantAvailablePermissionCodes = ref<string[]>([]);
+const form = reactive<Record<string, unknown>>({
   code: '',
   name: '',
   description: '',
@@ -148,18 +167,52 @@ const filteredRoles = computed(() => {
   return roles.value.filter((role) => [role.code, role.name].some((item) => item.toLowerCase().includes(value)));
 });
 
-const allEnabledPermissionCodes = computed(() => permissions.value
-  .filter((permission) => permission.enabled !== false)
-  .map((permission) => permission.code)
-  .sort((left, right) => left.localeCompare(right)));
+const grantAvailablePermissions = computed(() => {
+  if (grantReadonly.value) {
+    return permissions.value;
+  }
+  const availableCodeSet = new Set(grantAvailablePermissionCodes.value);
+  return permissions.value.filter((permission) => availableCodeSet.has(permission.code));
+});
 
 const grantDialogTitle = computed(() => {
   const prefix = grantReadonly.value ? '角色授权（只读）' : '角色授权';
   return grantingRole.value ? `${prefix} - ${grantingRole.value.name}` : prefix;
 });
 
+const roleDialogConfirmPermission = computed(() => (editingRole.value ? 'iam-role:update' : 'iam-role:create'));
+
+const roleFormFields = computed<DynamicFormField[]>(() => [
+  {
+    key: 'code',
+    label: '角色编码',
+    placeholder: 'tenant_operator',
+    required: !editingRole.value,
+    disabled: Boolean(editingRole.value),
+    span: 12,
+  },
+  {
+    key: 'name',
+    label: '角色名称',
+    placeholder: '租户操作员',
+    required: true,
+    span: 12,
+  },
+  {
+    key: 'description',
+    label: '说明',
+    component: 'textarea',
+    placeholder: '角色用途说明',
+    span: 24,
+  },
+]);
+
+const roleFormSections = computed<DynamicFormSection[]>(() => [{
+  fields: roleFormFields.value,
+}]);
+
 onMounted(async () => {
-  await Promise.all([loadRoles(), loadMenus(), loadPermissions()]);
+  await Promise.all([loadRoles(), loadMenus()]);
 });
 
 async function loadRoles() {
@@ -171,17 +224,15 @@ async function loadRoles() {
   }
 }
 
-async function loadPermissions() {
-  permissions.value = await listIamPermissions();
-}
-
 async function loadMenus() {
-  menus.value = await listIamMenus();
+  if (!authorizationStore.isLoaded) {
+    await authorizationStore.refreshCurrentAuthorizationContext();
+  }
+  menus.value = flattenCurrentMenus(authorizationStore.menus);
 }
 
 function resetForm() {
   Object.assign(form, {
-    tenantId: Number(tenantId.value || 0),
     code: '',
     name: '',
     description: '',
@@ -189,28 +240,36 @@ function resetForm() {
 }
 
 function openCreate() {
+  if (!ensureBusinessTenantReady()) {
+    return;
+  }
   editingRole.value = null;
   resetForm();
   dialogVisible.value = true;
 }
 
 function openEdit(row: IamRole) {
+  if (!ensureWritableRole(row, '平台级角色当前不支持编辑')) {
+    return;
+  }
   editingRole.value = row;
   Object.assign(form, {
-    tenantId: row.tenantId,
     code: row.code,
     name: row.name,
     description: row.description || '',
-    enabled: row.enabled,
   });
   dialogVisible.value = true;
 }
 
-async function submitRole() {
+async function submitRole(value: Record<string, unknown>) {
+  Object.assign(form, value);
   if (editingRole.value) {
-    await updateIamRole(editingRole.value.id, form);
+    await updateIamRole(editingRole.value.id, rolePayload(editingRole.value.tenantId, value));
   } else {
-    await createIamRole(form);
+    if (!ensureBusinessTenantReady()) {
+      return;
+    }
+    await createIamRole(rolePayload(Number(tenantId.value), value));
   }
   dialogVisible.value = false;
   ElMessage.success('角色已保存');
@@ -218,9 +277,21 @@ async function submitRole() {
 }
 
 async function toggleRole(row: IamRole) {
+  if (!ensureWritableRole(row, '平台级角色当前不支持启停')) {
+    return;
+  }
   await setIamRoleEnabled(row.id, !row.enabled);
   ElMessage.success(row.enabled ? '角色已停用' : '角色已启用');
   await loadRoles();
+}
+
+function rolePayload(targetTenantId: number, value: Record<string, unknown>): IamRolePayload {
+  return {
+    tenantId: targetTenantId,
+    code: textValue(value.code),
+    name: textValue(value.name),
+    description: normalizeOptionalText(value.description),
+  };
 }
 
 function isReadonlyGrantRole(row: IamRole) {
@@ -234,13 +305,11 @@ function grantActionHint(row: IamRole) {
 async function openGrant(row: IamRole) {
   grantingRole.value = row;
   grantReadonly.value = row.tenantId <= 0;
-  if (grantReadonly.value) {
-    selectedPermissionCodes.value = allEnabledPermissionCodes.value;
-    grantVisible.value = true;
-    return;
-  }
   const grant = await getIamRolePermissions(row.tenantId, row.id);
+  grantAvailablePermissionCodes.value = grant.availablePermissionCodes || [];
+  permissions.value = grant.availablePermissions || [];
   selectedPermissionCodes.value = grant.permissionCodes;
+  selectedPermissionCodes.value = selectedPermissionCodes.value.filter((code) => grantAvailablePermissionCodes.value.includes(code));
   grantVisible.value = true;
 }
 
@@ -258,9 +327,60 @@ async function submitGrant() {
     selectedPermissionCodes.value,
     authStore.username,
   );
-  await authorizationStore.loadPermissionSnapshot();
+  await authorizationStore.refreshCurrentAuthorizationContext();
   grantVisible.value = false;
   ElMessage.success('角色授权已保存');
+}
+
+function ensureBusinessTenantReady() {
+  if (Number.isFinite(Number(tenantId.value)) && Number(tenantId.value) > 0) {
+    return true;
+  }
+  ElMessage.warning('请输入有效业务租户 ID');
+  return false;
+}
+
+function ensureWritableRole(role: IamRole, message: string) {
+  if (role.tenantId > 0) {
+    return true;
+  }
+  ElMessage.warning(message);
+  return false;
+}
+
+function normalizeOptionalText(value: unknown) {
+  const trimmed = textValue(value);
+  return trimmed || null;
+}
+
+function textValue(value: unknown) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function flattenCurrentMenus(sourceMenus: CurrentMenuNode[]) {
+  const nextId = { value: 1 };
+  return flattenCurrentMenuNodes(sourceMenus, null, nextId);
+}
+
+function flattenCurrentMenuNodes(sourceMenus: CurrentMenuNode[], parentId: number | null, nextId: { value: number }): IamMenu[] {
+  return sourceMenus.flatMap((menu) => {
+    const id = nextId.value++;
+    return [
+      {
+        id,
+        code: menu.code,
+        parentId,
+        title: menu.title,
+        i18nKey: menu.i18nKey,
+        path: menu.path,
+        icon: menu.icon,
+        permissionCode: menu.permissionCode,
+        sortNo: menu.sortNo,
+        enabled: true,
+      },
+      ...flattenCurrentMenuNodes(menu.children || [], id, nextId),
+    ];
+  });
 }
 </script>
 
@@ -275,11 +395,4 @@ async function submitGrant() {
   font-size: 13px;
 }
 
-:global(.role-grant-dialog) {
-  max-width: calc(100vw - 48px);
-}
-
-:global(.role-grant-dialog .el-dialog__body) {
-  padding-top: 8px;
-}
 </style>

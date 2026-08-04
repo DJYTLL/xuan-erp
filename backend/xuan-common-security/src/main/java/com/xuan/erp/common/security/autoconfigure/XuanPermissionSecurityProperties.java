@@ -1,6 +1,7 @@
 package com.xuan.erp.common.security.autoconfigure;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
 
 import java.net.URI;
 import java.time.Duration;
@@ -9,6 +10,7 @@ import java.time.Duration;
  * 业务服务权限快照与方法级授权配置。
  */
 @ConfigurationProperties(prefix = "xuan.security.permission")
+@Validated
 public class XuanPermissionSecurityProperties {
 
     /**
@@ -20,6 +22,16 @@ public class XuanPermissionSecurityProperties {
      * IAM 当前权限快照接口地址。
      */
     private URI iamSnapshotUri;
+
+    /**
+     * IAM 服务名；业务服务可通过服务发现解析真实实例地址。
+     */
+    private String iamServiceName = "xuan-iam";
+
+    /**
+     * IAM 当前权限快照接口标准路径。
+     */
+    private String iamSnapshotPath = "/api/iam/permissions/current";
 
     /**
      * 权限快照缓存配置。
@@ -40,6 +52,22 @@ public class XuanPermissionSecurityProperties {
 
     public void setIamSnapshotUri(URI iamSnapshotUri) {
         this.iamSnapshotUri = iamSnapshotUri;
+    }
+
+    public String getIamServiceName() {
+        return iamServiceName;
+    }
+
+    public void setIamServiceName(String iamServiceName) {
+        this.iamServiceName = iamServiceName;
+    }
+
+    public String getIamSnapshotPath() {
+        return iamSnapshotPath;
+    }
+
+    public void setIamSnapshotPath(String iamSnapshotPath) {
+        this.iamSnapshotPath = iamSnapshotPath;
     }
 
     public Cache getCache() {

@@ -50,6 +50,41 @@ feign:
     enabled: true
 
 xuan:
+  security:
+    # 业务服务侧 JWT/JWK 验签配置；IAM 签发私钥和 Gateway 入口认证不在这里配置。
+    jwt:
+      # 是否启用业务服务侧 JWT/JWK 自动配置；需要服务直验 Bearer Token 时开启。
+      enabled: ${XUAN_SECURITY_JWT_ENABLED:true}
+      # JWT 签发方，必须与 xuan-iam 实际签发 token 时写入的 issuer 保持一致。
+      issuer: ${XUAN_SECURITY_JWT_ISSUER:xuan-iam}
+      # JWT 受众，必须与 xuan-iam 实际签发 token 时写入的 audience 保持一致。
+      audience: ${XUAN_SECURITY_JWT_AUDIENCE:xuan-gateway}
+      # IAM 服务名；tenant 会通过服务发现解析真实 IAM 实例，而不是写死主机名和端口。
+      iam-service-name: ${XUAN_SECURITY_JWT_IAM_SERVICE_NAME:xuan-iam}
+      # IAM 对外发布 JWK 公钥集的标准路径；会拼接到服务发现解析出的实例地址后面。
+      jwk-set-path: ${XUAN_SECURITY_JWT_JWK_SET_PATH:/.well-known/jwks.json}
+      # JWK 本地缓存配置，用于减少业务服务对 IAM 公钥端点的重复访问。
+      cache:
+        # 正常 JWK 缓存时间，到期后会重新访问 IAM 的 JWKS Endpoint。
+        positive-cache-ttl: ${XUAN_SECURITY_JWT_POSITIVE_CACHE_TTL:10m}
+        # IAM JWKS Endpoint 短暂不可用时，允许继续使用旧 JWK 的兜底时间。
+        stale-cache-ttl: ${XUAN_SECURITY_JWT_STALE_CACHE_TTL:30m}
+        # 未知 kid 的负缓存时间，避免恶意 token 反复触发远程 JWK 刷新。
+        negative-cache-ttl: ${XUAN_SECURITY_JWT_NEGATIVE_CACHE_TTL:30s}
+        # 后台定期刷新 JWKS 的时间间隔，用于提前感知 IAM 公钥轮换。
+        refresh-interval: ${XUAN_SECURITY_JWT_REFRESH_INTERVAL:5m}
+    # 业务服务侧权限快照配置；用于 @PreAuthorize 的统一权限表达式，不改变 IAM 权限事实源。
+    permission:
+      # 是否启用业务服务侧权限快照远程加载和统一 @PreAuthorize 表达式。
+      enabled: ${XUAN_SECURITY_PERMISSION_ENABLED:true}
+      # IAM 服务名；tenant 会通过服务发现解析真实 IAM 实例，而不是依赖固定 URL。
+      iam-service-name: ${XUAN_SECURITY_PERMISSION_IAM_SERVICE_NAME:xuan-iam}
+      # IAM 当前权限快照接口标准路径；业务服务会携带当前 Bearer Token 调用该路径加载权限。
+      iam-snapshot-path: ${XUAN_SECURITY_PERMISSION_IAM_SNAPSHOT_PATH:/api/iam/permissions/current}
+      # 权限快照本地缓存配置；缓存 key 包含 tenantId、userId、authVersion。
+      cache:
+        # 权限快照本地缓存 TTL；权限版本变化后会自动换 key 并重新加载。
+        ttl: ${XUAN_SECURITY_PERMISSION_CACHE_TTL:30s}
   rocketmq:
     enabled: ${XUAN_ROCKETMQ_ENABLED:true}
     name-server: ${XUAN_ROCKETMQ_NAME_SERVER:${xuan.infra.rocketmq.name-server:duaoyunxuan.top:9047}}

@@ -39,6 +39,11 @@
           <span>{{ resolveIamInitTemplateCode(row) || '-' }}</span>
         </template>
       </el-table-column>
+      <el-table-column label="列权限模板" min-width="180">
+        <template #default="{ row }">
+          <span>{{ formatColumnPermissionTemplates(row) }}</span>
+        </template>
+      </el-table-column>
       <el-table-column label="额度" min-width="180">
         <template #default="{ row }">
           <span>{{ formatQuota(row) }}</span>
@@ -63,89 +68,21 @@
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="planDialogVisible" :title="editingPlan ? '编辑套餐' : '新增套餐'" width="760px" destroy-on-close>
-      <el-form label-position="top">
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="套餐编码">
-              <el-input v-model.trim="planForm.code" :disabled="Boolean(editingPlan)" placeholder="STANDARD" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="套餐名称">
-              <el-input v-model.trim="planForm.name" placeholder="标准版" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="计费周期">
-              <el-select v-model="planForm.billingCycle">
-                <el-option label="月付" value="MONTHLY" />
-                <el-option label="年付" value="YEARLY" />
-                <el-option label="永久" value="PERMANENT" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="初始化模板">
-              <el-select v-model="planForm.iamInitTemplateCode" placeholder="请选择初始化模板">
-                <el-option label="基础版 / 基础模板（basic）" value="basic" />
-                <el-option label="标准版 / 标准模板（standard）" value="standard" />
-                <el-option label="完整版 / 完整模板（full）" value="full" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="价格">
-              <XuanDecimalInput v-model="planForm.priceAmount" :scale="2" align="right" placeholder="0.00" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="币种">
-              <el-input v-model.trim="planForm.currency" placeholder="CNY" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="排序">
-              <XuanDecimalInput v-model="planForm.sortNo" :scale="0" input-mode="numeric" align="right" placeholder="0" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="最大用户数">
-              <XuanDecimalInput v-model="planForm.maxUserCount" :scale="0" input-mode="numeric" align="right" clearable placeholder="不限" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="最大仓库数">
-              <XuanDecimalInput v-model="planForm.maxWarehouseCount" :scale="0" input-mode="numeric" align="right" clearable placeholder="不限" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
-            <el-form-item label="最大存储 GB">
-              <XuanDecimalInput v-model="planForm.maxStorageGb" :scale="2" align="right" clearable suffix="GB" placeholder="不限" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="24">
-            <el-form-item label="功能开关 JSON">
-              <el-input
-                v-model.trim="planForm.featureFlagsJson"
-                type="textarea"
-                :rows="4"
-                placeholder='{"modules":["product"],"iamInitTemplateCode":"basic"}'
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="24">
-            <el-form-item label="备注">
-              <el-input v-model.trim="planForm.remark" type="textarea" :rows="3" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-      </el-form>
-      <template #footer>
-        <el-button @click="planDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submittingPlan" @click="submitPlan">保存</el-button>
-      </template>
-    </el-dialog>
+    <DynamicFormDialog
+      v-model="planDialogVisible"
+      :title="editingPlan ? '编辑套餐' : '新增套餐'"
+      description="套餐决定租户可使用的页面权限模板、列权限模板和资源额度。"
+      :fields="planFormFields"
+      :sections="planFormSections"
+      :model="planForm"
+      size="lg"
+      variant="workspace"
+      workspace-size="md"
+      label-position="top"
+      :confirm-permission="'tenant-plan:manage'"
+      :loading="submittingPlan"
+      @submit="submitPlan"
+    />
   </ListPageShell>
 </template>
 
@@ -153,6 +90,7 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus/es/components/message/index';
 import { RefreshCw } from 'lucide-vue-next';
+import { listIamColumnPermissionTemplates } from '@/api/iamAdmin';
 import {
   createTenantPlan,
   deleteTenantPlan,
@@ -161,11 +99,14 @@ import {
   listTenantPlans,
   updateTenantPlan,
 } from '@/api/tenants';
+import DynamicFormDialog from '@/framework/components/DynamicFormDialog.vue';
+import type { DynamicFormField, DynamicFormSection } from '@/framework/components/DynamicFormDialog.vue';
 import ListPageShell from '@/framework/components/ListPageShell.vue';
 import PermissionButton from '@/framework/components/PermissionButton.vue';
 import QueryToolbar from '@/framework/components/QueryToolbar.vue';
-import XuanDecimalInput from '@/framework/components/XuanDecimalInput.vue';
+import { useAuthorizationStore } from '@/stores/authorization';
 import { useAuthStore } from '@/stores/auth';
+import type { IamColumnPermissionTemplate } from '@/types/iamAdmin';
 import type { BillingCycle, TenantPlan, TenantPlanPayload, TenantPlanStatus } from '@/types/tenant';
 
 defineOptions({ name: 'TenantPlanManagementView' });
@@ -181,15 +122,19 @@ type TenantPlanForm = {
   maxStorageGb: string | null;
   featureFlagsJson: string;
   iamInitTemplateCode: string;
+  columnPermissionTemplateCodes: string[];
+  defaultColumnPermissionTemplateCode: string;
   sortNo: string;
   remark: string;
 };
 
 const authStore = useAuthStore();
+const authorizationStore = useAuthorizationStore();
 const loading = ref(false);
 const keyword = ref('');
 const statusFilter = ref<TenantPlanStatus | ''>('');
 const plans = ref<TenantPlan[]>([]);
+const columnPermissionTemplates = ref<IamColumnPermissionTemplate[]>([]);
 const planDialogVisible = ref(false);
 const submittingPlan = ref(false);
 const editingPlan = ref<TenantPlan | null>(null);
@@ -213,7 +158,141 @@ const filteredPlans = computed(() => {
   });
 });
 
-onMounted(loadPlans);
+const columnPermissionTemplateOptions = computed(() => columnPermissionTemplates.value
+  .filter((template) => template.tenantId === 0 && template.enabled)
+  .map((template) => ({
+    label: template.name,
+    value: template.code,
+    description: `${template.code}${template.description ? ` · ${template.description}` : ''}`,
+  })));
+
+const selectedColumnPermissionTemplateOptions = computed(() => {
+  const selectedCodes = new Set(planForm.columnPermissionTemplateCodes);
+  return columnPermissionTemplateOptions.value.filter((option) => selectedCodes.has(String(option.value)));
+});
+
+const planFormFields = computed<DynamicFormField[]>(() => [
+  {
+    key: 'code',
+    label: '套餐编码',
+    placeholder: 'STANDARD',
+    disabled: Boolean(editingPlan.value),
+    required: true,
+    span: 12,
+  },
+  {
+    key: 'name',
+    label: '套餐名称',
+    placeholder: '标准版',
+    required: true,
+    span: 12,
+  },
+  {
+    key: 'billingCycle',
+    label: '计费周期',
+    component: 'select',
+    options: [
+      { label: '月付', value: 'MONTHLY' },
+      { label: '年付', value: 'YEARLY' },
+      { label: '永久', value: 'PERMANENT' },
+    ],
+    span: 12,
+  },
+  {
+    key: 'iamInitTemplateCode',
+    label: '初始化模板',
+    component: 'select',
+    placeholder: '请选择初始化模板',
+    required: true,
+    description: '控制租户开通后可看到哪些页面、菜单和按钮。',
+    options: [
+      { label: '基础版 / 基础模板（basic）', value: 'basic' },
+      { label: '标准版 / 标准模板（standard）', value: 'standard' },
+      { label: '完整版 / 完整模板（full）', value: 'full' },
+    ],
+    span: 12,
+  },
+  {
+    key: 'columnPermissionTemplateCodes',
+    label: '列权限模板',
+    component: 'checkbox-group',
+    description: '控制该套餐下租户最多可分配哪些页面字段。角色列权限只能在这里继续缩小。',
+    optionStyle: 'card',
+    options: columnPermissionTemplateOptions.value,
+    span: 24,
+  },
+  {
+    key: 'defaultColumnPermissionTemplateCode',
+    label: '默认列权限模板',
+    component: 'select',
+    placeholder: '默认使用第一个已选模板',
+    description: '租户首次初始化时使用的默认列权限模板，必须来自上方已选择模板。',
+    clearable: true,
+    options: selectedColumnPermissionTemplateOptions.value,
+    span: 24,
+  },
+  { key: 'priceAmount', label: '价格', component: 'number', scale: 2, align: 'right', placeholder: '0.00', span: 8 },
+  { key: 'currency', label: '币种', placeholder: 'CNY', span: 8 },
+  { key: 'sortNo', label: '排序', component: 'number', scale: 0, inputMode: 'numeric', align: 'right', placeholder: '0', span: 8 },
+  { key: 'maxUserCount', label: '最大用户数', component: 'number', scale: 0, inputMode: 'numeric', align: 'right', clearable: true, placeholder: '不限', span: 8 },
+  { key: 'maxWarehouseCount', label: '最大仓库数', component: 'number', scale: 0, inputMode: 'numeric', align: 'right', clearable: true, placeholder: '不限', span: 8 },
+  { key: 'maxStorageGb', label: '最大存储 GB', component: 'number', scale: 2, align: 'right', clearable: true, suffix: 'GB', placeholder: '不限', span: 8 },
+  {
+    key: 'featureFlagsJson',
+    label: '高级配置 JSON',
+    component: 'textarea',
+    placeholder: '{"modules":["product"],"iamInitTemplateCode":"basic","columnPermissionTemplateCodes":["tenant_readonly_masked"]}',
+    description: '保存时会自动同步初始化模板和列权限模板字段；通常只需要调整 modules 等扩展项。',
+    rows: 3,
+    span: 24,
+  },
+  { key: 'remark', label: '备注', component: 'textarea', rows: 3, span: 24 },
+]);
+
+const planFormSections = computed<DynamicFormSection[]>(() => [
+  {
+    title: '基础信息',
+    description: '用于识别套餐、控制计费周期，并绑定租户初始化时的页面权限模板。',
+    fields: [
+      planFormFields.value[0],
+      planFormFields.value[1],
+      planFormFields.value[2],
+      planFormFields.value[3],
+    ],
+  },
+  {
+    title: '列权限边界',
+    description: '这里是租户可用字段权限的上限；租户下的角色只能在该范围内再收窄。',
+    fields: [
+      planFormFields.value[4],
+      planFormFields.value[5],
+    ],
+  },
+  {
+    title: '计费与额度',
+    description: '套餐价格、排序和资源上限。留空的额度表示不限制。',
+    fields: [
+      planFormFields.value[6],
+      planFormFields.value[7],
+      planFormFields.value[8],
+      planFormFields.value[9],
+      planFormFields.value[10],
+      planFormFields.value[11],
+    ],
+  },
+  {
+    title: '高级配置',
+    description: '面向后续扩展的原始功能标记，普通维护只需要关注上面的结构化字段。',
+    fields: [
+      planFormFields.value[12],
+      planFormFields.value[13],
+    ],
+  },
+]);
+
+onMounted(async () => {
+  await Promise.all([loadPlans(), loadColumnPermissionTemplates()]);
+});
 
 async function loadPlans() {
   loading.value = true;
@@ -221,9 +300,18 @@ async function loadPlans() {
     plans.value = await listTenantPlans();
   } catch {
     plans.value = [];
-    ElMessage.error('租户套餐加载失败，请确认网关已转发 /api/tenant-plans');
+    // 真实错误原因统一由 HTTP 拦截器展示，这里只清空列表。
   } finally {
     loading.value = false;
+  }
+}
+
+async function loadColumnPermissionTemplates() {
+  try {
+    columnPermissionTemplates.value = await listIamColumnPermissionTemplates({ tenantId: 0, enabled: true });
+  } catch {
+    columnPermissionTemplates.value = [];
+    // 真实错误原因统一由 HTTP 拦截器展示。
   }
 }
 
@@ -237,8 +325,10 @@ function emptyPlanForm(): TenantPlanForm {
     maxUserCount: null,
     maxWarehouseCount: null,
     maxStorageGb: null,
-    featureFlagsJson: '{"modules":[],"iamInitTemplateCode":"basic"}',
+    featureFlagsJson: '{"modules":[],"iamInitTemplateCode":"basic","columnPermissionTemplateCodes":["tenant_readonly_masked"],"defaultColumnPermissionTemplateCode":"tenant_readonly_masked"}',
     iamInitTemplateCode: 'basic',
+    columnPermissionTemplateCodes: ['tenant_readonly_masked'],
+    defaultColumnPermissionTemplateCode: 'tenant_readonly_masked',
     sortNo: '0',
     remark: '',
   };
@@ -263,13 +353,16 @@ function openEditPlan(row: TenantPlan) {
     maxStorageGb: row.maxStorageGb === null ? null : String(row.maxStorageGb),
     featureFlagsJson: row.featureFlagsJson || '{}',
     iamInitTemplateCode: resolveIamInitTemplateCode(row) || 'basic',
+    columnPermissionTemplateCodes: resolveColumnPermissionTemplateCodes(row),
+    defaultColumnPermissionTemplateCode: resolveDefaultColumnPermissionTemplateCode(row),
     sortNo: String(row.sortNo || 0),
     remark: row.remark || '',
   });
   planDialogVisible.value = true;
 }
 
-async function submitPlan() {
+async function submitPlan(value: Record<string, unknown>) {
+  Object.assign(planForm, value);
   if (!planForm.code.trim() || !planForm.name.trim()) {
     ElMessage.warning('请填写套餐编码和套餐名称');
     return;
@@ -295,6 +388,7 @@ async function submitPlan() {
     planDialogVisible.value = false;
     ElMessage.success('租户套餐已保存');
     await loadPlans();
+    await refreshCurrentAuthorizationAfterPlanChange();
   } finally {
     submittingPlan.value = false;
   }
@@ -309,17 +403,35 @@ async function changePlanStatus(row: TenantPlan, status: TenantPlanStatus) {
   }
   ElMessage.success(status === 'ENABLED' ? '套餐已启用' : '套餐已停用');
   await loadPlans();
+  await refreshCurrentAuthorizationAfterPlanChange();
 }
 
 async function removePlan(row: TenantPlan) {
   await deleteTenantPlan(row.id, '套餐废弃', authStore.username);
   ElMessage.success('套餐已删除');
   await loadPlans();
+  await refreshCurrentAuthorizationAfterPlanChange();
+}
+
+async function refreshCurrentAuthorizationAfterPlanChange() {
+  if (Number(authStore.tenantId || 0) > 0) {
+    await authorizationStore.refreshCurrentAuthorizationContext();
+  }
 }
 
 function normalizePlanPayload(form: TenantPlanForm): TenantPlanPayload {
   const featureFlags = parseFeatureFlags(form.featureFlagsJson);
   featureFlags.iamInitTemplateCode = form.iamInitTemplateCode;
+  const selectedColumnTemplateCodes = normalizeStringList(form.columnPermissionTemplateCodes);
+  featureFlags.columnPermissionTemplateCodes = selectedColumnTemplateCodes;
+  const defaultColumnTemplateCode = selectedColumnTemplateCodes.includes(form.defaultColumnPermissionTemplateCode)
+    ? form.defaultColumnPermissionTemplateCode
+    : selectedColumnTemplateCodes[0] || '';
+  if (defaultColumnTemplateCode) {
+    featureFlags.defaultColumnPermissionTemplateCode = defaultColumnTemplateCode;
+  } else {
+    delete featureFlags.defaultColumnPermissionTemplateCode;
+  }
   return {
     code: form.code.trim().toUpperCase(),
     name: form.name.trim(),
@@ -375,6 +487,43 @@ function resolveIamInitTemplateCode(plan: TenantPlan) {
   } catch {
     return '';
   }
+}
+
+function resolveColumnPermissionTemplateCodes(plan: TenantPlan) {
+  try {
+    const featureFlags = parseFeatureFlags(plan.featureFlagsJson || '{}');
+    return normalizeStringList(featureFlags.columnPermissionTemplateCodes);
+  } catch {
+    return [];
+  }
+}
+
+function resolveDefaultColumnPermissionTemplateCode(plan: TenantPlan) {
+  try {
+    const featureFlags = parseFeatureFlags(plan.featureFlagsJson || '{}');
+    return typeof featureFlags.defaultColumnPermissionTemplateCode === 'string' ? featureFlags.defaultColumnPermissionTemplateCode : '';
+  } catch {
+    return '';
+  }
+}
+
+function normalizeStringList(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return Array.from(new Set(value
+    .filter((item): item is string => typeof item === 'string')
+    .map((item) => item.trim())
+    .filter(Boolean)));
+}
+
+function formatColumnPermissionTemplates(plan: TenantPlan) {
+  const codes = resolveColumnPermissionTemplateCodes(plan);
+  if (!codes.length) {
+    return '-';
+  }
+  const nameByCode = new Map(columnPermissionTemplates.value.map((template) => [template.code, template.name]));
+  return codes.map((code) => nameByCode.get(code) || code).join('、');
 }
 
 function billingCycleLabel(value: BillingCycle) {

@@ -1,6 +1,6 @@
 export interface LoginProfile {
   key: string;
-  tenantId: string;
+  tenantCode: string;
   username: string;
   password?: string;
   updatedAt: number;
@@ -13,7 +13,7 @@ const LEGACY_USERNAME_STORAGE_KEY = 'xuan-login-username';
 const MAX_LOGIN_PROFILES = 8;
 
 interface SaveLoginProfileInput {
-  tenantId: string;
+  tenantCode: string;
   username: string;
   password?: string;
 }
@@ -42,7 +42,7 @@ export function loadLoginProfiles(): LoginProfile[] {
 export function saveLoginProfile(input: SaveLoginProfileInput): LoginProfile {
   const storage = getStorage();
   const profile = normalizeProfile({
-    tenantId: input.tenantId,
+    tenantCode: input.tenantCode,
     username: input.username,
     password: input.password,
     updatedAt: Date.now(),
@@ -118,14 +118,14 @@ function readLegacyProfile(storage: Storage): LoginProfile | null {
     return null;
   }
 
-  const tenantId = normalizeText(storage.getItem(LEGACY_TENANT_ID_STORAGE_KEY));
+  const tenantCode = normalizeText(storage.getItem(LEGACY_TENANT_ID_STORAGE_KEY));
   const username = normalizeText(storage.getItem(LEGACY_USERNAME_STORAGE_KEY));
-  if (!tenantId || !username) {
+  if (!tenantCode || !username) {
     return null;
   }
 
   return normalizeProfile({
-    tenantId,
+    tenantCode,
     username,
     updatedAt: Date.now(),
   });
@@ -137,21 +137,21 @@ function clearLegacyProfile(storage: Storage) {
   storage.removeItem(LEGACY_USERNAME_STORAGE_KEY);
 }
 
-function normalizeProfile(input: Partial<LoginProfile> & Pick<LoginProfile, 'tenantId' | 'username'>): LoginProfile {
-  const tenantId = normalizeText(input.tenantId);
+function normalizeProfile(input: Partial<LoginProfile> & { tenantCode?: string; tenantId?: string; username: string }): LoginProfile {
+  const tenantCode = normalizeText(input.tenantCode ?? input.tenantId);
   const username = normalizeText(input.username);
 
   return {
-    key: buildLoginProfileKey(tenantId, username),
-    tenantId,
+    key: buildLoginProfileKey(tenantCode, username),
+    tenantCode,
     username,
     password: normalizeText(input.password) || undefined,
     updatedAt: typeof input.updatedAt === 'number' ? input.updatedAt : 0,
   };
 }
 
-function buildLoginProfileKey(tenantId: string, username: string): string {
-  return `${tenantId}::${username}`;
+function buildLoginProfileKey(tenantCode: string, username: string): string {
+  return `${tenantCode}::${username}`;
 }
 
 function normalizeText(value: unknown): string {

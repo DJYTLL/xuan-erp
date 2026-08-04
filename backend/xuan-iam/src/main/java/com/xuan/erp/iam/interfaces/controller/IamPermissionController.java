@@ -35,14 +35,14 @@ public class IamPermissionController {
     }
 
     @Operation(summary = "查询权限清单", description = "查询 IAM 中维护的全局权限定义")
-    @PreAuthorize("hasAuthority('iam:view')")
+    @PreAuthorize("hasAuthority('iam-permission:view')")
     @GetMapping
     public ApiResponse<List<IamPermission>> listPermissions() {
         return ApiResponse.success(permissionApplicationService.listPermissions());
     }
 
     @Operation(summary = "新增权限", description = "新增 IAM 全局权限定义")
-    @PreAuthorize("hasAuthority('iam:create')")
+    @PreAuthorize("hasAuthority('iam-permission:create')")
     @PostMapping
     public ApiResponse<IamPermission> createPermission(@RequestBody CreateIamPermissionRequest request) {
         return ApiResponse.success(permissionApplicationService.createPermission(new CreateIamPermissionCommand(
@@ -54,7 +54,7 @@ public class IamPermissionController {
     }
 
     @Operation(summary = "修改权限", description = "修改 IAM 全局权限定义")
-    @PreAuthorize("hasAuthority('iam:update')")
+    @PreAuthorize("hasAuthority('iam-permission:update')")
     @PutMapping("/{permissionId}")
     public ApiResponse<IamPermission> updatePermission(
             @Parameter(description = "权限 ID")
@@ -69,7 +69,7 @@ public class IamPermissionController {
     }
 
     @Operation(summary = "启用权限", description = "启用 IAM 权限定义")
-    @PreAuthorize("hasAuthority('iam:update')")
+    @PreAuthorize("hasAuthority('iam-permission:update')")
     @PostMapping("/{permissionId}/enable")
     public ApiResponse<IamPermission> enablePermission(
             @Parameter(description = "权限 ID")
@@ -78,7 +78,7 @@ public class IamPermissionController {
     }
 
     @Operation(summary = "停用权限", description = "停用 IAM 权限定义")
-    @PreAuthorize("hasAuthority('iam:update')")
+    @PreAuthorize("hasAuthority('iam-permission:update')")
     @PostMapping("/{permissionId}/disable")
     public ApiResponse<IamPermission> disablePermission(
             @Parameter(description = "权限 ID")

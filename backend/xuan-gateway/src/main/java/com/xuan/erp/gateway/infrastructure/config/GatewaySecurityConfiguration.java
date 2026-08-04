@@ -1,6 +1,7 @@
 package com.xuan.erp.gateway.infrastructure.config;
 import com.xuan.erp.common.audit.SafeAuditWritePublisher;
 import com.xuan.erp.common.security.CurrentUser;
+import com.xuan.erp.common.security.autoconfigure.JwkSetRefreshScheduler;
 import com.xuan.erp.common.security.audit.SecurityAuditEventFactory;
 import com.xuan.erp.common.security.audit.SecurityAuditFailure;
 import com.xuan.erp.common.security.jwt.jwk.CachingJwkKeyProvider;
@@ -9,7 +10,9 @@ import com.xuan.erp.gateway.infrastructure.security.GatewayAuditWriteGateway;
 import com.xuan.erp.gateway.infrastructure.security.GatewaySecurityAuditReporter;
 import com.xuan.erp.gateway.infrastructure.security.GatewayBearerAuthenticationWebFilter;
 import com.xuan.erp.gateway.infrastructure.security.GatewayJwkSetUriResolver;
+import com.xuan.erp.gateway.infrastructure.security.GatewayRequestHeaderWebFilter;
 import com.xuan.erp.gateway.infrastructure.security.GatewaySecurityErrorResponseWriter;
+import com.xuan.erp.gateway.infrastructure.security.GatewaySentinelBlockRequestHandler;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -27,6 +30,11 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Executor;
 
 /**
@@ -175,14 +183,55 @@ public class GatewaySecurityConfiguration {
     }
 
     /**
+     * 创建 Gateway 请求头治理过滤器，负责 TraceId 生成/透传与外部身份 Header 清理。
+     *
+     * @return Gateway 请求头治理过滤器
+     */
+    @Bean
+    GatewayRequestHeaderWebFilter gatewayRequestHeaderWebFilter() {
+        return new GatewayRequestHeaderWebFilter();
+    }
+
+    /**
+     * 创建 Sentinel Gateway 限流统一响应处理器。
+     *
+     * @return Sentinel Gateway block 响应处理器
+     */
+    @Bean
+    GatewaySentinelBlockRequestHandler gatewaySentinelBlockRequestHandler() {
+        return new GatewaySentinelBlockRequestHandler();
+    }
+
+    /**
      * 创建公共安全模块提供的本地缓存 JWKS Provider。
      *
      * @param fetcher JWKS 抓取器
      * @return 带缓存的 JWKS Provider
      */
     @Bean
-    CachingJwkKeyProvider cachingJwkKeyProvider(RemoteJwkSetFetcher fetcher) {
-        return new CachingJwkKeyProvider(fetcher);
+    CachingJwkKeyProvider cachingJwkKeyProvider(RemoteJwkSetFetcher fetcher, GatewaySecurityProperties properties) {
+        GatewaySecurityProperties.JwkCache cache = properties.getJwkCache();
+        return new CachingJwkKeyProvider(
+                fetcher,
+                requiredPositiveCacheTtl(cache),
+                requiredStaleCacheTtl(cache),
+                requiredNegativeCacheTtl(cache),
+                requiredRefreshInterval(cache),
+                Clock.systemUTC());
+    }
+
+    /**
+     * 创建网关 JWKS 定期刷新调度器。
+     *
+     * @param jwkProvider 带缓存的 JWKS Provider
+     * @param properties 网关安全配置
+     * @return JWKS 定期刷新调度器
+     */
+    @Bean
+    JwkSetRefreshScheduler gatewayJwkSetRefreshScheduler(
+            CachingJwkKeyProvider jwkProvider,
+            GatewaySecurityProperties properties) {
+        return new JwkSetRefreshScheduler(jwkProvider, requiredRefreshInterval(properties.getJwkCache()));
     }
 
     /**
@@ -242,6 +291,7 @@ public class GatewaySecurityConfiguration {
     SecurityWebFilterChain gatewaySecurityWebFilterChain(
             ServerHttpSecurity http,
             GatewayBearerAuthenticationWebFilter bearerAuthenticationWebFilter,
+            GatewayRequestHeaderWebFilter requestHeaderWebFilter,
             CorsConfigurationSource gatewayCorsConfigurationSource,
             GatewaySecurityAuditReporter securityAuditReporter,
             GatewaySecurityErrorResponseWriter securityErrorResponseWriter,
@@ -250,6 +300,7 @@ public class GatewaySecurityConfiguration {
             return http
                     .cors(cors -> cors.configurationSource(gatewayCorsConfigurationSource))
                     .csrf(ServerHttpSecurity.CsrfSpec::disable)
+                    .addFilterAt(requestHeaderWebFilter, SecurityWebFiltersOrder.FIRST)
                     .build();
         }
         return http
@@ -273,13 +324,18 @@ public class GatewaySecurityConfiguration {
                     if (!properties.getPublicPaths().isEmpty()) {
                         spec.pathMatchers(properties.getPublicPaths().toArray(String[]::new)).permitAll();
                     }
-                    for (GatewaySecurityProperties.PermissionRule rule : properties.getPermissionRules()) {
-                        if (hasText(rule.getAuthority()) && !rule.getPaths().isEmpty()) {
-                            spec.pathMatchers(rule.getPaths().toArray(String[]::new)).hasAnyAuthority(rule.getAuthority(), "*");
+                    for (GatewaySecurityProperties.PermissionRule rule : orderedPermissionRules(properties)) {
+                        List<String> authorities = rule.getAuthorities();
+                        if (!authorities.isEmpty() && !rule.getPaths().isEmpty()) {
+                            Set<String> allowedAuthorities = new LinkedHashSet<>(authorities);
+                            allowedAuthorities.add("*");
+                            spec.pathMatchers(rule.getPaths().toArray(String[]::new))
+                                    .hasAnyAuthority(allowedAuthorities.toArray(String[]::new));
                         }
                     }
                     spec.anyExchange().authenticated();
                 })
+                .addFilterAt(requestHeaderWebFilter, SecurityWebFiltersOrder.FIRST)
                 .addFilterAt(bearerAuthenticationWebFilter, SecurityWebFiltersOrder.AUTHENTICATION)
                 .build();
     }
@@ -302,10 +358,73 @@ public class GatewaySecurityConfiguration {
                         .publish(exchange, SecurityAuditFailure.PERMISSION_DENIED, null, null, message)
                         .then(securityErrorResponseWriter.write(
                                 exchange,
-                                SecurityAuditFailure.PERMISSION_DENIED)));
+                SecurityAuditFailure.PERMISSION_DENIED)));
     }
 
-    private boolean hasText(String value) {
-        return value != null && !value.isBlank();
+    private List<GatewaySecurityProperties.PermissionRule> orderedPermissionRules(GatewaySecurityProperties properties) {
+        return properties.getPermissionRules().stream()
+                .sorted((left, right) -> Integer.compare(ruleSpecificity(right), ruleSpecificity(left)))
+                .toList();
+    }
+
+    private int ruleSpecificity(GatewaySecurityProperties.PermissionRule rule) {
+        return rule.getPaths().stream()
+                .mapToInt(this::pathSpecificity)
+                .max()
+                .orElse(0);
+    }
+
+    private int pathSpecificity(String path) {
+        if (path == null || path.isBlank()) {
+            return 0;
+        }
+        int score = path.length();
+        if (!path.contains("*")) {
+            score += 10_000;
+        }
+        score -= wildcardCount(path) * 1_000;
+        return score;
+    }
+
+    private int wildcardCount(String path) {
+        int count = 0;
+        for (int index = 0; index < path.length(); index++) {
+            if (path.charAt(index) == '*') {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private static Duration requiredPositiveCacheTtl(GatewaySecurityProperties.JwkCache cache) {
+        Duration value = cache.getPositiveCacheTtl();
+        if (value == null || value.isZero() || value.isNegative()) {
+            throw new IllegalStateException("xuan.gateway.security.jwk-cache.positive-cache-ttl 必须大于 0");
+        }
+        return value;
+    }
+
+    private static Duration requiredStaleCacheTtl(GatewaySecurityProperties.JwkCache cache) {
+        Duration value = cache.getStaleCacheTtl();
+        if (value == null || value.isNegative()) {
+            throw new IllegalStateException("xuan.gateway.security.jwk-cache.stale-cache-ttl 不能小于 0");
+        }
+        return value;
+    }
+
+    private static Duration requiredNegativeCacheTtl(GatewaySecurityProperties.JwkCache cache) {
+        Duration value = cache.getNegativeCacheTtl();
+        if (value == null || value.isZero() || value.isNegative()) {
+            throw new IllegalStateException("xuan.gateway.security.jwk-cache.negative-cache-ttl 必须大于 0");
+        }
+        return value;
+    }
+
+    private static Duration requiredRefreshInterval(GatewaySecurityProperties.JwkCache cache) {
+        Duration value = cache.getRefreshInterval();
+        if (value == null || value.isZero() || value.isNegative()) {
+            throw new IllegalStateException("xuan.gateway.security.jwk-cache.refresh-interval 必须大于 0");
+        }
+        return value;
     }
 }

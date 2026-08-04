@@ -6,10 +6,11 @@ package com.xuan.erp.iam.application.command;
 public record CreateIamUserCommand(
         Long tenantId,
         String username,
-        String passwordHash,
+        String initialPassword,
         String displayName,
         String email,
         String phone,
-        String remark
+        String remark,
+        String operator
 ) {
 }

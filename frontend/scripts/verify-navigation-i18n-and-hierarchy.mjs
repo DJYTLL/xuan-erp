@@ -16,8 +16,8 @@ const sampleMenus = [
       menu('procurement', '采购', 'menu.procurement', '/procurement', 10, 'procurement:read'),
     ]),
   ]),
-  menu('system', '系统设置', 'menu.system', '/system', 30, 'iam:view', [
-    menu('iam-menu-management', '菜单管理', 'menu.iamMenus', '/system/iam/menus', 10, 'iam:view'),
+  menu('system', '系统设置', 'menu.system', '/system', 30, null, [
+    menu('iam-menu-management', '菜单管理', 'menu.iamMenus', '/system/iam/menus', 10, 'iam-menu:view'),
   ]),
 ];
 

@@ -17,5 +17,6 @@ public interface IamTenantBootstrapGateway {
             String adminDisplayName,
             String adminEmail,
             String adminPhone,
+            String iamInitTemplateCode,
             String requestedBy);
 }

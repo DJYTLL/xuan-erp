@@ -7,11 +7,29 @@ const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const checks = [
   {
     file: 'src/framework/components/DynamicFormDialog.vue',
-    includes: ['defineProps<', 'defineEmits<', 'fields', 'submit', 'DynamicFormSection', 'workspace-dialog-body'],
+    includes: [
+      'defineProps<',
+      'defineEmits<',
+      'fields',
+      'submit',
+      'DynamicFormSection',
+      'workspace-dialog-body',
+      'slot name="body"',
+      'renderForm',
+      "size?: 'sm' | 'md' | 'lg'",
+      'sizeWidthMap',
+      'dialogWidth',
+      'slot name="footer"',
+      "component === 'radio-group'",
+      "component === 'tree-select'",
+      "component === 'datetime'",
+      'el-radio-group',
+      'el-tree-select',
+    ],
   },
   {
     file: 'src/styles/shell.css',
-    includes: ['.dynamic-form-dialog--workspace', 'margin: 24px auto', 'max-height: calc(100vh - 48px)'],
+    includes: ['.dynamic-form-dialog--workspace', 'margin: 24px auto', 'max-height: calc(100vh - 48px)', 'background: var(--xuan-panel);'],
   },
   {
     file: 'src/framework/components/DetailDrawer.vue',
@@ -27,7 +45,73 @@ const checks = [
   },
   {
     file: 'src/views/ComponentCenterView.vue',
-    includes: ['DynamicFormDialog', 'DetailDrawer', 'ApprovalConfirmDialog', 'BatchConfirmDialog'],
+    includes: ['DynamicFormDialog', 'MenuPermissionAssignment', 'DetailDrawer', 'ApprovalConfirmDialog', 'BatchConfirmDialog', 'overview-dialogs', 'dialog-preview-strip', 'roleGrantPreviewVisible', 'openRoleGrantPreview'],
+  },
+  {
+    file: 'src/views/IamMenuManagementView.vue',
+    includes: ['DynamicFormDialog', 'menuType', 'parentMenuTreeOptions', 'async function submitMenu(value', 'Object.assign(form, value)', 'size="lg"'],
+  },
+  {
+    file: 'src/views/IamPermissionManagementView.vue',
+    includes: ['DynamicFormDialog', 'menuSelectOptions', 'async function submitPermission(value:', 'Object.assign(form, value)', 'size="md"'],
+  },
+  {
+    file: 'src/views/IamTenantInitTemplateManagementView.vue',
+    includes: [
+      'DynamicFormDialog',
+      'MenuPermissionAssignment',
+      'grantVisible',
+      'async function submitTemplate(value:',
+      'Object.assign(form, value)',
+      'variant="workspace"',
+      'size="md"',
+    ],
+  },
+  {
+    file: 'src/views/IamRoleManagementView.vue',
+    includes: [
+      'DynamicFormDialog',
+      'MenuPermissionAssignment',
+      'size="lg"',
+      ':render-form="false"',
+      'confirm-text="保存授权"',
+    ],
+  },
+  {
+    file: 'src/views/IamUserManagementView.vue',
+    includes: [
+      'DynamicFormDialog',
+      'grantVisible',
+      'passwordDialogVisible',
+      'size="lg"',
+      'size="sm"',
+      'variant="workspace"',
+      ':render-form="false"',
+    ],
+  },
+  {
+    file: 'src/views/TenantPlanManagementView.vue',
+    includes: ['DynamicFormDialog', 'planDialogVisible', 'async function submitPlan(value:', 'Object.assign(planForm, value)', 'size="lg"'],
+  },
+  {
+    file: 'src/views/TenantManagementView.vue',
+    includes: [
+      'DynamicFormDialog',
+      'createDialogVisible',
+      'editDialogVisible',
+      'planAdjustmentDialogVisible',
+      'taskRetryDialogVisible',
+      'outboxRetryDialogVisible',
+      'async function submitCreateTenant(value:',
+      'async function submitEditTenant(value:',
+      'async function submitPlanAdjustment(value:',
+      'async function submitTaskRetry(value:',
+      'async function submitOutboxRetry(value:',
+      'async function submitTenantActionReason(value:',
+      'size="lg"',
+      'size="md"',
+      'size="sm"',
+    ],
   },
   {
     file: 'src/views/ProductManagementView.vue',
@@ -51,6 +135,11 @@ for (const check of checks) {
   for (const fragment of check.includes) {
     if (!content.includes(fragment)) {
       failures.push(`${check.file} missing "${fragment}"`);
+    }
+  }
+  if (check.file.startsWith('src/views/')) {
+    if (content.includes('<el-dialog v-model=')) {
+      failures.push(`${check.file} still contains raw el-dialog usage`);
     }
   }
 }

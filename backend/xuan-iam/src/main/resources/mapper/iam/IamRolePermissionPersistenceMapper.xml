@@ -13,6 +13,17 @@
           AND role_permission.deleted_at IS NULL
           AND permission.deleted_at IS NULL
           AND permission.is_enabled = true
+          AND (
+              #{tenantId} &lt;= 0
+              OR EXISTS (
+                  SELECT 1
+                  FROM iam_tenant_permission_entitlement entitlement
+                  WHERE entitlement.tenant_id = role_permission.tenant_id
+                    AND entitlement.permission_id = role_permission.permission_id
+                    AND entitlement.deleted_at IS NULL
+                    AND entitlement.is_enabled = true
+              )
+          )
         ORDER BY permission.code
     </select>
 
@@ -42,6 +53,49 @@
               AND existing.deleted_at IS NULL
         )
     </insert>
+
+    <insert id="insertTenantAdminUserRole">
+        INSERT INTO iam_user_role (
+            tenant_id, user_id, role_id, created_by, updated_by
+        )
+        SELECT user_tenant.tenant_id, user_tenant.user_id, #{roleId}, #{operator}, #{operator}
+        FROM iam_user_tenant user_tenant
+        JOIN iam_user iam_user ON iam_user.id = user_tenant.user_id
+                              AND iam_user.tenant_id = user_tenant.tenant_id
+                              AND iam_user.deleted_at IS NULL
+                              AND iam_user.is_enabled = true
+        WHERE user_tenant.tenant_id = #{tenantId}
+          AND user_tenant.is_tenant_admin = true
+          AND user_tenant.membership_status = 'ACTIVE'
+          AND user_tenant.deleted_at IS NULL
+          AND NOT EXISTS (
+              SELECT 1
+              FROM iam_user_role existing
+              WHERE existing.tenant_id = user_tenant.tenant_id
+                AND existing.user_id = user_tenant.user_id
+                AND existing.role_id = #{roleId}
+                AND existing.deleted_at IS NULL
+          )
+    </insert>
+
+    <update id="removeRolePermissionsOutsideTenantEntitlements">
+        UPDATE iam_role_permission role_permission
+        SET deleted_by = #{operator},
+            delete_reason = 'tenant permission entitlement reduced',
+            deleted_at = now(),
+            updated_by = #{operator},
+            updated_at = now()
+        WHERE role_permission.tenant_id = #{tenantId}
+          AND role_permission.deleted_at IS NULL
+          AND NOT EXISTS (
+              SELECT 1
+              FROM iam_tenant_permission_entitlement entitlement
+              WHERE entitlement.tenant_id = role_permission.tenant_id
+                AND entitlement.permission_id = role_permission.permission_id
+                AND entitlement.deleted_at IS NULL
+                AND entitlement.is_enabled = true
+          )
+    </update>
 
     <select id="findUserIdsByRoleId" resultType="java.lang.Long">
         SELECT user_role.user_id
@@ -82,6 +136,17 @@
           AND role_permission.deleted_at IS NULL
           AND permission.deleted_at IS NULL
           AND permission.is_enabled = true
+          AND (
+              #{tenantId} &lt;= 0
+              OR EXISTS (
+                  SELECT 1
+                  FROM iam_tenant_permission_entitlement entitlement
+                  WHERE entitlement.tenant_id = role_permission.tenant_id
+                    AND entitlement.permission_id = role_permission.permission_id
+                    AND entitlement.deleted_at IS NULL
+                    AND entitlement.is_enabled = true
+              )
+          )
         ORDER BY permission.code
     </select>
 

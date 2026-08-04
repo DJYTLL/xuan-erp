@@ -2,9 +2,11 @@ package com.xuan.erp.iam.infrastructure.persistence.assembler;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xuan.erp.iam.domain.model.IamAuthorizationSnapshot;
 import com.xuan.erp.iam.infrastructure.persistence.entity.IamAuthorizationSnapshotRecord;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -16,7 +18,6 @@ public final class IamAuthorizationSnapshotPersistenceAssembler {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final TypeReference<List<Long>> LONG_LIST = new TypeReference<>() { };
     private static final TypeReference<List<String>> STRING_LIST = new TypeReference<>() { };
-    private static final TypeReference<Map<String, List<String>>> COLUMN_SETTINGS = new TypeReference<>() { };
 
     private IamAuthorizationSnapshotPersistenceAssembler() {
     }
@@ -49,7 +50,7 @@ public final class IamAuthorizationSnapshotPersistenceAssembler {
                 read(record.roleIdsJson(), LONG_LIST, List.of()),
                 read(record.permissionCodesJson(), STRING_LIST, List.of()),
                 read(record.menuCodesJson(), STRING_LIST, List.of()),
-                read(record.columnSettingsJson(), COLUMN_SETTINGS, Map.of()),
+                readColumnSettings(record.columnSettingsJson()),
                 record.snapshotHash(),
                 record.expiresAt(),
                 record.builtAt(),
@@ -76,5 +77,63 @@ public final class IamAuthorizationSnapshotPersistenceAssembler {
         } catch (JsonProcessingException ex) {
             throw new IllegalStateException("IAM 授权快照反序列化失败", ex);
         }
+    }
+
+    private static Map<String, Map<String, String>> readColumnSettings(String value) {
+        if (value == null || value.isBlank()) {
+            return Map.of();
+        }
+        try {
+            JsonNode root = OBJECT_MAPPER.readTree(value);
+            if (root == null || !root.isObject()) {
+                return Map.of();
+            }
+            Map<String, Map<String, String>> result = new LinkedHashMap<>();
+            root.fields().forEachRemaining(resource -> {
+                if (resource.getKey() == null || resource.getKey().isBlank()) {
+                    return;
+                }
+                Map<String, String> columns = readResourceColumns(resource.getValue());
+                if (!columns.isEmpty()) {
+                    result.put(resource.getKey().trim(), Map.copyOf(columns));
+                }
+            });
+            return Map.copyOf(result);
+        } catch (JsonProcessingException ex) {
+            throw new IllegalStateException("IAM 授权快照列权限反序列化失败", ex);
+        }
+    }
+
+    private static Map<String, String> readResourceColumns(JsonNode node) {
+        Map<String, String> columns = new LinkedHashMap<>();
+        if (node == null || node.isNull()) {
+            return columns;
+        }
+        if (node.isArray()) {
+            node.forEach(column -> {
+                if (column.isTextual() && !column.asText().isBlank()) {
+                    columns.put(column.asText().trim(), "VISIBLE");
+                }
+            });
+            return columns;
+        }
+        if (node.isObject()) {
+            node.fields().forEachRemaining(column -> {
+                if (column.getKey() != null && !column.getKey().isBlank()) {
+                    columns.put(column.getKey().trim(), normalizeAccess(column.getValue().asText()));
+                }
+            });
+        }
+        return columns;
+    }
+
+    private static String normalizeAccess(String value) {
+        if (value == null || value.isBlank()) {
+            return "HIDDEN";
+        }
+        return switch (value.trim().toUpperCase()) {
+            case "VISIBLE", "MASKED", "HIDDEN" -> value.trim().toUpperCase();
+            default -> "HIDDEN";
+        };
     }
 }

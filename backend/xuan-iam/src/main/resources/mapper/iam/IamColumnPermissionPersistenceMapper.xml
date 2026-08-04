@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xuan.erp.iam.infrastructure.persistence.mapper.IamColumnPermissionPersistenceMapper">
+
+    <select id="findColumnPermissionRulesByRoleIds" resultType="com.xuan.erp.iam.infrastructure.persistence.entity.IamColumnPermissionRuleRecord">
+        WITH tenant_column_upper_bound AS (
+            SELECT resource_column.id AS resource_column_id,
+                   max(CASE template_item.access_mode
+                           WHEN 'VISIBLE' THEN 3
+                           WHEN 'MASKED' THEN 2
+                           ELSE 1
+                       END) AS access_rank
+            FROM iam_tenant_column_permission_template_assignment assignment
+            JOIN iam_column_permission_template template
+              ON template.id = assignment.template_id
+             AND template.deleted_at IS NULL
+             AND template.is_enabled = true
+            JOIN iam_column_permission_template_item template_item
+              ON template_item.template_id = template.id
+             AND template_item.deleted_at IS NULL
+            JOIN iam_resource_column resource_column
+              ON resource_column.id = template_item.resource_column_id
+             AND resource_column.deleted_at IS NULL
+             AND resource_column.is_enabled = true
+            WHERE assignment.tenant_id = #{tenantId}
+              AND assignment.deleted_at IS NULL
+            GROUP BY resource_column.id
+        ),
+        role_column_rule AS (
+            SELECT resource_column.id AS resource_column_id,
+                   max(CASE rule.access_mode
+                           WHEN 'VISIBLE' THEN 3
+                           WHEN 'MASKED' THEN 2
+                           ELSE 1
+                       END) AS access_rank
+            FROM iam_role_column_permission_rule rule
+            JOIN iam_resource_column resource_column
+              ON resource_column.id = rule.resource_column_id
+             AND resource_column.deleted_at IS NULL
+             AND resource_column.is_enabled = true
+            WHERE rule.tenant_id = #{tenantId}
+              AND rule.deleted_at IS NULL
+              <choose>
+                  <when test="roleIds != null and roleIds.size() &gt; 0">
+                      AND rule.role_id IN
+                      <foreach collection="roleIds" item="roleId" open="(" separator="," close=")">
+                          #{roleId}
+                      </foreach>
+                  </when>
+                  <otherwise>
+                      AND 1 = 0
+                  </otherwise>
+              </choose>
+            GROUP BY resource_column.id
+        )
+        SELECT resource_column.resource_key AS resourceKey,
+               resource_column.column_key AS columnKey,
+               CASE LEAST(
+                   coalesce(tenant_column_upper_bound.access_rank, 1),
+                   coalesce(role_column_rule.access_rank, tenant_column_upper_bound.access_rank, 1)
+               )
+                   WHEN 3 THEN 'VISIBLE'
+                   WHEN 2 THEN 'MASKED'
+                   ELSE 'HIDDEN'
+               END AS accessMode
+        FROM iam_resource_column resource_column
+        LEFT JOIN tenant_column_upper_bound
+          ON tenant_column_upper_bound.resource_column_id = resource_column.id
+        LEFT JOIN role_column_rule
+          ON role_column_rule.resource_column_id = resource_column.id
+        WHERE resource_column.deleted_at IS NULL
+          AND resource_column.is_enabled = true
+        ORDER BY resource_column.resource_key, resource_column.sort_no, resource_column.column_key
+    </select>
+</mapper>

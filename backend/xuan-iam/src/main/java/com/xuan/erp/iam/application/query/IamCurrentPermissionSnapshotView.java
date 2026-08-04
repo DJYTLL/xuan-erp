@@ -10,7 +10,7 @@ public record IamCurrentPermissionSnapshotView(
         List<IamCurrentMenuNodeView> menus,
         List<String> routePermissions,
         List<String> buttonPermissions,
-        Map<String, List<String>> columnPermissions,
+        Map<String, Map<String, String>> columnPermissions,
         Map<String, List<String>> fieldPermissions,
         List<String> dataScopes,
         Map<String, List<String>> stateActionRules,

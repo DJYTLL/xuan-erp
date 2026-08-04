@@ -1,7 +1,9 @@
 import { http } from './http';
 import type { ApiResponse } from '@/types/auth';
 import type {
+  ChangeTenantStatusPayload,
   CreateTenantPayload,
+  DeleteTenantPayload,
   PageResult,
   RetryTenantOutboxEventPayload,
   RetryTenantProvisionTaskPayload,
@@ -27,6 +29,16 @@ export async function listTenants(pageNum = 1, pageSize = 20): Promise<PageResul
   return unwrap<PageResult<Tenant>>(response.data);
 }
 
+export async function listColumnPermissionTenants(pageNum = 1, pageSize = 20): Promise<PageResult<Tenant>> {
+  const response = await http.get<ApiResponse<PageResult<Tenant>> | PageResult<Tenant>>(
+    '/api/tenants/column-permission-options',
+    {
+      params: { pageNum, pageSize },
+    },
+  );
+  return unwrap<PageResult<Tenant>>(response.data);
+}
+
 export async function createTenant(payload: CreateTenantPayload): Promise<Tenant> {
   const response = await http.post<ApiResponse<Tenant> | Tenant>('/api/tenants', payload);
   return unwrap<Tenant>(response.data);
@@ -34,6 +46,27 @@ export async function createTenant(payload: CreateTenantPayload): Promise<Tenant
 
 export async function updateTenant(tenantId: number, payload: UpdateTenantPayload): Promise<Tenant> {
   const response = await http.put<ApiResponse<Tenant> | Tenant>(`/api/tenants/${tenantId}`, payload);
+  return unwrap<Tenant>(response.data);
+}
+
+export async function enableTenant(tenantId: number, payload: ChangeTenantStatusPayload): Promise<Tenant> {
+  const response = await http.post<ApiResponse<Tenant> | Tenant>(`/api/tenants/${tenantId}/enable`, payload);
+  return unwrap<Tenant>(response.data);
+}
+
+export async function disableTenant(tenantId: number, payload: ChangeTenantStatusPayload): Promise<Tenant> {
+  const response = await http.post<ApiResponse<Tenant> | Tenant>(`/api/tenants/${tenantId}/disable`, payload);
+  return unwrap<Tenant>(response.data);
+}
+
+export async function deleteTenant(tenantId: number, payload: DeleteTenantPayload): Promise<void> {
+  await http.delete<ApiResponse<null> | null>(`/api/tenants/${tenantId}`, {
+    data: payload,
+  });
+}
+
+export async function repairTenantPermissionSync(tenantId: number): Promise<Tenant> {
+  const response = await http.post<ApiResponse<Tenant> | Tenant>(`/api/tenants/${tenantId}/permission-sync/repair`);
   return unwrap<Tenant>(response.data);
 }
 

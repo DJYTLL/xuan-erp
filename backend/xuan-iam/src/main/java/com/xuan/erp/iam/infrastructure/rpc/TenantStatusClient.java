@@ -13,4 +13,7 @@ public interface TenantStatusClient {
 
     @GetMapping("/internal/tenants/{tenantId}/status")
     ApiResponse<TenantStatusClientResponse> getTenantStatus(@PathVariable("tenantId") Long tenantId);
+
+    @GetMapping("/internal/tenants/by-code/{tenantCode}/status")
+    ApiResponse<TenantStatusClientResponse> getTenantStatusByCode(@PathVariable("tenantCode") String tenantCode);
 }

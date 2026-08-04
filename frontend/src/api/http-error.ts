@@ -1,5 +1,6 @@
 import axios, { type AxiosError } from 'axios';
 import { ElMessage } from 'element-plus/es/components/message/index';
+import { getGatewayApiBaseUrl } from './gateway-base';
 import { appFrameworkConfig } from '@/app/frameworkConfig';
 import { clearStoredAuthSession, getStoredAuthToken, getStoredLocale } from '@/framework/auth/tokenStorage';
 
@@ -39,6 +40,30 @@ const GENERIC_HTTP_MESSAGES = new Set([
   'internal server error',
   'service unavailable',
 ]);
+const ROLE_COLUMN_PERMISSION_ROUTE = '/system/iam/role-column-permissions';
+const ROLE_COLUMN_PERMISSION_DEPENDENCIES: Array<{
+  permission: string;
+  message: string;
+  matches: (path: string) => boolean;
+}> = [
+  {
+    permission: 'iam-role:view',
+    message: '缺少角色查询权限',
+    matches: (path) => path === '/api/iam/roles',
+  },
+  {
+    permission: 'iam-column-permission:view',
+    message: '缺少列权限资源查看权限',
+    matches: (path) => path === '/api/iam/column-permissions/resources'
+      || path.startsWith('/api/iam/column-permissions/tenants/')
+      || /^\/api\/iam\/column-permissions\/templates\/\d+\/items$/.test(path),
+  },
+  {
+    permission: 'iam-role-column-permission:view',
+    message: '缺少角色列权限查看权限',
+    matches: (path) => path.startsWith('/api/iam/column-permissions/roles/'),
+  },
+];
 
 const AUTH_PROBE_PATHS = appFrameworkConfig.auth.authProbePaths;
 
@@ -66,8 +91,11 @@ export async function handleHttpError(error: unknown) {
   }
 
   if (status === 403) {
-    notifyHttpError(message);
-    handlerOptions.onForbidden?.();
+    const dependencyMessage = resolveRoleColumnPermissionForbiddenMessage(error);
+    notifyHttpError(dependencyMessage || message);
+    if (!dependencyMessage) {
+      handlerOptions.onForbidden?.();
+    }
     return;
   }
 
@@ -120,8 +148,20 @@ export function getHttpErrorCode(error: unknown) {
   return String(code);
 }
 
+export function resolveRoleColumnPermissionForbiddenMessage(error: unknown) {
+  if (getHttpStatus(error) !== 403 || !isRoleColumnPermissionPageRequest()) {
+    return '';
+  }
+  const requestPath = normalizeRequestPath((error as AxiosError).config?.url);
+  return ROLE_COLUMN_PERMISSION_DEPENDENCIES.find((dependency) => dependency.matches(requestPath))?.message || '';
+}
+
 function getHttpStatus(error: unknown) {
   return (error as AxiosError).response?.status || null;
+}
+
+function isRoleColumnPermissionPageRequest() {
+  return typeof window !== 'undefined' && window.location.pathname === ROLE_COLUMN_PERMISSION_ROUTE;
 }
 
 async function shouldForceLogout(error: unknown) {
@@ -144,7 +184,7 @@ async function shouldForceLogout(error: unknown) {
 async function probeCurrentSession(token: string) {
   try {
     const response = await axios.get(appFrameworkConfig.auth.currentUserProbePath, {
-      baseURL: import.meta.env.VITE_API_BASE_URL || '',
+      baseURL: getGatewayApiBaseUrl(),
       timeout: 5000,
       headers: {
         Authorization: `Bearer ${token}`,

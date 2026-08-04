@@ -18,6 +18,7 @@ async function importTypescriptModule(filePath) {
 }
 
 const modulePath = new URL('../src/framework/components/browseTablePreferences.ts', import.meta.url);
+const schemaModulePath = new URL('../src/framework/components/browseTableSchema.ts', import.meta.url);
 const componentPath = new URL('../src/framework/components/XuanBrowseTable.vue', import.meta.url);
 const shellStylePath = new URL('../src/styles/shell.css', import.meta.url);
 const {
@@ -27,6 +28,12 @@ const {
   resizeColumn,
   toggleColumnVisibility,
 } = await importTypescriptModule(modulePath);
+const {
+  createBrowseTablePermissionKey,
+  resolveColumnAccessMode,
+  maskBrowseTableValue,
+  resolveBrowseTableCellText,
+} = await importTypescriptModule(schemaModulePath);
 
 const columns = [
   { key: 'code', title: '编码', width: 120 },
@@ -97,12 +104,66 @@ assert.equal(resized.columns.find((column) => column.key === 'factoryCode')?.wid
 const hidden = toggleColumnVisibility(resized, 'name', true);
 assert.equal(hidden.columns.find((column) => column.key === 'name')?.visible, true);
 
+assert.equal(createBrowseTablePermissionKey('erp-product', 'supplier'), 'erp-product::supplier');
+assert.equal(maskBrowseTableValue('13812345678', 'phone'), '138****5678');
+assert.equal(maskBrowseTableValue('MODEL-2026', 'generic'), 'MO***26');
+assert.equal(
+  resolveColumnAccessMode(
+    {
+      key: 'supplier',
+      title: '来源供应商',
+      permission: { resourceKey: 'erp-product', columnKey: 'supplier' },
+    },
+    { 'erp-product::supplier': 'HIDDEN' },
+  ),
+  'HIDDEN',
+);
+assert.equal(
+  resolveColumnAccessMode(
+    {
+      key: 'authVersion',
+      title: '权限版本',
+      permission: { resourceKey: 'iam-user', columnKey: 'authVersion' },
+    },
+    { 'iam-user::username': 'VISIBLE' },
+    true,
+  ),
+  'HIDDEN',
+);
+assert.equal(
+  resolveColumnAccessMode(
+    {
+      key: 'authVersion',
+      title: '权限版本',
+      permission: { resourceKey: 'iam-user', columnKey: 'authVersion' },
+    },
+    { 'iam-user::username': 'VISIBLE' },
+    false,
+  ),
+  'VISIBLE',
+);
+assert.equal(
+  resolveBrowseTableCellText(
+    { supplier: '默认供应商' },
+    {
+      key: 'supplier',
+      title: '来源供应商',
+      permission: { resourceKey: 'erp-product', columnKey: 'supplier', maskType: 'generic' },
+    },
+    'MASKED',
+  ),
+  '默认***应商',
+);
+
 const componentSource = await readFile(componentPath, 'utf8');
 const shellStyleSource = await readFile(shellStylePath, 'utf8');
 
 assert.match(componentSource, /width="460"/, '列设置弹层宽度必须和内容宽度一致，避免下拉框溢出');
+assert.match(componentSource, /columnPermissionSnapshot/, '浏览表格必须接收列权限快照。');
+assert.match(componentSource, /resolveColumnAccessMode/, '浏览表格必须解析列权限三态。');
 assert.match(shellStyleSource, /\.browse-column-panel\s*{[^}]*width:\s*460px;/s, '列设置面板宽度必须固定为 460px');
 assert.match(shellStyleSource, /\.browse-column-row\s*{[^}]*grid-template-columns:\s*minmax\(128px,\s*1fr\)\s*44px\s*44px\s*128px;/s, '列设置每行必须使用稳定 grid 列宽');
 assert.match(shellStyleSource, /\.browse-column-list\s*{[^}]*overflow-x:\s*hidden;/s, '列设置滚动区不能出现横向溢出');
+assert.match(shellStyleSource, /\.browse-column-row-meta\s*{/s, '列设置需要渲染列权限说明区域。');
 
 console.log('browse table preference verification passed');

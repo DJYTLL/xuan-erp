@@ -57,6 +57,15 @@ public class IamAuthenticationApplicationService {
     private static final String REFRESH_PATH = "/api/iam/auth/refresh";
     private static final String LOGOUT_PATH = "/api/iam/auth/logout";
     private static final Set<String> PLATFORM_SUPER_ADMIN_USERNAMES = Set.of("super_admin", "superadmin");
+    private static final Set<String> PLATFORM_TENANT_CODES = Set.of("0", "platform", "super", "super_admin");
+    private static final IamTenantStatusView PLATFORM_TENANT_STATUS = new IamTenantStatusView(
+            0L,
+            "platform",
+            "平台租户",
+            "ENABLED",
+            true,
+            null,
+            null);
 
     private final IamUserRepository userRepository;
     private final IamAuthorizationSnapshotRepository authorizationSnapshotRepository;
@@ -67,6 +76,7 @@ public class IamAuthenticationApplicationService {
     private final IamAuthProperties authProperties;
     private final SafeAuditWritePublisher auditWritePublisher;
     private final IamTenantStatusGateway tenantStatusGateway;
+    private final IamTenantBootstrapApplicationService tenantBootstrapApplicationService;
 
     public IamAuthenticationApplicationService(
             IamUserRepository userRepository,
@@ -86,7 +96,10 @@ public class IamAuthenticationApplicationService {
                 refreshTokenGenerator,
                 authProperties,
                 auditWritePublisher,
-                tenantId -> Optional.of(new IamTenantStatusView(tenantId, null, "ENABLED", true, null, null)));
+                tenantId -> {
+                    throw new BusinessException("IAM_TENANT_STATUS_UNAVAILABLE", "租户状态暂时无法确认，请稍后再试");
+                },
+                null);
     }
 
     @Autowired
@@ -99,7 +112,8 @@ public class IamAuthenticationApplicationService {
             IamRefreshTokenGenerator refreshTokenGenerator,
             IamAuthProperties authProperties,
             SafeAuditWritePublisher auditWritePublisher,
-            IamTenantStatusGateway tenantStatusGateway) {
+            IamTenantStatusGateway tenantStatusGateway,
+            @org.springframework.lang.Nullable IamTenantBootstrapApplicationService tenantBootstrapApplicationService) {
         this.userRepository = userRepository;
         this.authorizationSnapshotRepository = authorizationSnapshotRepository;
         this.refreshTokenRepository = refreshTokenRepository;
@@ -109,25 +123,49 @@ public class IamAuthenticationApplicationService {
         this.authProperties = authProperties;
         this.auditWritePublisher = auditWritePublisher;
         this.tenantStatusGateway = tenantStatusGateway;
+        this.tenantBootstrapApplicationService = tenantBootstrapApplicationService;
+    }
+
+    public IamAuthenticationApplicationService(
+            IamUserRepository userRepository,
+            IamAuthorizationSnapshotRepository authorizationSnapshotRepository,
+            IamRefreshTokenRepository refreshTokenRepository,
+            PasswordEncoder passwordEncoder,
+            IamAccessTokenIssuer accessTokenIssuer,
+            IamRefreshTokenGenerator refreshTokenGenerator,
+            IamAuthProperties authProperties,
+            SafeAuditWritePublisher auditWritePublisher,
+            IamTenantStatusGateway tenantStatusGateway) {
+        this(
+                userRepository,
+                authorizationSnapshotRepository,
+                refreshTokenRepository,
+                passwordEncoder,
+                accessTokenIssuer,
+                refreshTokenGenerator,
+                authProperties,
+                auditWritePublisher,
+                tenantStatusGateway,
+                null);
     }
 
     @Transactional
     public IamLoginView login(LoginIamUserCommand command) {
-        requireTenantId(command.tenantId(), "租户 ID 不能为空");
         String username = IamUser.normalizeUsername(command.username());
         String password = requireText(command.password(), "密码不能为空");
-        IamUser user = userRepository.findActiveByTenantIdAndUsername(command.tenantId(), username)
+        ResolvedLoginTenant loginTenant = resolveLoginTenant(command);
+        IamUser user = userRepository.findActiveByTenantIdAndUsername(loginTenant.tenantId(), username)
                 .orElse(null);
         if (user == null) {
-            publishLoginAudit(command.tenantId(), username, null, ACTION_LOGIN_FAILED, AuditWriteOutcome.FAILED,
+            publishLoginAudit(loginTenant.tenantId(), username, null, ACTION_LOGIN_FAILED, AuditWriteOutcome.FAILED,
                     "IAM_INVALID_CREDENTIALS", "用户名或密码错误");
             throw new BusinessException("IAM_INVALID_CREDENTIALS", "用户名或密码错误");
         }
-        validateTenantStatus(command.tenantId(), username, user);
-        validateUserStatus(command.tenantId(), username, user);
+        validateTenantStatus(loginTenant, username, user);
+        validateUserStatus(loginTenant.tenantId(), username, user);
         if (!passwordEncoder.matches(password, user.passwordHash())) {
             recordFailedLogin(user);
-            publishLoginAudit(command.tenantId(), username, user, ACTION_LOGIN_FAILED, AuditWriteOutcome.FAILED,
+            publishLoginAudit(loginTenant.tenantId(), username, user, ACTION_LOGIN_FAILED, AuditWriteOutcome.FAILED,
                     "IAM_INVALID_CREDENTIALS", "用户名或密码错误");
             throw new BusinessException("IAM_INVALID_CREDENTIALS", "用户名或密码错误");
         }
@@ -135,14 +173,17 @@ public class IamAuthenticationApplicationService {
         CurrentUser currentUser = buildCurrentUser(saved);
         IamIssuedAccessToken issuedAccessToken = accessTokenIssuer.issue(currentUser);
         PreparedRefreshToken issuedRefreshToken = prepareRefreshToken(saved, null, OffsetDateTime.now());
+        IamTenantStatusView tenantDisplay = resolveTenantDisplay(saved, loginTenant);
         refreshTokenRepository.save(issuedRefreshToken.token());
-        publishLoginAudit(command.tenantId(), username, saved, ACTION_LOGIN_SUCCESS, AuditWriteOutcome.SUCCESS,
+        publishLoginAudit(loginTenant.tenantId(), username, saved, ACTION_LOGIN_SUCCESS, AuditWriteOutcome.SUCCESS,
                 null, null);
         return new IamLoginView(
                 issuedAccessToken.accessToken(),
                 issuedAccessToken.expiresAt(),
                 issuedRefreshToken.rawToken(),
                 issuedRefreshToken.token().expiresAt(),
+                tenantDisplay.code(),
+                tenantDisplay.name(),
                 currentUser);
     }
 
@@ -186,6 +227,7 @@ public class IamAuthenticationApplicationService {
         }
         try {
             validateUserStatusForRefresh(user);
+            validateTenantStatusForRefresh(user);
         } catch (BusinessException ex) {
             publishRefreshAudit(existing.tenantId(), user.username(), user.id(), existing,
                     ACTION_REFRESH_FAILED, AuditWriteOutcome.FAILED, ex.code(), ex.getMessage());
@@ -195,6 +237,7 @@ public class IamAuthenticationApplicationService {
         CurrentUser currentUser = buildCurrentUser(user);
         IamIssuedAccessToken issuedAccessToken = accessTokenIssuer.issue(currentUser);
         PreparedRefreshToken newRefreshToken = prepareRefreshToken(user, existing.tokenFamilyId(), now);
+        IamTenantStatusView tenantDisplay = resolveTenantDisplay(user, new ResolvedLoginTenant(user.tenantId(), null));
         refreshTokenRepository.save(revokeRefreshToken(existing, newRefreshToken.token().tokenHash(), now));
         refreshTokenRepository.save(newRefreshToken.token());
         publishRefreshAudit(user.tenantId(), user.username(), user.id(), existing,
@@ -204,7 +247,29 @@ public class IamAuthenticationApplicationService {
                 issuedAccessToken.expiresAt(),
                 newRefreshToken.rawToken(),
                 newRefreshToken.token().expiresAt(),
+                tenantDisplay.code(),
+                tenantDisplay.name(),
                 currentUser);
+    }
+
+    public void validateCurrentTenantStatus(CurrentUser currentUser) {
+        if (currentUser == null || currentUser.tenantId() == null) {
+            throw new BusinessException("IAM_UNAUTHORIZED", "当前请求未包含 IAM 登录上下文");
+        }
+        if (isPlatformSuperAdmin(currentUser)) {
+            return;
+        }
+        validateTenantStatusOrThrow(currentUser.tenantId());
+    }
+
+    public IamTenantStatusView resolveCurrentTenantDisplay(CurrentUser currentUser) {
+        if (currentUser == null || currentUser.tenantId() == null) {
+            throw new BusinessException("IAM_UNAUTHORIZED", "当前请求未包含 IAM 登录上下文");
+        }
+        if (isPlatformSuperAdmin(currentUser)) {
+            return PLATFORM_TENANT_STATUS;
+        }
+        return resolveTenantStatusById(currentUser.tenantId());
     }
 
     @Transactional
@@ -265,6 +330,53 @@ public class IamAuthenticationApplicationService {
 
     private boolean isPlatformSuperAdmin(IamUser user) {
         return Long.valueOf(0L).equals(user.tenantId()) && PLATFORM_SUPER_ADMIN_USERNAMES.contains(user.username());
+    }
+
+    private boolean isPlatformSuperAdmin(CurrentUser currentUser) {
+        return Long.valueOf(0L).equals(currentUser.tenantId())
+                && (currentUser.roles().contains("super_admin")
+                || currentUser.permissions().contains("*")
+                || PLATFORM_SUPER_ADMIN_USERNAMES.contains(currentUser.username()));
+    }
+
+    private IamTenantStatusView resolveTenantDisplay(IamUser user, ResolvedLoginTenant loginTenant) {
+        if (isPlatformSuperAdmin(user)) {
+            return PLATFORM_TENANT_STATUS;
+        }
+        if (loginTenant.status() != null) {
+            return normalizeTenantDisplay(loginTenant.status(), user.tenantId());
+        }
+        return resolveTenantStatusById(user.tenantId());
+    }
+
+    private IamTenantStatusView resolveTenantStatusById(Long tenantId) {
+        try {
+            return normalizeTenantDisplay(tenantStatusGateway.findTenantStatus(tenantId).orElse(null), tenantId);
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            throw new BusinessException("IAM_TENANT_STATUS_UNAVAILABLE", "租户状态暂时无法确认，请稍后再试");
+        }
+    }
+
+    private IamTenantStatusView normalizeTenantDisplay(IamTenantStatusView tenantStatus, Long fallbackTenantId) {
+        if (tenantStatus == null) {
+            throw new BusinessException("IAM_TENANT_NOT_FOUND", "租户不存在");
+        }
+        String tenantCode = hasText(tenantStatus.code()) ? tenantStatus.code().trim() : String.valueOf(fallbackTenantId);
+        String tenantName = hasText(tenantStatus.name()) ? tenantStatus.name().trim() : tenantCode;
+        return new IamTenantStatusView(
+                tenantStatus.tenantId() == null ? fallbackTenantId : tenantStatus.tenantId(),
+                tenantCode,
+                tenantName,
+                tenantStatus.status(),
+                tenantStatus.loginAllowed(),
+                tenantStatus.loginDeniedReason(),
+                tenantStatus.currentPlanExpiresAt(),
+                tenantStatus.permissionHash(),
+                tenantStatus.iamInitTemplateCode(),
+                tenantStatus.columnPermissionTemplateCodes(),
+                tenantStatus.defaultColumnPermissionTemplateCode());
     }
 
     private IamUser recordSuccessfulLogin(IamUser user) {
@@ -354,22 +466,87 @@ public class IamAuthenticationApplicationService {
         }
     }
 
-    private void validateTenantStatus(Long tenantId, String username, IamUser user) {
+    private void validateTenantStatus(ResolvedLoginTenant loginTenant, String username, IamUser user) {
         if (isPlatformSuperAdmin(user)) {
             return;
         }
-        IamTenantStatusView tenantStatus = tenantStatusGateway.findTenantStatus(tenantId).orElse(null);
+        try {
+            validateTenantStatusOrThrow(loginTenant);
+        } catch (BusinessException ex) {
+            publishLoginAudit(loginTenant.tenantId(), username, user, ACTION_LOGIN_FAILED, AuditWriteOutcome.FAILED,
+                    ex.code(), ex.getMessage());
+            throw ex;
+        }
+    }
+
+    private void validateTenantStatusForRefresh(IamUser user) {
+        if (isPlatformSuperAdmin(user)) {
+            return;
+        }
+        validateTenantStatusOrThrow(user.tenantId());
+    }
+
+    private void validateTenantStatusOrThrow(Long tenantId) {
+        validateTenantStatusOrThrow(new ResolvedLoginTenant(tenantId, null));
+    }
+
+    private void validateTenantStatusOrThrow(ResolvedLoginTenant loginTenant) {
+        IamTenantStatusView tenantStatus;
+        try {
+            tenantStatus = loginTenant.status() == null
+                    ? tenantStatusGateway.findTenantStatus(loginTenant.tenantId()).orElse(null)
+                    : loginTenant.status();
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (RuntimeException ex) {
+            throw new BusinessException("IAM_TENANT_STATUS_UNAVAILABLE", "租户状态暂时无法确认，请稍后再试");
+        }
         if (tenantStatus == null) {
-            publishLoginAudit(tenantId, username, user, ACTION_LOGIN_FAILED, AuditWriteOutcome.FAILED,
-                    "IAM_TENANT_NOT_FOUND", "租户不存在");
             throw new BusinessException("IAM_TENANT_NOT_FOUND", "租户不存在");
         }
         if (!tenantStatus.loginAllowed()) {
             String message = hasText(tenantStatus.loginDeniedReason()) ? tenantStatus.loginDeniedReason() : "租户当前状态不允许登录";
-            publishLoginAudit(tenantId, username, user, ACTION_LOGIN_FAILED, AuditWriteOutcome.FAILED,
-                    "IAM_TENANT_LOGIN_DISABLED", message);
             throw new BusinessException("IAM_TENANT_LOGIN_DISABLED", message);
         }
+        ensureTenantPermissionSynced(tenantStatus);
+    }
+
+    private void ensureTenantPermissionSynced(IamTenantStatusView tenantStatus) {
+        if (tenantBootstrapApplicationService == null || tenantStatus == null) {
+            return;
+        }
+        tenantBootstrapApplicationService.ensureTenantPermissionSynced(
+                tenantStatus.tenantId(),
+                tenantStatus.iamInitTemplateCode(),
+                tenantStatus.columnPermissionTemplateCodes(),
+                tenantStatus.defaultColumnPermissionTemplateCode(),
+                tenantStatus.permissionHash(),
+                "iam-auth-auto-sync");
+    }
+
+    private ResolvedLoginTenant resolveLoginTenant(LoginIamUserCommand command) {
+        String tenantCode = trimToNull(command.tenantCode());
+        if (tenantCode != null) {
+            String normalizedTenantCode = tenantCode.toLowerCase(java.util.Locale.ROOT);
+            if (PLATFORM_TENANT_CODES.contains(normalizedTenantCode)) {
+                return new ResolvedLoginTenant(0L, PLATFORM_TENANT_STATUS);
+            }
+            IamTenantStatusView tenantStatus;
+            try {
+                tenantStatus = tenantStatusGateway.findTenantStatusByCode(normalizedTenantCode).orElse(null);
+            } catch (BusinessException ex) {
+                throw ex;
+            } catch (RuntimeException ex) {
+                throw new BusinessException("IAM_TENANT_STATUS_UNAVAILABLE", "租户状态暂时无法确认，请稍后再试");
+            }
+            if (tenantStatus == null) {
+                throw new BusinessException("IAM_TENANT_NOT_FOUND", "租户不存在");
+            }
+            requireTenantId(tenantStatus.tenantId(), "租户状态返回的租户 ID 无效");
+            return new ResolvedLoginTenant(tenantStatus.tenantId(), tenantStatus);
+        }
+        requireTenantId(command.tenantId(), "租户编码或租户 ID 不能为空");
+        return new ResolvedLoginTenant(command.tenantId(), null);
     }
 
     private void validateUserStatusForRefresh(IamUser user) {
@@ -599,6 +776,16 @@ public class IamAuthenticationApplicationService {
         return value != null && !value.isBlank();
     }
 
+    private String trimToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
+    }
+
     private record PreparedRefreshToken(String rawToken, IamRefreshToken token) {
+    }
+
+    private record ResolvedLoginTenant(Long tenantId, IamTenantStatusView status) {
     }
 }

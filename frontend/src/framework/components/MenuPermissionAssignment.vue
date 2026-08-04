@@ -29,9 +29,14 @@
             v-if="node.children.length"
             class="permission-expand-button"
             type="button"
+            :aria-label="isExpanded(node.key) ? '收起菜单' : '展开菜单'"
             @click.stop="toggleExpanded(node.key)"
           >
-            {{ isExpanded(node.key) ? '⌄' : '›' }}
+            <ChevronRight
+              class="permission-expand-icon"
+              :class="{ rotated: isExpanded(node.key) }"
+              :size="14"
+            />
           </button>
           <span v-else class="permission-leaf-dot">•</span>
           <span class="permission-node-title">{{ node.title }}</span>
@@ -90,6 +95,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { ChevronRight } from 'lucide-vue-next';
 import AppState from '@/framework/components/AppState.vue';
 import {
   createNavigationPermissionTree,
@@ -120,6 +126,7 @@ type PermissionTreeNode = {
   directPermissions: PermissionAssignmentPermission[];
   relatedPermissions: PermissionAssignmentPermission[];
   permissionCodes: string[];
+  visiblePermissionCodes: string[];
 };
 
 type PermissionAssignmentItem = PermissionAssignmentPermission & {
@@ -238,11 +245,12 @@ function buildPermissionTree(
       directPermissions: orphanPermissions,
       relatedPermissions: [],
       permissionCodes: [],
+      visiblePermissionCodes: [],
     });
   }
 
   roots.forEach((node) => assignNodeState(node, 0));
-  return roots.filter((node) => node.permissionCodes.length || node.children.length);
+  return pruneInvisiblePermissionNodes(roots);
 }
 
 function buildNavigationPermissionNode(
@@ -270,6 +278,7 @@ function buildNavigationPermissionNode(
       ? resolvePageRequiredPermissions(sourceCode, directPermissions, permissionByCode, pageRequiredPermissionMap)
       : [],
     permissionCodes: [],
+    visiblePermissionCodes: [],
   };
 }
 
@@ -297,13 +306,24 @@ function resolvePageRequiredPermissions(
 
 function assignNodeState(node: PermissionTreeNode, level: number): string[] {
   node.level = level;
-  const childCodes = node.children.flatMap((child) => assignNodeState(child, level + 1));
+  node.children.forEach((child) => assignNodeState(child, level + 1));
+  node.children = pruneInvisiblePermissionNodes(node.children);
+  const childCodes = node.children.flatMap((child) => child.permissionCodes);
+  const childVisibleCodes = node.children.flatMap((child) => child.visiblePermissionCodes);
+  node.visiblePermissionCodes = dedupe([
+    ...node.directPermissions.map((permission) => permission.code),
+    ...childVisibleCodes,
+  ]);
   node.permissionCodes = dedupe([
     ...node.directPermissions.map((permission) => permission.code),
     ...node.relatedPermissions.map((permission) => permission.code),
     ...childCodes,
   ]);
   return node.permissionCodes;
+}
+
+function pruneInvisiblePermissionNodes(nodes: PermissionTreeNode[]) {
+  return nodes.filter((node) => node.visiblePermissionCodes.length || node.children.length);
 }
 
 function flattenTree(nodes: PermissionTreeNode[], keyword: string): PermissionTreeNode[] {
@@ -429,9 +449,9 @@ function toCurrentMenuNodes(sourceMenus: PermissionMenuSource[], parentId: numbe
 <style scoped>
 .menu-permission-assignment {
   min-height: 0;
-  height: min(640px, calc(100vh - 220px));
+  height: 100%;
   display: grid;
-  grid-template-columns: minmax(300px, 42%) minmax(360px, 1fr);
+  grid-template-columns: minmax(260px, 38%) minmax(0, 1fr);
   gap: 16px;
   overflow: hidden;
 }
@@ -496,6 +516,14 @@ function toCurrentMenuNodes(sourceMenus: PermissionMenuSource[], parentId: numbe
   border: 0;
   color: var(--xuan-muted);
   background: transparent;
+}
+
+.permission-expand-icon {
+  transition: transform 160ms ease;
+}
+
+.permission-expand-icon.rotated {
+  transform: rotate(90deg);
 }
 
 .permission-node-title {

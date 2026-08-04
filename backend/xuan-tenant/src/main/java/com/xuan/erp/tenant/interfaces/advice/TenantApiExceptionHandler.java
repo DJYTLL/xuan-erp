@@ -4,6 +4,7 @@ import com.xuan.erp.common.api.ApiResponse;
 import com.xuan.erp.common.exception.BusinessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -24,6 +25,12 @@ public class TenantApiExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ApiResponse<Void> handleDataIntegrityViolation(DataIntegrityViolationException error) {
         return ApiResponse.failure("TENANT_DATA_INTEGRITY_VIOLATION", mostSpecificMessage(error));
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ApiResponse<Void> handleAccessDenied(AccessDeniedException error) {
+        return ApiResponse.failure("SECURITY_PERMISSION_DENIED", "没有访问权限");
     }
 
     private String mostSpecificMessage(Throwable error) {

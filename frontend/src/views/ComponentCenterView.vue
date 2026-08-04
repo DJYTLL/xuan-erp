@@ -70,17 +70,27 @@
       <el-collapse-item name="overview-dialogs" class="component-collapse-panel">
         <template #title>
           <div class="component-panel-title">
-            <strong>抽屉与弹窗</strong>
-            <span>表单弹窗、详情抽屉、审核确认、批量确认保持同一节奏。</span>
+            <strong>分配角色弹窗</strong>
+            <span>抽取用户管理里的分配角色弹窗，按 workspace 三档比例一行预览。</span>
           </div>
         </template>
         <section class="component-preview-panel" :data-demo-kind="renderOverviewDemo('dialogs')">
-          <div class="demo-row">
-            <el-button type="primary" @click="formVisible = true">表单弹窗</el-button>
-            <el-button @click="drawerVisible = true">详情抽屉</el-button>
-            <el-button type="success" @click="approvalVisible = true">审核确认</el-button>
-            <el-button type="danger" @click="batchVisible = true">批量确认</el-button>
+          <div class="dialog-preview-strip">
+            <span class="dialog-preview-strip-label">弹窗尺寸</span>
+            <div class="dialog-preview-strip-actions">
+              <el-button
+                v-for="item in roleGrantPreviewModes"
+                :key="item.size"
+                size="small"
+                plain
+                @click="openRoleGrantPreview(item.size)"
+              >
+                {{ item.title }}
+              </el-button>
+            </div>
+            <span class="dialog-preview-strip-hint">原始分配角色 workspace 弹窗，按比例切换 sm / md / lg</span>
           </div>
+          <p class="dialog-preview-note">预览内容沿用用户管理中的分配角色结构，保留标题拖动和右下角缩放。</p>
         </section>
       </el-collapse-item>
 
@@ -234,28 +244,71 @@
             v-model:current-page="browseCurrentPage"
             v-model:page-size="browsePageSize"
             v-model:density="browseDensity"
-            page-code="component-center"
-            table-code="browse-table-demo"
+            :schema="browseTableSchema"
             :user-id="browseUserId"
             :tenant-id="browseTenantId"
             :data="pagedDemoRows"
-            :columns="browseColumns"
+            :column-permission-snapshot="browseColumnPermissionSnapshot"
             :total="browseRows.length"
             :selected-count="browseSelectedRows.length"
-            :actions-width="160"
             @selection-change="browseSelectedRows = $event"
-          >
-            <template #cell-status="{ row }">
-              <el-tag size="small" :type="row.status === '启用' ? 'success' : 'warning'">{{ row.status }}</el-tag>
-            </template>
-            <template #toolbar-actions>
-              <el-button text @click="browseSelectedRows = []">刷新</el-button>
-            </template>
-            <template #actions="{ row }">
-              <el-button link type="primary">编辑</el-button>
-              <el-button link type="danger">{{ row.status === '启用' ? '停用' : '启用' }}</el-button>
-            </template>
-          </XuanBrowseTable>
+            @toolbar-action="handleBrowseToolbarAction"
+            @row-action="handleBrowseRowAction"
+          />
+
+          <el-collapse class="component-demo-settings-collapse">
+            <el-collapse-item name="browse-table-reuse-guide">
+              <template #title>
+                <div class="component-panel-title">
+                  <strong>复用说明</strong>
+                  <span>参考页面开发规范，新增列表页时按 schema、数据、列权限和偏好存储四步接入。</span>
+                </div>
+              </template>
+              <div class="browse-table-guide">
+                <p class="browse-table-guide-note">
+                  对照开发文档中的《页面开发规范》和《列权限》，复用这个表格时至少同时接好
+                  schema、pageKey/列权限、用户偏好存储和业务数据请求四条链路。
+                </p>
+                <div class="browse-table-guide-grid">
+                  <section class="browse-table-guide-card">
+                    <strong>1. 页面层要做什么</strong>
+                    <ul>
+                      <li>定义页面自己的 <code>browseTableSchema</code>，不要把列、按钮和操作散写在 template 里。</li>
+                      <li>页面继续负责取列表数据、查询条件、分页状态和业务动作处理。</li>
+                      <li>路由、菜单、页面权限、按钮权限、列权限映射要一起补齐，按开发文档视为同一个接入任务。</li>
+                    </ul>
+                  </section>
+                  <section class="browse-table-guide-card">
+                    <strong>2. 列权限怎么接</strong>
+                    <ul>
+                      <li>每列在 schema 中声明 <code>resourceKey</code>、<code>columnKey</code> 和可选 <code>maskType</code>。</li>
+                      <li>页面把 IAM 返回的列权限快照整理成 <code>resourceKey::columnKey</code> 对应的三态结果。</li>
+                      <li>表格内部统一按 <code>VISIBLE / MASKED / HIDDEN</code> 计算最终展示。</li>
+                    </ul>
+                  </section>
+                  <section class="browse-table-guide-card">
+                    <strong>3. 后端什么时候需要改</strong>
+                    <ul>
+                      <li>表格偏好存储当前已经有 IAM 用户偏好接口，不需要为分页、密度、列顺序再新建表。</li>
+                      <li>列权限结果当前已经能从 IAM 授权快照的 <code>column_settings</code> 提供，不需要改表格组件协议。</li>
+                      <li>只有当业务页本身还没登记列权限资源、或者后端返回 DTO 没做字段过滤时，才需要补后端。</li>
+                    </ul>
+                  </section>
+                </div>
+
+                <div class="component-demo-code-blocks">
+                  <div class="component-demo-code-block">
+                    <span>页面接入示例</span>
+                    <pre><code>{{ browseTableGuideTemplateCode }}</code></pre>
+                  </div>
+                  <div class="component-demo-code-block">
+                    <span>schema + 列权限示例</span>
+                    <pre><code>{{ browseTableGuideScriptCode }}</code></pre>
+                  </div>
+                </div>
+              </div>
+            </el-collapse-item>
+          </el-collapse>
         </section>
       </el-collapse-item>
 
@@ -396,21 +449,36 @@
     </el-collapse>
 
     <DynamicFormDialog
-      v-model="formVisible"
-      title="新增供应商"
-      description="按业务使用顺序维护基础资料、结算信息和扩展字段"
-      helper-text="拖动标题栏移动，拖动四角调整大小"
-      :fields="demoFields"
-      :sections="demoSections"
-      :model="demoForm"
-      :custom-fields="demoCustomFields"
+      v-model="roleGrantPreviewVisible"
+      title="分配角色 - 平台超级管理员"
+      :render-form="false"
+      description="按角色树维护当前用户可分配的角色"
+      helper-text="拖动标题栏移动，拖动右下角调整大小"
       variant="workspace"
-      width="96vw"
-      label-width="0"
-      label-position="top"
-      show-custom-fields
-      @submit="submitDemoForm"
-    />
+      :workspace-size="roleGrantPreviewSize"
+      confirm-text="保存角色"
+      :confirm-permission="'iam-user:update'"
+      @submit="submitRoleGrantPreview"
+    >
+      <template #body>
+        <div class="workspace-role-preview-dialog">
+          <p class="workspace-role-preview-note">平台级用户当前仅支持查看角色分配结果</p>
+          <el-input v-model="roleGrantPreviewKeyword" placeholder="搜索角色编码 / 名称" clearable />
+          <el-checkbox-group v-model="roleGrantPreviewSelectedRoleIds" class="workspace-role-preview-list">
+            <el-checkbox
+              v-for="role in filteredRoleGrantPreviewRoles"
+              :key="role.id"
+              :label="role.id"
+              class="workspace-role-preview-item"
+              disabled
+            >
+              <span>{{ role.name }}</span>
+              <code>{{ role.code }}</code>
+            </el-checkbox>
+          </el-checkbox-group>
+        </div>
+      </template>
+    </DynamicFormDialog>
     <DetailDrawer
       v-model="drawerVisible"
       title="供应商详情"
@@ -467,10 +535,14 @@ import NavigationMenuTree, {
 import PermissionButton from '@/framework/components/PermissionButton.vue';
 import RecentAccountSearchSelect from '@/components/login/RecentAccountSearchSelect.vue';
 import SearchActionBar from '@/framework/components/SearchActionBar.vue';
-import XuanBrowseTable, { type XuanBrowseTableColumn } from '@/framework/components/XuanBrowseTable.vue';
+import XuanBrowseTable from '@/framework/components/XuanBrowseTable.vue';
 import XuanDateTimeRangePicker, { type DateRangeValue } from '@/framework/components/XuanDateTimeRangePicker.vue';
 import XuanDecimalInput from '@/framework/components/XuanDecimalInput.vue';
 import type { BrowseTableDensity } from '@/framework/components/browseTablePreferences';
+import type {
+  BrowseTableColumnPermissionSnapshot,
+  XuanBrowseTableSchema,
+} from '@/framework/components/browseTableSchema';
 import { useAuthStore } from '@/stores/auth';
 import type { IamMenu, IamPermission } from '@/types/iamAdmin';
 import type { LoginProfile } from '@/utils/loginProfiles';
@@ -480,11 +552,12 @@ defineOptions({ name: 'ComponentCenterView' });
 const { t } = useI18n();
 const authStore = useAuthStore();
 
-const formVisible = ref(false);
+const roleGrantPreviewVisible = ref(false);
+const roleGrantPreviewSize = ref<'sm' | 'md' | 'lg'>('md');
 const drawerVisible = ref(false);
 const approvalVisible = ref(false);
 const batchVisible = ref(false);
-const componentOverviewPanels = ref(['overview-query', 'overview-permission-buttons']);
+const componentOverviewPanels = ref(['overview-query', 'overview-permission-buttons', 'overview-dialogs']);
 const componentCenterActivePanels = ref([
   'search-action-bar',
   'login-recent-account-select',
@@ -494,10 +567,30 @@ const componentCenterActivePanels = ref([
   'navigation-menu-tree',
   'permission-assignment',
 ]);
+const roleGrantPreviewModes = [
+  { size: 'sm', title: 'sm', description: '小型 workspace 弹窗', width: '66vw / 72vh' },
+  { size: 'md', title: 'md', description: '中型 workspace 弹窗', width: '80vw / 87vh' },
+  { size: 'lg', title: 'lg', description: '大型 workspace 弹窗', width: '92vw / 页面内高' },
+] as const;
 const browseCurrentPage = ref(1);
 const browsePageSize = ref(10);
 const browseDensity = ref<BrowseTableDensity>('default');
 const browseSelectedRows = ref<BrowseDemoRow[]>([]);
+const roleGrantPreviewKeyword = ref('');
+const roleGrantPreviewSelectedRoleIds = ref<number[]>([1]);
+const roleGrantPreviewRoles = [
+  { id: 1, name: '平台超级管理员', code: 'super_admin' },
+  { id: 2, name: '租户管理员', code: 'tenant_admin' },
+  { id: 3, name: '采购主管', code: 'purchase_manager' },
+  { id: 4, name: '仓库操作员', code: 'warehouse_operator' },
+];
+const filteredRoleGrantPreviewRoles = computed(() => {
+  const keywordValue = roleGrantPreviewKeyword.value.trim().toLowerCase();
+  if (!keywordValue) {
+    return roleGrantPreviewRoles;
+  }
+  return roleGrantPreviewRoles.filter((role) => [role.name, role.code].some((item) => item.toLowerCase().includes(keywordValue)));
+});
 const permissionDemoSelectedCodes = ref([
   'erp-sale-draft:view',
   'erp-sale-draft:edit',
@@ -553,6 +646,46 @@ const navigationTreeDemoScriptCode = `function resolveMenuContextActions(node: N
 function handleMenuContextCommand({ actionKey, node }) {
   console.log('右键菜单已触发', actionKey, node.key);
 }`;
+const browseTableGuideTemplateCode = `<XuanBrowseTable
+  v-model:current-page="currentPage"
+  v-model:page-size="pageSize"
+  v-model:density="tableDensity"
+  :schema="browseTableSchema"
+  :data="rows"
+  :total="total"
+  :tenant-id="browseTenantId"
+  :user-id="browseUserId"
+  :column-permission-snapshot="browseColumnPermissionSnapshot"
+  @toolbar-action="handleToolbarAction"
+  @row-action="handleRowAction"
+/>`;
+const browseTableGuideScriptCode = `const browseTableSchema: XuanBrowseTableSchema<ProductRow> = {
+  pageCode: 'inventory-products',
+  tableCode: 'product-list',
+  columns: [
+    { key: 'code', title: '编码', width: 120 },
+    {
+      key: 'supplier',
+      title: '来源供应商',
+      width: 150,
+      permission: { resourceKey: 'erp-product', columnKey: 'supplier' },
+    },
+    {
+      key: 'contactPhone',
+      title: '联系电话',
+      width: 150,
+      permission: { resourceKey: 'tenant', columnKey: 'contactPhone', maskType: 'phone' },
+    },
+  ],
+  rowActions: [
+    { key: 'view', label: '查看', type: 'primary', link: true, permission: 'product:view' },
+  ],
+};
+
+const browseColumnPermissionSnapshot = {
+  'erp-product::supplier': 'HIDDEN',
+  'tenant::contactPhone': 'MASKED',
+} satisfies BrowseTableColumnPermissionSnapshot;`;
 const browseTenantId = computed(() => String(authStore.tenantId ?? '0'));
 const browseUserId = computed(() => authStore.currentUser?.username || 'anonymous');
 const documentBasicInfo = ref<DocumentBasicInfo>(createDefaultDocumentBasicInfo());
@@ -580,31 +713,31 @@ const dateRangeDemo = reactive<{
   dateRange: null,
   disabledRange: null,
 });
-const selectedLoginRecentAccountKey = ref('0::super_admin');
+const selectedLoginRecentAccountKey = ref('platform::super_admin');
 const loginRecentAccountDemoProfiles = ref<LoginProfile[]>([
   {
-    key: '0::super_admin',
-    tenantId: '0',
+    key: 'platform::super_admin',
+    tenantCode: 'platform',
     username: 'super_admin',
     password: 'demo-password',
     updatedAt: Date.now(),
   },
   {
-    key: '1001::tenant_admin',
-    tenantId: '1001',
+    key: 'default::tenant_admin',
+    tenantCode: 'default',
     username: 'tenant_admin',
     updatedAt: Date.now() - 1000,
   },
   {
-    key: '1002::warehouse_user',
-    tenantId: '1002',
+    key: 'acme::warehouse_user',
+    tenantCode: 'acme',
     username: 'warehouse_user',
     updatedAt: Date.now() - 2000,
   },
 ]);
 const selectedLoginRecentAccountLabel = computed(() => {
   const profile = loginRecentAccountDemoProfiles.value.find((item) => item.key === selectedLoginRecentAccountKey.value);
-  return profile ? `${profile.tenantId} / ${profile.username}` : '未选择';
+  return profile ? `${profile.tenantCode} / ${profile.username}` : '未选择';
 });
 
 type BrowseDemoRow = {
@@ -628,19 +761,6 @@ type NavigationTreeDemoContextAction = {
   enabled: boolean;
 };
 
-const browseColumns: Array<XuanBrowseTableColumn<BrowseDemoRow>> = [
-  { key: 'index', title: '序号', width: 70 },
-  { key: 'code', title: '编码', width: 130 },
-  { key: 'name', title: '名称', width: 130 },
-  { key: 'factoryCode', title: '厂家编码', width: 150 },
-  { key: 'factoryModel', title: '厂家型号', width: 150 },
-  { key: 'factoryName', title: '厂家名称', width: 150 },
-  { key: 'supplier', title: '来源供应商', width: 150 },
-  { key: 'status', title: '状态', width: 110 },
-  { key: 'category', title: '分类', width: 110 },
-  { key: 'unit', title: '单位', width: 90 },
-];
-
 const browseRows: BrowseDemoRow[] = Array.from({ length: 18 }, (_, index) => {
   const number = index + 1;
   return {
@@ -661,6 +781,86 @@ const pagedDemoRows = computed(() => {
   const start = (browseCurrentPage.value - 1) * browsePageSize.value;
   return browseRows.slice(start, start + browsePageSize.value);
 });
+
+const browseColumnPermissionSnapshot: BrowseTableColumnPermissionSnapshot = {
+  'erp-product::factoryModel': 'MASKED',
+  'erp-product::supplier': 'HIDDEN',
+};
+
+const browseTableSchema: XuanBrowseTableSchema<BrowseDemoRow> = {
+  pageCode: 'component-center',
+  tableCode: 'browse-table-demo',
+  actionsWidth: 160,
+  defaultDensity: 'default',
+  defaultPageSize: 10,
+  toolbar: {
+    showDensity: true,
+    showColumnSetting: true,
+    actions: [
+      {
+        key: 'refresh',
+        label: '刷新',
+        text: true,
+      },
+    ],
+  },
+  columns: [
+    { key: 'index', title: '序号', width: 70 },
+    { key: 'code', title: '编码', width: 130 },
+    { key: 'name', title: '名称', width: 130 },
+    { key: 'factoryCode', title: '厂家编码', width: 150 },
+    {
+      key: 'factoryModel',
+      title: '厂家型号',
+      width: 150,
+      permission: {
+        resourceKey: 'erp-product',
+        columnKey: 'factoryModel',
+        maskType: 'generic',
+      },
+    },
+    { key: 'factoryName', title: '厂家名称', width: 150 },
+    {
+      key: 'supplier',
+      title: '来源供应商',
+      width: 150,
+      permission: {
+        resourceKey: 'erp-product',
+        columnKey: 'supplier',
+      },
+    },
+    {
+      key: 'status',
+      title: '状态',
+      width: 110,
+      displayType: 'tag',
+      tagType: (row) => (row.status === '启用' ? 'success' : 'warning'),
+    },
+    { key: 'category', title: '分类', width: 110 },
+    { key: 'unit', title: '单位', width: 90 },
+  ],
+  rowActions: [
+    {
+      key: 'edit',
+      label: '编辑',
+      type: 'primary',
+      link: true,
+    },
+    {
+      key: 'toggle-enabled',
+      label: '切换状态',
+      type: 'danger',
+      link: true,
+    },
+  ],
+  emptyState: {
+    title: '暂无商品',
+    description: '当前筛选条件下没有浏览数据。',
+  },
+  pagination: {
+    pageSizes: [10, 20, 50],
+  },
+};
 
 const permissionDemoMenus: IamMenu[] = [
   { id: 1, code: 'inventory-root', parentId: null, title: '进销存', i18nKey: null, path: null, icon: 'PackageOpen', permissionCode: null, sortNo: 1, enabled: true },
@@ -911,11 +1111,14 @@ function renderOverviewDemo(kind: string) {
   return kind;
 }
 
-function submitDemoForm(value: Record<string, unknown>) {
-  Object.assign(demoForm, value);
-  demoCustomFields.value = Array.isArray(value.customFields) ? value.customFields as DynamicCustomField[] : [];
-  formVisible.value = false;
-  ElMessage.success('表单弹窗提交成功');
+function openRoleGrantPreview(size: 'sm' | 'md' | 'lg') {
+  roleGrantPreviewSize.value = size;
+  roleGrantPreviewVisible.value = true;
+}
+
+function submitRoleGrantPreview() {
+  roleGrantPreviewVisible.value = false;
+  ElMessage.success('分配角色预览已关闭');
 }
 
 function resetDemoSearch() {
@@ -934,10 +1137,27 @@ function submitDemoSearch() {
   ElMessage.success('搜索操作栏已触发查询');
 }
 
+function handleBrowseToolbarAction({ actionKey }: { actionKey: string }) {
+  if (actionKey === 'refresh') {
+    browseSelectedRows.value = [];
+    ElMessage.success('浏览表格 schema 工具栏已触发刷新');
+  }
+}
+
+function handleBrowseRowAction({ actionKey, row }: { actionKey: string; row: BrowseDemoRow }) {
+  if (actionKey === 'edit') {
+    ElMessage.success(`打开 ${row.code} 的编辑动作`);
+    return;
+  }
+  if (actionKey === 'toggle-enabled') {
+    ElMessage.success(`切换 ${row.code} 的启停状态`);
+  }
+}
+
 function handleLoginRecentAccountSelect(profileKey: string) {
   const profile = loginRecentAccountDemoProfiles.value.find((item) => item.key === profileKey);
   if (profile) {
-    ElMessage.success(`已选择 ${profile.tenantId} / ${profile.username}`);
+    ElMessage.success(`已选择 ${profile.tenantCode} / ${profile.username}`);
   }
 }
 
@@ -1031,6 +1251,88 @@ function submitDocumentDemo() {
   padding: 0;
 }
 
+.dialog-preview-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  margin-top: 14px;
+}
+
+.dialog-preview-strip-label {
+  color: var(--xuan-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.dialog-preview-strip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dialog-preview-strip-hint {
+  color: var(--xuan-muted);
+  font-size: 12px;
+}
+
+.dialog-preview-strip :deep(.el-button) {
+  min-width: 72px;
+}
+
+.dialog-preview-note {
+  margin: 12px 0 0;
+  color: var(--xuan-muted);
+  font-size: 12px;
+}
+
+.workspace-role-preview-dialog {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.workspace-role-preview-note {
+  margin: 0;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #1d4ed8;
+  background: #eff6ff;
+  font-size: 13px;
+}
+
+.workspace-role-preview-list {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px 12px;
+  min-height: 0;
+  overflow: auto;
+}
+
+.workspace-role-preview-item {
+  align-items: center;
+  height: auto;
+  min-height: 34px;
+  margin-right: 0;
+}
+
+.workspace-role-preview-item span {
+  margin-right: 8px;
+  font-weight: 600;
+}
+
+.workspace-role-preview-item code {
+  border-radius: 4px;
+  padding: 2px 5px;
+  color: #b45309;
+  background: #fff7ed;
+  font-size: 12px;
+}
+
 .component-panel-title {
   display: flex;
   min-width: 0;
@@ -1050,6 +1352,12 @@ function submitDocumentDemo() {
   font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+@media (max-width: 960px) {
+  .dialog-preview-strip {
+    align-items: flex-start;
+  }
 }
 
 .component-collapse-panel .component-preview-panel {
@@ -1135,6 +1443,54 @@ function submitDocumentDemo() {
   display: grid;
   grid-template-columns: repeat(2, minmax(260px, 1fr));
   gap: 12px;
+}
+
+.browse-table-guide {
+  display: grid;
+  gap: 16px;
+}
+
+.browse-table-guide-note {
+  margin: 0;
+  color: var(--xuan-muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.browse-table-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.browse-table-guide-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--xuan-border);
+  border-radius: 8px;
+  padding: 14px;
+  background: #f8fafc;
+}
+
+.browse-table-guide-card strong {
+  color: var(--xuan-text);
+  font-size: 14px;
+}
+
+.browse-table-guide-card ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--xuan-text);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.browse-table-guide-card li + li {
+  margin-top: 6px;
+}
+
+.browse-table-guide-card code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 }
 
 .component-demo-code-block {
@@ -1223,6 +1579,7 @@ function submitDocumentDemo() {
 
 @media (max-width: 900px) {
   .navigation-tree-demo,
+  .browse-table-guide-grid,
   .component-demo-code-blocks,
   .decimal-input-demo-grid,
   .date-range-demo-grid {

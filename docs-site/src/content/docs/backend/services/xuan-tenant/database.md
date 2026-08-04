@@ -89,7 +89,8 @@ title: "xuan-tenant 数据库结构"
 | 名称 | 字段/表达式 | 类型 | 说明 |
 | --- | --- | --- | --- |
 | `pk_tenant` | `id` | primary | 主键 |
-| `idx_tenant_code_active` | `normalized_code; WHERE deleted_at IS NULL` | normal | 规范化租户编码活动态唯一，由应用逻辑保证；唯一性由应用逻辑保证 |
+| `idx_tenant_code_active` | `normalized_code; WHERE deleted_at IS NULL` | normal | 规范化租户编码活动态查询索引 |
+| `ux_tenant_normalized_code_active` | `normalized_code; WHERE deleted_at IS NULL` | unique | 活动租户编码唯一约束，支撑登录入口按租户编码解析租户 |
 | `idx_tenant_status` | `status, deleted_at` | normal | 按状态筛选租户；唯一性由应用逻辑保证 |
 
 ### 逻辑约束

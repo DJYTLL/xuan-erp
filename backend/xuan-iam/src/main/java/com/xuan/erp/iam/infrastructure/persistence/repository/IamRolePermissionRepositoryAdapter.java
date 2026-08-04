@@ -33,6 +33,16 @@ public class IamRolePermissionRepositoryAdapter implements IamRolePermissionRepo
     }
 
     @Override
+    public void grantRoleToTenantAdmins(Long tenantId, Long roleId, String operator) {
+        mapper.insertTenantAdminUserRole(tenantId, roleId, operator);
+    }
+
+    @Override
+    public void removeRolePermissionsOutsideTenantEntitlements(Long tenantId, String operator) {
+        mapper.removeRolePermissionsOutsideTenantEntitlements(tenantId, operator);
+    }
+
+    @Override
     public List<Long> findUserIdsByRoleId(Long tenantId, Long roleId) {
         return mapper.findUserIdsByRoleId(tenantId, roleId);
     }

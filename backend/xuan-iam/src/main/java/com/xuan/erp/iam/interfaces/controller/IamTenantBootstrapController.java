@@ -3,10 +3,12 @@ package com.xuan.erp.iam.interfaces.controller;
 import com.xuan.erp.common.api.ApiResponse;
 import com.xuan.erp.iam.application.service.IamTenantBootstrapApplicationService;
 import com.xuan.erp.iam.interfaces.dto.IamTenantBootstrapRequest;
+import com.xuan.erp.iam.interfaces.dto.IamTenantPermissionSyncStateResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -40,6 +42,21 @@ public class IamTenantBootstrapController {
         return ApiResponse.success(tenantBootstrapApplicationService.bootstrapTenant(
                 tenantId,
                 request == null ? null : request.toCommand(),
+                request == null ? null : request.iamInitTemplateCode(),
+                request == null ? null : request.columnPermissionTemplateCodes(),
+                request == null ? null : request.defaultColumnPermissionTemplateCode(),
+                request == null ? null : request.permissionHash(),
                 requestedBy));
+    }
+
+    @Operation(summary = "查询租户 IAM 权限同步状态", description = "供 Tenant 对比当前套餐权限指纹和 IAM 最后同步指纹")
+    @PreAuthorize("hasAnyAuthority('tenant:view', 'tenant-plan:assign')")
+    @GetMapping("/{tenantId}/permission-sync-state")
+    public ApiResponse<IamTenantPermissionSyncStateResponse> getPermissionSyncState(
+            @Parameter(description = "租户 ID")
+            @PathVariable("tenantId") Long tenantId) {
+        return ApiResponse.success(new IamTenantPermissionSyncStateResponse(
+                tenantId,
+                tenantBootstrapApplicationService.lastSyncedPermissionHash(tenantId)));
     }
 }

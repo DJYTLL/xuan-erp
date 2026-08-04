@@ -6,5 +6,5 @@ export type FrameworkPermissionChecker = (permission: FrameworkPermission) => bo
 export const frameworkPermissionCheckerKey: InjectionKey<FrameworkPermissionChecker> = Symbol('frameworkPermissionChecker');
 
 export function useFrameworkPermissionChecker() {
-  return inject(frameworkPermissionCheckerKey, () => true);
+  return inject(frameworkPermissionCheckerKey, (permission) => !permission);
 }

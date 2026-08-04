@@ -31,4 +31,11 @@ public class TenantInternalStatusController {
         return ApiResponse.success(TenantAssembler.toInternalStatusResponse(
                 tenantApplicationService.getTenantInternalStatus(tenantId)));
     }
+
+    @Operation(summary = "按租户编码查询租户登录状态", description = "供 IAM 登录前用业务编码解析租户并校验是否允许登录")
+    @GetMapping("/by-code/{tenantCode}/status")
+    public ApiResponse<TenantInternalStatusResponse> getTenantStatusByCode(@PathVariable("tenantCode") String tenantCode) {
+        return ApiResponse.success(TenantAssembler.toInternalStatusResponse(
+                tenantApplicationService.getTenantInternalStatusByCode(tenantCode)));
+    }
 }

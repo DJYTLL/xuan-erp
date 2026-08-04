@@ -15,10 +15,10 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.ArrayDeque;
-import java.util.Deque;
 import java.util.List;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -52,6 +52,28 @@ class CachingJwkKeyProviderTest {
         assertThat(fetcher.fetchCount()).isEqualTo(1);
     }
 
+    // 测试正向缓存 TTL 到期后，即使目标 kid 仍存在，也会重新拉取 JWKS，避免长期使用过旧公钥。
+    @Test
+    void refreshesCachedJwkSetWhenPositiveCacheTtlExpires() throws Exception {
+        MutableClock clock = new MutableClock(Instant.parse("2026-07-14T00:00:00Z"));
+        StubJwkSetFetcher fetcher = new StubJwkSetFetcher(List.of(
+                jwkSet("kid-1"),
+                jwkSet("kid-1")));
+        CachingJwkKeyProvider provider = new CachingJwkKeyProvider(
+                fetcher,
+                Duration.ofSeconds(5),
+                Duration.ofMinutes(1),
+                Duration.ofSeconds(30),
+                Duration.ofSeconds(10),
+                clock);
+
+        provider.jwkSetForKid("kid-1").block();
+        clock.advance(Duration.ofSeconds(6));
+        provider.jwkSetForKid("kid-1").block();
+
+        assertThat(fetcher.fetchCount()).isEqualTo(2);
+    }
+
     // 测试缓存中没有目标 kid 时会刷新一次，支持 IAM 密钥轮换后新 kid 生效。
     @Test
     void refreshesOnceWhenKidMissingFromCurrentCache() throws Exception {
@@ -65,6 +87,74 @@ class CachingJwkKeyProviderTest {
 
         assertThat(refreshed).isNotNull();
         assertThat(refreshed.getKeyByKeyId("kid-2")).isNotNull();
+        assertThat(fetcher.fetchCount()).isEqualTo(2);
+    }
+
+    // 测试正向缓存过期后 IAM JWKS 短暂不可用时，兜底期内可继续使用旧公钥验签。
+    @Test
+    void usesStaleJwkSetWhenEndpointFailsInsideStaleTtl() throws Exception {
+        MutableClock clock = new MutableClock(Instant.parse("2026-07-14T00:00:00Z"));
+        StubJwkSetFetcher fetcher = new StubJwkSetFetcher(List.of(jwkSet("kid-1")));
+        fetcher.enqueueFailure(new IllegalStateException("iam down"));
+        CachingJwkKeyProvider provider = new CachingJwkKeyProvider(
+                fetcher,
+                Duration.ofSeconds(5),
+                Duration.ofMinutes(1),
+                Duration.ofSeconds(30),
+                Duration.ofSeconds(10),
+                clock);
+
+        provider.jwkSetForKid("kid-1").block();
+        clock.advance(Duration.ofSeconds(6));
+        JWKSet staleJwkSet = provider.jwkSetForKid("kid-1").block();
+
+        assertThat(staleJwkSet).isNotNull();
+        assertThat(staleJwkSet.getKeyByKeyId("kid-1")).isNotNull();
+        assertThat(fetcher.fetchCount()).isEqualTo(2);
+    }
+
+    // 测试陈旧缓存兜底期也过期后，IAM JWKS 仍不可用时应暴露基础设施不可用。
+    @Test
+    void rejectsStaleJwkSetAfterStaleTtlExpires() throws Exception {
+        MutableClock clock = new MutableClock(Instant.parse("2026-07-14T00:00:00Z"));
+        StubJwkSetFetcher fetcher = new StubJwkSetFetcher(List.of(jwkSet("kid-1")));
+        fetcher.enqueueFailure(new IllegalStateException("iam down"));
+        CachingJwkKeyProvider provider = new CachingJwkKeyProvider(
+                fetcher,
+                Duration.ofSeconds(5),
+                Duration.ofSeconds(10),
+                Duration.ofSeconds(30),
+                Duration.ofSeconds(10),
+                clock);
+
+        provider.jwkSetForKid("kid-1").block();
+        clock.advance(Duration.ofSeconds(16));
+
+        assertThatThrownBy(() -> provider.jwkSetForKid("kid-1").block())
+                .isInstanceOf(JwkSetUnavailableException.class);
+    }
+
+    // 测试达到定期刷新间隔后，Provider 可以预热最新 JWKS，后续新 kid 命中时不再额外拉取。
+    @Test
+    void refreshIfDueWarmsLatestJwkSetAfterRefreshInterval() throws Exception {
+        MutableClock clock = new MutableClock(Instant.parse("2026-07-14T00:00:00Z"));
+        StubJwkSetFetcher fetcher = new StubJwkSetFetcher(List.of(
+                jwkSet("kid-1"),
+                jwkSet("kid-1", "kid-2")));
+        CachingJwkKeyProvider provider = new CachingJwkKeyProvider(
+                fetcher,
+                Duration.ofMinutes(10),
+                Duration.ofMinutes(30),
+                Duration.ofSeconds(30),
+                Duration.ofSeconds(10),
+                clock);
+
+        provider.jwkSetForKid("kid-1").block();
+        provider.refreshIfDue().block();
+        clock.advance(Duration.ofSeconds(11));
+        provider.refreshIfDue().block();
+        provider.jwkSetForKid("kid-2").block();
+
         assertThat(fetcher.fetchCount()).isEqualTo(2);
     }
 
@@ -139,34 +229,64 @@ class CachingJwkKeyProviderTest {
     private static final class StubJwkSetFetcher implements JwkSetFetcher {
 
         private final AtomicInteger fetchCount = new AtomicInteger();
-        private final Deque<JWKSet> responses;
-        private final RuntimeException failure;
+        private final ConcurrentLinkedDeque<Object> responses;
 
         private StubJwkSetFetcher(List<JWKSet> responses) {
-            this.responses = new ArrayDeque<>(responses);
-            this.failure = null;
+            this.responses = new ConcurrentLinkedDeque<>(responses);
         }
 
         private StubJwkSetFetcher(RuntimeException failure) {
-            this.responses = new ArrayDeque<>();
-            this.failure = failure;
+            this.responses = new ConcurrentLinkedDeque<>();
+            this.responses.add(failure);
+        }
+
+        private void enqueueFailure(RuntimeException failure) {
+            responses.add(failure);
         }
 
         @Override
         public Mono<JWKSet> fetch() {
             fetchCount.incrementAndGet();
-            if (failure != null) {
-                return Mono.error(failure);
-            }
-            JWKSet response = responses.pollFirst();
+            Object response = responses.pollFirst();
             if (response == null) {
                 return Mono.error(new AssertionError("测试未准备足够的 JWKS 响应"));
             }
-            return Mono.just(response);
+            if (response instanceof RuntimeException exception) {
+                return Mono.error(exception);
+            }
+            return Mono.just((JWKSet) response);
         }
 
         private int fetchCount() {
             return fetchCount.get();
+        }
+    }
+
+    private static final class MutableClock extends Clock {
+
+        private final AtomicReference<Instant> instant;
+
+        private MutableClock(Instant instant) {
+            this.instant = new AtomicReference<>(instant);
+        }
+
+        private void advance(Duration duration) {
+            instant.updateAndGet(current -> current.plus(duration));
+        }
+
+        @Override
+        public ZoneOffset getZone() {
+            return ZoneOffset.UTC;
+        }
+
+        @Override
+        public Clock withZone(java.time.ZoneId zone) {
+            return this;
+        }
+
+        @Override
+        public Instant instant() {
+            return instant.get();
         }
     }
 }

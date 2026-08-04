@@ -66,7 +66,8 @@ class IamAuthenticationApplicationServiceTest {
                 accessTokenIssuer,
                 new StubRefreshTokenGenerator("refresh-token-1"),
                 authProperties,
-                auditPublisher);
+                auditPublisher,
+                allowingTenantStatusGateway());
 
         IamLoginView view = service.login(new LoginIamUserCommand(1001L, "admin", "Passw0rd!"));
 
@@ -93,6 +94,42 @@ class IamAuthenticationApplicationServiceTest {
     }
 
     @Test
+    void authenticatesUserByTenantCodeBeforeUsingTenantIdInternally() {
+        InMemoryIamUserRepository userRepository = new InMemoryIamUserRepository();
+        userRepository.store.put(1L, user(1L, 1001L, "admin", passwordEncoder.encode("Passw0rd!"), true, 0, null, null));
+        StubTenantStatusGateway tenantStatusGateway = new StubTenantStatusGateway();
+        tenantStatusGateway.codeStore.put("acme", new IamTenantStatusView(
+                1001L,
+                "acme",
+                "阿客米租户",
+                "ENABLED",
+                true,
+                null,
+                null));
+        StubIamAccessTokenIssuer accessTokenIssuer = new StubIamAccessTokenIssuer();
+        CapturingAuditWritePublisher auditPublisher = new CapturingAuditWritePublisher();
+        IamAuthenticationApplicationService service = new IamAuthenticationApplicationService(
+                userRepository,
+                new InMemoryAuthorizationSnapshotRepository(),
+                new InMemoryRefreshTokenRepository(),
+                passwordEncoder,
+                accessTokenIssuer,
+                new StubRefreshTokenGenerator("refresh-token-1"),
+                authProperties,
+                auditPublisher,
+                tenantStatusGateway);
+
+        IamLoginView view = service.login(new LoginIamUserCommand(null, " Acme ", "admin", "Passw0rd!"));
+
+        assertEquals(1001L, view.currentUser().tenantId());
+        assertEquals("acme", view.tenantCode());
+        assertEquals("阿客米租户", view.tenantName());
+        assertEquals("acme", tenantStatusGateway.lastTenantCode);
+        assertEquals(1001L, accessTokenIssuer.lastCurrentUser.tenantId());
+        assertLastAudit(auditPublisher, "iam:auth:login-success", AuditWriteOutcome.SUCCESS, "admin", 1L);
+    }
+
+    @Test
     void rejectsLoginWhenTenantStatusDoesNotAllowLogin() {
         InMemoryIamUserRepository userRepository = new InMemoryIamUserRepository();
         userRepository.store.put(1L, user(1L, 1001L, "admin", passwordEncoder.encode("Passw0rd!"), true, 0, null, null));
@@ -100,6 +137,7 @@ class IamAuthenticationApplicationServiceTest {
         tenantStatusGateway.store.put(1001L, new IamTenantStatusView(
                 1001L,
                 "acme",
+                "阿客米租户",
                 "DISABLED",
                 false,
                 "租户已停用",
@@ -135,6 +173,7 @@ class IamAuthenticationApplicationServiceTest {
         tenantStatusGateway.store.put(1001L, new IamTenantStatusView(
                 1001L,
                 "acme",
+                "阿客米租户",
                 "PROVISIONED",
                 true,
                 null,
@@ -158,6 +197,43 @@ class IamAuthenticationApplicationServiceTest {
         assertEquals("PROVISIONED", tenantStatusGateway.store.get(1001L).status());
         assertEquals(1001L, tenantStatusGateway.lastTenantId);
         assertLastAudit(auditPublisher, "iam:auth:login-success", AuditWriteOutcome.SUCCESS, "admin", 1L);
+    }
+
+    @Test
+    void rejectsCurrentTenantContextWhenTenantStatusNoLongerAllowsLogin() {
+        StubTenantStatusGateway tenantStatusGateway = new StubTenantStatusGateway();
+        tenantStatusGateway.store.put(1001L, new IamTenantStatusView(
+                1001L,
+                "acme",
+                "阿客米租户",
+                "DISABLED",
+                false,
+                "租户已停用",
+                null));
+        IamAuthenticationApplicationService service = new IamAuthenticationApplicationService(
+                new InMemoryIamUserRepository(),
+                new InMemoryAuthorizationSnapshotRepository(),
+                new InMemoryRefreshTokenRepository(),
+                passwordEncoder,
+                new StubIamAccessTokenIssuer(),
+                new StubRefreshTokenGenerator("refresh-token-1"),
+                authProperties,
+                new CapturingAuditWritePublisher(),
+                tenantStatusGateway);
+        CurrentUser currentUser = new CurrentUser(
+                1L,
+                1001L,
+                "admin",
+                Set.of("tenant_admin"),
+                3L,
+                Set.of("product:view"));
+
+        BusinessException error = assertThrows(BusinessException.class,
+                () -> service.validateCurrentTenantStatus(currentUser));
+
+        assertEquals("IAM_TENANT_LOGIN_DISABLED", error.code());
+        assertEquals("租户已停用", error.getMessage());
+        assertEquals(1001L, tenantStatusGateway.lastTenantId);
     }
 
     @Test
@@ -186,6 +262,29 @@ class IamAuthenticationApplicationServiceTest {
     }
 
     @Test
+    void rejectsTenantLoginWhenTenantStatusGatewayIsNotProvided() {
+        InMemoryIamUserRepository userRepository = new InMemoryIamUserRepository();
+        userRepository.store.put(1L, user(1L, 1001L, "admin", passwordEncoder.encode("Passw0rd!"), true, 0, null, null));
+        CapturingAuditWritePublisher auditPublisher = new CapturingAuditWritePublisher();
+        IamAuthenticationApplicationService service = new IamAuthenticationApplicationService(
+                userRepository,
+                new InMemoryAuthorizationSnapshotRepository(),
+                new InMemoryRefreshTokenRepository(),
+                passwordEncoder,
+                new StubIamAccessTokenIssuer(),
+                new StubRefreshTokenGenerator("refresh-token-1"),
+                authProperties,
+                auditPublisher);
+
+        BusinessException error = assertThrows(BusinessException.class,
+                () -> service.login(new LoginIamUserCommand(1001L, "admin", "Passw0rd!")));
+
+        assertEquals("IAM_TENANT_STATUS_UNAVAILABLE", error.code());
+        assertLastAudit(auditPublisher, "iam:auth:login-failed", AuditWriteOutcome.FAILED, "admin", 1L);
+        assertEquals("IAM_TENANT_STATUS_UNAVAILABLE", auditPublisher.events.getLast().errorCode());
+    }
+
+    @Test
     void refreshRotatesRefreshTokenAndRevokesPreviousToken() {
         InMemoryIamUserRepository userRepository = new InMemoryIamUserRepository();
         userRepository.store.put(1L, user(1L, 1001L, "admin", passwordEncoder.encode("Passw0rd!"), true, 0, null, null));
@@ -202,7 +301,8 @@ class IamAuthenticationApplicationServiceTest {
                 new StubIamAccessTokenIssuer(),
                 refreshTokenGenerator,
                 authProperties,
-                auditPublisher);
+                auditPublisher,
+                allowingTenantStatusGateway());
         IamLoginView loginView = service.login(new LoginIamUserCommand(1001L, "admin", "Passw0rd!"));
 
         IamLoginView refreshedView = service.refresh(new RefreshIamTokenCommand(loginView.refreshToken()));
@@ -222,6 +322,52 @@ class IamAuthenticationApplicationServiceTest {
     }
 
     @Test
+    void rejectsRefreshWhenTenantStatusNoLongerAllowsLogin() {
+        InMemoryIamUserRepository userRepository = new InMemoryIamUserRepository();
+        userRepository.store.put(1L, user(1L, 1001L, "admin", passwordEncoder.encode("Passw0rd!"), true, 0, null, null));
+        InMemoryRefreshTokenRepository refreshTokenRepository = new InMemoryRefreshTokenRepository();
+        StubTenantStatusGateway tenantStatusGateway = new StubTenantStatusGateway();
+        tenantStatusGateway.store.put(1001L, new IamTenantStatusView(
+                1001L,
+                "acme",
+                "阿客米租户",
+                "ENABLED",
+                true,
+                null,
+                null));
+        CapturingAuditWritePublisher auditPublisher = new CapturingAuditWritePublisher();
+        IamAuthenticationApplicationService service = new IamAuthenticationApplicationService(
+                userRepository,
+                new InMemoryAuthorizationSnapshotRepository(),
+                refreshTokenRepository,
+                passwordEncoder,
+                new StubIamAccessTokenIssuer(),
+                new StubRefreshTokenGenerator("refresh-token-1", "refresh-token-2"),
+                authProperties,
+                auditPublisher,
+                tenantStatusGateway);
+        IamLoginView loginView = service.login(new LoginIamUserCommand(1001L, "admin", "Passw0rd!"));
+        tenantStatusGateway.store.put(1001L, new IamTenantStatusView(
+                1001L,
+                "acme",
+                "阿客米租户",
+                "DISABLED",
+                false,
+                "租户已停用",
+                null));
+
+        BusinessException error = assertThrows(BusinessException.class,
+                () -> service.refresh(new RefreshIamTokenCommand(loginView.refreshToken())));
+
+        assertEquals("IAM_TENANT_LOGIN_DISABLED", error.code());
+        assertEquals("租户已停用", error.getMessage());
+        assertEquals(1001L, tenantStatusGateway.lastTenantId);
+        assertEquals(1, refreshTokenRepository.store.size());
+        assertLastAudit(auditPublisher, "iam:auth:refresh-failed", AuditWriteOutcome.FAILED, "admin", 1L, "IamRefreshToken");
+        assertEquals("IAM_TENANT_LOGIN_DISABLED", auditPublisher.events.getLast().errorCode());
+    }
+
+    @Test
     void rejectsReusedRefreshTokenAfterRotation() {
         InMemoryIamUserRepository userRepository = new InMemoryIamUserRepository();
         userRepository.store.put(1L, user(1L, 1001L, "admin", passwordEncoder.encode("Passw0rd!"), true, 0, null, null));
@@ -235,7 +381,8 @@ class IamAuthenticationApplicationServiceTest {
                 new StubIamAccessTokenIssuer(),
                 new StubRefreshTokenGenerator("refresh-token-1", "refresh-token-2"),
                 authProperties,
-                auditPublisher);
+                auditPublisher,
+                allowingTenantStatusGateway());
         IamLoginView loginView = service.login(new LoginIamUserCommand(1001L, "admin", "Passw0rd!"));
         service.refresh(new RefreshIamTokenCommand(loginView.refreshToken()));
 
@@ -295,7 +442,8 @@ class IamAuthenticationApplicationServiceTest {
                 new StubIamAccessTokenIssuer(),
                 new StubRefreshTokenGenerator("refresh-token-1", "refresh-token-2"),
                 authProperties,
-                auditPublisher);
+                auditPublisher,
+                allowingTenantStatusGateway());
         IamLoginView loginView = service.login(new LoginIamUserCommand(1001L, "admin", "Passw0rd!"));
 
         service.logout(new RevokeIamRefreshTokenCommand(loginView.refreshToken()));
@@ -325,7 +473,8 @@ class IamAuthenticationApplicationServiceTest {
                 new StubIamAccessTokenIssuer(),
                 new StubRefreshTokenGenerator("refresh-token-1"),
                 authProperties,
-                auditPublisher);
+                auditPublisher,
+                allowingTenantStatusGateway());
         IamLoginView loginView = service.login(new LoginIamUserCommand(1001L, "admin", "Passw0rd!"));
 
         service.logout(new RevokeIamRefreshTokenCommand("unknown-refresh-token"));
@@ -353,7 +502,8 @@ class IamAuthenticationApplicationServiceTest {
                 accessTokenIssuer,
                 new StubRefreshTokenGenerator("refresh-token-1"),
                 authProperties,
-                auditPublisher);
+                auditPublisher,
+                allowingTenantStatusGateway());
 
         IamLoginView view = service.login(new LoginIamUserCommand(0L, "super_admin", "123456"));
 
@@ -380,7 +530,8 @@ class IamAuthenticationApplicationServiceTest {
                 accessTokenIssuer,
                 new StubRefreshTokenGenerator("refresh-token-1"),
                 authProperties,
-                auditPublisher);
+                auditPublisher,
+                allowingTenantStatusGateway());
 
         IamLoginView view = service.login(new LoginIamUserCommand(0L, "superadmin", "123456"));
 
@@ -406,7 +557,8 @@ class IamAuthenticationApplicationServiceTest {
                 new StubIamAccessTokenIssuer(),
                 new StubRefreshTokenGenerator("refresh-token-1"),
                 authProperties,
-                auditPublisher);
+                auditPublisher,
+                allowingTenantStatusGateway());
 
         BusinessException error = assertThrows(BusinessException.class,
                 () -> service.login(new LoginIamUserCommand(1001L, "admin", "wrong-password")));
@@ -430,7 +582,8 @@ class IamAuthenticationApplicationServiceTest {
                 accessTokenIssuer,
                 new StubRefreshTokenGenerator("refresh-token-1"),
                 authProperties,
-                auditPublisher);
+                auditPublisher,
+                allowingTenantStatusGateway());
 
         BusinessException error = assertThrows(BusinessException.class,
                 () -> service.login(new LoginIamUserCommand(1001L, "missing", "Passw0rd!")));
@@ -455,7 +608,8 @@ class IamAuthenticationApplicationServiceTest {
                 accessTokenIssuer,
                 new StubRefreshTokenGenerator("refresh-token-1"),
                 authProperties,
-                auditPublisher);
+                auditPublisher,
+                allowingTenantStatusGateway());
 
         BusinessException error = assertThrows(BusinessException.class,
                 () -> service.login(new LoginIamUserCommand(1001L, "admin", "Passw0rd!")));
@@ -487,7 +641,8 @@ class IamAuthenticationApplicationServiceTest {
                 new StubIamAccessTokenIssuer(),
                 new StubRefreshTokenGenerator("refresh-token-1"),
                 authProperties,
-                auditPublisher);
+                auditPublisher,
+                allowingTenantStatusGateway());
 
         BusinessException error = assertThrows(BusinessException.class,
                 () -> service.login(new LoginIamUserCommand(1001L, "admin", "Passw0rd!")));
@@ -518,7 +673,8 @@ class IamAuthenticationApplicationServiceTest {
                 new StubIamAccessTokenIssuer(),
                 new StubRefreshTokenGenerator("refresh-token-1"),
                 authProperties,
-                auditPublisher);
+                auditPublisher,
+                allowingTenantStatusGateway());
 
         BusinessException error = assertThrows(BusinessException.class,
                 () -> service.login(new LoginIamUserCommand(1001L, "admin", "Passw0rd!")));
@@ -696,6 +852,10 @@ class IamAuthenticationApplicationServiceTest {
         }
     }
 
+    private static IamTenantStatusGateway allowingTenantStatusGateway() {
+        return tenantId -> Optional.of(new IamTenantStatusView(tenantId, "default", "默认租户", "ENABLED", true, null, null));
+    }
+
     private static final class InMemoryIamUserRepository implements IamUserRepository {
 
         private final Map<Long, IamUser> store = new LinkedHashMap<>();
@@ -815,12 +975,20 @@ class IamAuthenticationApplicationServiceTest {
     private static final class StubTenantStatusGateway implements IamTenantStatusGateway {
 
         private final Map<Long, IamTenantStatusView> store = new LinkedHashMap<>();
+        private final Map<String, IamTenantStatusView> codeStore = new LinkedHashMap<>();
         private Long lastTenantId;
+        private String lastTenantCode;
 
         @Override
         public Optional<IamTenantStatusView> findTenantStatus(Long tenantId) {
             lastTenantId = tenantId;
             return Optional.ofNullable(store.get(tenantId));
+        }
+
+        @Override
+        public Optional<IamTenantStatusView> findTenantStatusByCode(String tenantCode) {
+            lastTenantCode = tenantCode;
+            return Optional.ofNullable(codeStore.get(tenantCode));
         }
     }
 

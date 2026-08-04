@@ -5,6 +5,7 @@ import com.xuan.erp.iam.application.command.LoginIamUserCommand;
 import com.xuan.erp.iam.application.command.RefreshIamTokenCommand;
 import com.xuan.erp.iam.application.command.RevokeIamRefreshTokenCommand;
 import com.xuan.erp.iam.application.query.IamLoginView;
+import com.xuan.erp.iam.application.query.IamTenantStatusView;
 import com.xuan.erp.iam.interfaces.dto.IamCurrentUserResponse;
 import com.xuan.erp.iam.interfaces.dto.IamLoginRequest;
 import com.xuan.erp.iam.interfaces.dto.IamLoginResponse;
@@ -19,7 +20,7 @@ public final class IamAuthenticationAssembler {
     }
 
     public static LoginIamUserCommand toCommand(IamLoginRequest request) {
-        return new LoginIamUserCommand(request.tenantId(), request.username(), request.password());
+        return new LoginIamUserCommand(request.tenantId(), request.tenantCode(), request.username(), request.password());
     }
 
     public static RefreshIamTokenCommand toCommand(IamRefreshTokenRequest request) {
@@ -37,13 +38,26 @@ public final class IamAuthenticationAssembler {
                 view.accessTokenExpiresAt(),
                 view.refreshToken(),
                 view.refreshTokenExpiresAt(),
-                toCurrentUserResponse(view.currentUser()));
+                toCurrentUserResponse(view.currentUser(), view.tenantCode(), view.tenantName()));
     }
 
     public static IamCurrentUserResponse toCurrentUserResponse(CurrentUser currentUser) {
+        return toCurrentUserResponse(currentUser, null, null);
+    }
+
+    public static IamCurrentUserResponse toCurrentUserResponse(CurrentUser currentUser, IamTenantStatusView tenantStatus) {
+        if (tenantStatus == null) {
+            return toCurrentUserResponse(currentUser);
+        }
+        return toCurrentUserResponse(currentUser, tenantStatus.code(), tenantStatus.name());
+    }
+
+    public static IamCurrentUserResponse toCurrentUserResponse(CurrentUser currentUser, String tenantCode, String tenantName) {
         return new IamCurrentUserResponse(
                 currentUser.userId(),
                 currentUser.tenantId(),
+                tenantCode,
+                tenantName,
                 currentUser.username(),
                 currentUser.roles(),
                 currentUser.authVersion(),

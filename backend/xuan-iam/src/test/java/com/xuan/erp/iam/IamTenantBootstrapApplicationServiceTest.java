@@ -3,7 +3,9 @@ package com.xuan.erp.iam;
 import com.xuan.erp.common.exception.BusinessException;
 import com.xuan.erp.iam.application.command.BootstrapTenantAdminCommand;
 import com.xuan.erp.iam.application.port.IamTenantBootstrapGateway;
+import com.xuan.erp.iam.application.service.IamColumnPermissionApplicationService;
 import com.xuan.erp.iam.application.service.IamTenantBootstrapApplicationService;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -23,23 +25,35 @@ class IamTenantBootstrapApplicationServiceTest {
     @Test
     void delegatesBootstrapToGatewayAndReturnsInsertedMenuCount() {
         IamTenantBootstrapGateway bootstrapGateway = mock(IamTenantBootstrapGateway.class);
-        IamTenantBootstrapApplicationService service = new IamTenantBootstrapApplicationService(bootstrapGateway, passwordEncoder);
-        when(bootstrapGateway.bootstrapTenant(1001L, "admin", "hashed-password", "租户管理员", null, null, "tenant-service")).thenReturn(12);
+        IamColumnPermissionApplicationService columnPermissionApplicationService = mock(IamColumnPermissionApplicationService.class);
+        IamTenantBootstrapApplicationService service = new IamTenantBootstrapApplicationService(
+                bootstrapGateway,
+                passwordEncoder,
+                columnPermissionApplicationService);
+        when(bootstrapGateway.bootstrapTenant(1001L, "admin", "hashed-password", "租户管理员", null, null, "standard", "tenant-service")).thenReturn(12);
 
         Integer insertedCount = service.bootstrapTenant(
                 1001L,
                 new BootstrapTenantAdminCommand("admin", "hashed-password", "租户管理员", null, null, true),
+                " standard ",
+                List.of(" tenant-basic ", "iam-user-basic", "tenant-basic"),
+                " tenant-basic ",
                 " tenant-service ");
 
         assertEquals(12, insertedCount);
-        verify(bootstrapGateway).bootstrapTenant(1001L, "admin", "hashed-password", "租户管理员", null, null, "tenant-service");
+        verify(bootstrapGateway).bootstrapTenant(1001L, "admin", "hashed-password", "租户管理员", null, null, "standard", "tenant-service");
+        verify(columnPermissionApplicationService).replaceTenantTemplateAssignmentsByCodes(
+                1001L,
+                List.of("tenant-basic", "iam-user-basic"),
+                "tenant-basic",
+                "tenant-service");
     }
 
     @Test
     void defaultsRequesterToTenantProvisionWhenBlank() {
         IamTenantBootstrapGateway bootstrapGateway = mock(IamTenantBootstrapGateway.class);
         IamTenantBootstrapApplicationService service = new IamTenantBootstrapApplicationService(bootstrapGateway, passwordEncoder);
-        when(bootstrapGateway.bootstrapTenant(1001L, "admin", "hashed-password", "租户管理员", null, null, "tenant-provision")).thenReturn(0);
+        when(bootstrapGateway.bootstrapTenant(1001L, "admin", "hashed-password", "租户管理员", null, null, null, "tenant-provision")).thenReturn(0);
 
         Integer insertedCount = service.bootstrapTenant(
                 1001L,
@@ -47,7 +61,7 @@ class IamTenantBootstrapApplicationServiceTest {
                 " ");
 
         assertEquals(0, insertedCount);
-        verify(bootstrapGateway).bootstrapTenant(1001L, "admin", "hashed-password", "租户管理员", null, null, "tenant-provision");
+        verify(bootstrapGateway).bootstrapTenant(1001L, "admin", "hashed-password", "租户管理员", null, null, null, "tenant-provision");
     }
 
     @Test
@@ -58,6 +72,7 @@ class IamTenantBootstrapApplicationServiceTest {
                 org.mockito.ArgumentMatchers.eq("admin"),
                 org.mockito.ArgumentMatchers.argThat(hash -> passwordEncoder.matches("123456", hash)),
                 org.mockito.ArgumentMatchers.eq("租户管理员"),
+                org.mockito.ArgumentMatchers.isNull(),
                 org.mockito.ArgumentMatchers.isNull(),
                 org.mockito.ArgumentMatchers.isNull(),
                 org.mockito.ArgumentMatchers.eq("tenant-provision"))).thenReturn(1);

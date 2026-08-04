@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { getCurrentPermissionSnapshot } from '@/api/auth';
+import { getCurrentMenus, getCurrentPermissionSnapshot } from '@/api/auth';
 import type { CurrentMenuNode, CurrentPermissionSnapshot } from '@/types/auth';
 
 interface AuthorizationState {
@@ -58,13 +58,19 @@ export const useAuthorizationStore = defineStore('authorization', {
   },
   actions: {
     async loadPermissionSnapshot() {
+      return this.refreshCurrentAuthorizationContext();
+    },
+    async refreshCurrentAuthorizationContext() {
       this.loading = true;
       try {
-        const snapshot = await getCurrentPermissionSnapshot();
+        const [snapshot, currentMenus] = await Promise.all([
+          getCurrentPermissionSnapshot(),
+          getCurrentMenus(),
+        ]);
         this.snapshot = {
           ...emptySnapshot(),
           ...snapshot,
-          menus: normalizeMenus(snapshot.menus),
+          menus: normalizeMenus(currentMenus),
         };
         return this.snapshot;
       } finally {

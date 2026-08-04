@@ -4,6 +4,7 @@
     :title="title"
     :width="width"
     class="batch-confirm-dialog"
+    align-center
     @update:model-value="emit('update:modelValue', $event)"
   >
     <div class="confirm-summary" :class="`confirm-summary-${tone}`">
@@ -63,4 +64,3 @@ function confirm() {
   }
 }
 </script>
-

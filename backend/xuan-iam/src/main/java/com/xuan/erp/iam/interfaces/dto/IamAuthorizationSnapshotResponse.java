@@ -25,7 +25,7 @@ public record IamAuthorizationSnapshotResponse(
         @Schema(description = "菜单编码列表")
         List<String> menuCodes,
         @Schema(description = "列权限快照")
-        Map<String, List<String>> columnSettings,
+        Map<String, Map<String, String>> columnSettings,
         @Schema(description = "快照哈希")
         String snapshotHash,
         @Schema(description = "构建时间")

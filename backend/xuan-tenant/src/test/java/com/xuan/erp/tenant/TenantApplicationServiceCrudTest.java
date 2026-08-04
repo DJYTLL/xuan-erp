@@ -144,6 +144,50 @@ class TenantApplicationServiceCrudTest {
     }
 
     @Test
+    void selectedPlanTemplateCodeDrivesIamBootstrapPayload() {
+        InMemoryTenantRepository tenantRepository = new InMemoryTenantRepository();
+        InMemoryTenantStatusHistoryRepository historyRepository = new InMemoryTenantStatusHistoryRepository();
+        InMemoryTenantProvisionTaskRepository taskRepository = new InMemoryTenantProvisionTaskRepository();
+        InMemoryTenantProvisionTaskStepRepository stepRepository = new InMemoryTenantProvisionTaskStepRepository();
+        InMemoryTenantPlanRepository planRepository = new InMemoryTenantPlanRepository();
+        InMemoryTenantPlanAssignmentRepository assignmentRepository = new InMemoryTenantPlanAssignmentRepository();
+        planRepository.store.put(7L, tenantPlan(
+                7L,
+                "standard",
+                TenantPlanStatus.ENABLED,
+                "{\"modules\":[\"product\"],\"iamInitTemplateCode\":\"standard\"}"));
+        TenantProvisionApplicationService provisionService = new TenantProvisionApplicationService(
+                taskRepository,
+                stepRepository,
+                new NoOpTenantOutboxEventRepository());
+        TenantApplicationService service = new TenantApplicationService(
+                tenantRepository,
+                historyRepository,
+                null,
+                provisionService,
+                null,
+                planRepository,
+                assignmentRepository);
+
+        service.createTenant(new CreateTenantCommand(
+                "acme",
+                "玄云",
+                null,
+                null,
+                null,
+                null,
+                "admin",
+                "123456",
+                "租户管理员",
+                null,
+                null,
+                7L,
+                null));
+
+        assertTrue(stepRepository.saved.getFirst().requestPayloadJson().contains("\"iamInitTemplateCode\":\"standard\""));
+    }
+
+    @Test
     void createTenantReturnsCurrentPlanSummaryWhenInitialPlanAssigned() {
         InMemoryTenantRepository tenantRepository = new InMemoryTenantRepository();
         InMemoryTenantStatusHistoryRepository historyRepository = new InMemoryTenantStatusHistoryRepository();
@@ -218,6 +262,9 @@ class TenantApplicationServiceCrudTest {
         Tenant created = tenantRepository.store.get(tenantId);
         tenantRepository.store.put(tenantId, created.markProvisioned("初始化完成", "system", OffsetDateTime.now()));
 
+        service.enableTenant(tenantId, new ChangeTenantStatusCommand("开通启用", "admin"));
+        assertEquals(TenantStatus.ENABLED, tenantRepository.findById(tenantId).orElseThrow().status());
+
         service.disableTenant(tenantId, new ChangeTenantStatusCommand("欠费停用", "admin"));
         Tenant disabled = tenantRepository.findById(tenantId).orElseThrow();
         assertEquals(TenantStatus.DISABLED, disabled.status());
@@ -232,7 +279,23 @@ class TenantApplicationServiceCrudTest {
         assertEquals("测试数据清理", deleted.deleteReason());
         assertTrue(deleted.deletedAt() != null);
         assertEquals(Optional.empty(), tenantRepository.findById(tenantId));
-        assertEquals(5, historyRepository.saved.stream().filter(item -> item.tenantId().equals(tenantId)).count());
+        assertEquals(6, historyRepository.saved.stream().filter(item -> item.tenantId().equals(tenantId)).count());
+    }
+
+    @Test
+    void rejectsDisablingProvisionedTenantBeforeEnable() {
+        InMemoryTenantRepository tenantRepository = new InMemoryTenantRepository();
+        InMemoryTenantStatusHistoryRepository historyRepository = new InMemoryTenantStatusHistoryRepository();
+        TenantApplicationService service = new TenantApplicationService(tenantRepository, historyRepository);
+        Long tenantId = service.createTenant(new CreateTenantCommand("acme", "玄云", null, null, null)).id();
+
+        Tenant created = tenantRepository.store.get(tenantId);
+        tenantRepository.store.put(tenantId, created.markProvisioned("初始化完成", "system", OffsetDateTime.now()));
+
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> service.disableTenant(tenantId, new ChangeTenantStatusCommand("欠费停用", "admin")));
+
+        assertEquals("tenant must be enabled before disabling", error.getMessage());
     }
 
     @Test
@@ -266,6 +329,38 @@ class TenantApplicationServiceCrudTest {
         assertEquals(TenantStatus.PROVISIONED, status.status());
         assertTrue(status.loginAllowed());
         assertEquals(null, status.loginDeniedReason());
+    }
+
+    @Test
+    void disabledTenantDoesNotAllowLoginInInternalStatusView() {
+        InMemoryTenantRepository tenantRepository = new InMemoryTenantRepository();
+        TenantApplicationService service = new TenantApplicationService(tenantRepository, new InMemoryTenantStatusHistoryRepository());
+        Long tenantId = service.createTenant(new CreateTenantCommand("acme", "玄云", null, null, null)).id();
+        Tenant created = tenantRepository.store.get(tenantId);
+        tenantRepository.store.put(tenantId, created.markProvisioned("初始化完成", "system", OffsetDateTime.now()));
+        service.enableTenant(tenantId, new ChangeTenantStatusCommand("开通启用", "admin"));
+        service.disableTenant(tenantId, new ChangeTenantStatusCommand("欠费停用", "admin"));
+
+        TenantInternalStatusView status = service.getTenantInternalStatus(tenantId);
+
+        assertEquals(TenantStatus.DISABLED, status.status());
+        assertFalse(status.loginAllowed());
+        assertEquals("租户状态不允许登录: DISABLED", status.loginDeniedReason());
+    }
+
+    @Test
+    void findsInternalStatusByTenantCodeForLogin() {
+        InMemoryTenantRepository tenantRepository = new InMemoryTenantRepository();
+        TenantApplicationService service = new TenantApplicationService(tenantRepository, new InMemoryTenantStatusHistoryRepository());
+        Long tenantId = service.createTenant(new CreateTenantCommand(" Acme ", "玄云", null, null, null)).id();
+        Tenant created = tenantRepository.store.get(tenantId);
+        tenantRepository.store.put(tenantId, created.markProvisioned("初始化完成", "system", OffsetDateTime.now()));
+
+        TenantInternalStatusView status = service.getTenantInternalStatusByCode(" ACME ");
+
+        assertEquals(tenantId, status.tenantId());
+        assertEquals("Acme", status.code());
+        assertTrue(status.loginAllowed());
     }
 
     @Test
@@ -716,9 +811,22 @@ class TenantApplicationServiceCrudTest {
             }
             return savedAssignment;
         }
+
+        @Override
+        public List<TenantPlanAssignment> findActiveByPlanId(Long planId) {
+            return saved.stream()
+                    .filter(assignment -> assignment.deletedAt() == null)
+                    .filter(assignment -> assignment.planId().equals(planId))
+                    .filter(assignment -> assignment.status() == PlanAssignmentStatus.ACTIVE)
+                    .toList();
+        }
     }
 
     private static TenantPlan tenantPlan(Long id, String code, TenantPlanStatus status) {
+        return tenantPlan(id, code, status, "{}");
+    }
+
+    private static TenantPlan tenantPlan(Long id, String code, TenantPlanStatus status, String featureFlagsJson) {
         OffsetDateTime now = OffsetDateTime.parse("2026-07-14T00:00:00Z");
         return new TenantPlan(
                 id,
@@ -731,7 +839,7 @@ class TenantApplicationServiceCrudTest {
                 null,
                 null,
                 null,
-                "{}",
+                featureFlagsJson,
                 0,
                 null,
                 "system",

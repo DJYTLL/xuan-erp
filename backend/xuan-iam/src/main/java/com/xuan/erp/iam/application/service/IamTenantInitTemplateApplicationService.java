@@ -22,12 +22,15 @@ public class IamTenantInitTemplateApplicationService {
 
     private final IamTenantInitPermissionTemplateRepository templateRepository;
     private final IamPermissionRepository permissionRepository;
+    private final IamTenantPermissionEntitlementApplicationService entitlementApplicationService;
 
     public IamTenantInitTemplateApplicationService(
             IamTenantInitPermissionTemplateRepository templateRepository,
-            IamPermissionRepository permissionRepository) {
+            IamPermissionRepository permissionRepository,
+            IamTenantPermissionEntitlementApplicationService entitlementApplicationService) {
         this.templateRepository = templateRepository;
         this.permissionRepository = permissionRepository;
+        this.entitlementApplicationService = entitlementApplicationService;
     }
 
     public List<IamTenantInitPermissionTemplate> listTemplates() {
@@ -96,7 +99,7 @@ public class IamTenantInitTemplateApplicationService {
         List<String> permissionCodes = requireEnabledPermissionCodes(command.permissionCodes());
         String operator = trimToNull(command.operator()) == null ? "system" : command.operator().trim();
         OffsetDateTime now = OffsetDateTime.now();
-        return templateRepository.save(new IamTenantInitPermissionTemplate(
+        IamTenantInitPermissionTemplate saved = templateRepository.save(new IamTenantInitPermissionTemplate(
                 existing.id(),
                 existing.code(),
                 existing.name(),
@@ -111,6 +114,8 @@ public class IamTenantInitTemplateApplicationService {
                 null,
                 null,
                 null));
+        entitlementApplicationService.syncTemplateEntitlements(saved.code(), permissionCodes, operator);
+        return saved;
     }
 
     private IamTenantInitPermissionTemplate requireTemplate(Long templateId) {

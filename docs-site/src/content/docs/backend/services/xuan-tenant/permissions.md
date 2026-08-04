@@ -7,9 +7,11 @@ title: "xuan-tenant 权限文档"
 ## 当前实现说明
 
 - 平台统一模板要求所有微服务的基础操作优先使用 `view/create/update/delete`。
-- `xuan-tenant` 当前已经落地的 V1 权限码继续保留，避免接口、测试和前端约定反复震荡。
-- 启用和停用当前统一收敛到 `tenant:lifecycle`，等平台需要精细化时再受控拆分为 `tenant:enable` 和 `tenant:disable`。
+- `xuan-tenant` 当前已统一租户生命周期权限码：启用使用 `tenant:enable`，停用、暂停、冻结使用 `tenant:disable`。
+- 历史 `tenant:lifecycle` 仅作为 IAM 迁移兼容来源保留，不再作为后端接口、前端按钮或文档中的正式权限码。
 - 配置写操作当前统一使用 `tenant-config:manage`，语义上对应配置编辑能力。
+- 租户套餐中的 `feature_flags.iamInitTemplateCode` 是 IAM 初始化模板选择器；创建租户或调整套餐后，`xuan-tenant` 通过 IAM 初始化流程让该模板重新同步租户权限池、菜单、受管角色、角色权限、管理员角色绑定和授权快照。
+- 套餐不是前端展示承诺，而是后端授权边界：没有进入租户权限池的权限，后端角色授权接口不能授予，当前用户权限接口不能返回，前端菜单和按钮也不能展示。
 
 ## 菜单与 pageKey
 
@@ -26,7 +28,8 @@ title: "xuan-tenant 权限文档"
 | `tenant:view` | 查询租户 | 访问租户列表、详情、生命周期历史和下拉引用数据 |
 | `tenant:create` | 创建租户 | 创建租户主档并异步启动首期编排入口，创建成功后立即返回 `PROVISIONING` |
 | `tenant:update` | 修改租户 | 修改租户名称、联系人摘要、备注等基础信息 |
-| `tenant:lifecycle` | 生命周期操作 | 当前聚合启用、暂停、停用、恢复等动作，对应统一模板里的启用/停用类能力 |
+| `tenant:enable` | 启用租户 | 启用、恢复租户 |
+| `tenant:disable` | 停用租户 | 暂停、停用、冻结租户，必须填写原因 |
 | `tenant:delete` | 删除租户 | 逻辑删除租户，删除前必须完成应用层状态和关联校验 |
 | `tenant-plan:view` | 查询套餐 | 查看套餐列表、套餐详情和当前租户套餐 |
 | `tenant-plan:manage` | 维护套餐 | 新增、修改、启停套餐定义、额度和功能开关 |
@@ -41,6 +44,22 @@ title: "xuan-tenant 权限文档"
 | `tenant-provision:manage` | 管理初始化 | 面向运维动作，只用于重试失败初始化步骤、处理死信 Outbox 事件和人工补偿，不承担创建租户或发起编排入口职责 |
 | `tenant-provision:callback` | 初始化回执 | IAM 和业务服务回写初始化步骤成功或失败结果，不授予普通租户管理员 |
 | `tenant:export` | 导出 | 导出租户、套餐、域名、联系人、配置或初始化记录，按需启用 |
+
+## 套餐与 IAM 初始化模板
+
+套餐管理页面维护的是业务套餐定义；真正的租户授权由 IAM 初始化模板和角色模板落地。
+
+| 套餐字段 | 作用 | 权威落点 |
+| --- | --- | --- |
+| `plan.code` | 套餐编码，用于租户套餐绑定和计费/运营识别 | `xuan-tenant` |
+| `feature_flags.iamInitTemplateCode` | 选择 IAM 初始化模板，例如 `basic`、`standard`、`full` | `xuan-tenant` 发起，`xuan-iam` 执行 |
+| 租户模板绑定 | 稳定记录租户当前归属哪个 IAM 初始化模板 | `iam_tenant_init_template_binding` |
+| 初始化模板权限清单 | 定义该套餐最多允许哪些权限和菜单 | `iam_tenant_init_permission_template` |
+| 租户权限池 | 当前租户角色可被分配权限的上限 | `iam_tenant_permission_entitlement` |
+| 初始化角色模板 | 定义该模板创建哪些角色、每个角色有哪些权限、哪个角色授予管理员 | `iam_tenant_init_role_template` |
+| 当前用户菜单/按钮 | 前端运行态展示依据 | `GET /api/iam/menus/current`、`GET /api/iam/permissions/current` |
+
+调整套餐后必须重新触发 IAM 初始化同步，不能只修改租户套餐记录。同步完成后，后端当前用户权限接口应反映最新角色权限；前端在刷新权限状态后才能展示新增能力。降级时 IAM 会先减少租户权限池，再级联软删除所有角色中超出权限池的权限，前端菜单和按钮必须随当前权限快照隐藏被收回能力。
 
 ## 列权限
 

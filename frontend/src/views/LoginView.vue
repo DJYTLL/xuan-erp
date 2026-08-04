@@ -61,12 +61,11 @@
           </div>
 
           <label class="login-field">
-            <span>{{ t('login.tenantId') }}</span>
+            <span>{{ t('login.tenantCode') }}</span>
             <input
               ref="tenantInputRef"
-              v-model.trim="form.tenantId"
+              v-model.trim="form.tenantCode"
               :disabled="loading"
-              inputmode="numeric"
               autocomplete="off"
               :placeholder="t('login.tenantPlaceholder')"
               @focus="startTyping"
@@ -191,7 +190,7 @@ const tenantInputRef = ref<HTMLInputElement | null>(null);
 const usernameInputRef = ref<HTMLInputElement | null>(null);
 const passwordInputRef = ref<HTMLInputElement | null>(null);
 const form = reactive({
-  tenantId: initialProfile?.tenantId || '',
+  tenantCode: initialProfile?.tenantCode || '',
   username: initialProfile?.username || '',
   password: initialProfile?.password || '',
 });
@@ -213,7 +212,7 @@ function refreshLoginProfiles(preferredKey = '') {
 
 async function focusPreferredField() {
   await nextTick();
-  if (!form.tenantId) {
+  if (!form.tenantCode) {
     tenantInputRef.value?.focus();
     return;
   }
@@ -230,7 +229,7 @@ function applyLoginProfileSelection(profileKey: string) {
     return;
   }
 
-  form.tenantId = profile.tenantId;
+  form.tenantCode = profile.tenantCode;
   form.username = profile.username;
   form.password = profile.password || '';
   rememberPassword.value = Boolean(profile.password);
@@ -277,8 +276,7 @@ async function clearAllLoginProfiles() {
 }
 
 async function submitLogin() {
-  const tenantId = Number(form.tenantId);
-  if (form.tenantId === '' || Number.isNaN(tenantId) || !form.username || !form.password) {
+  if (!form.tenantCode || !form.username || !form.password) {
     ElMessage.warning(t('login.required'));
     return;
   }
@@ -286,12 +284,12 @@ async function submitLogin() {
   loading.value = true;
   try {
     await authStore.login({
-      tenantId,
+      tenantCode: form.tenantCode,
       username: form.username,
       password: form.password,
     });
     const profile = saveLoginProfile({
-      tenantId: form.tenantId,
+      tenantCode: form.tenantCode,
       username: form.username,
       password: rememberPassword.value ? form.password : undefined,
     });

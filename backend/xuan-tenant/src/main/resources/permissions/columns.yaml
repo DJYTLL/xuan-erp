@@ -3,6 +3,9 @@ draft: true
 columns:
   - pageKey: tenant
     fields:
+      - currentPlanName
+      - currentPlanExpiresAt
+      - primaryDomain
       - contactName
       - contactPhone
       - contactEmail

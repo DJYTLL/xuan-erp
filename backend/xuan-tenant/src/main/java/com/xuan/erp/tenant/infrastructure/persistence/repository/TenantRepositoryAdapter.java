@@ -103,6 +103,12 @@ public class TenantRepositoryAdapter implements TenantRepository {
                 record.currentPlanExpiresAt(),
                 record.primaryDomainId(),
                 record.primaryDomain(),
+                record.permissionSyncExpectedHash(),
+                record.permissionSyncStatus(),
+                record.permissionSyncLastCheckedAt(),
+                record.permissionSyncLastSyncedAt(),
+                record.permissionSyncLastErrorCode(),
+                record.permissionSyncLastErrorMessage(),
                 record.statusHistoryCount() == null ? 0L : record.statusHistoryCount(),
                 record.latestStatusChangeType(),
                 record.latestStatusChangedAt()

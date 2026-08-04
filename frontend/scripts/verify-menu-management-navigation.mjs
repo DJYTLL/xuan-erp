@@ -95,6 +95,8 @@ assertIncludes(menuViewSource, 'onClick: ({ node }) => handleMenuNodeEdit(node)'
 assertIncludes(treeComponentSource, 'contextMenuActionsResolver', 'Shared tree component should support page-provided context menu items.');
 assertIncludes(menuViewSource, 'resolveMenuDisplayTitle', 'Menu management table should use the same display title contract as the navigation tree.');
 assertIncludes(menuViewSource, '菜单类型', 'Menu dialog should make menu type explicit.');
+assertIncludes(menuViewSource, '菜单可见权限', 'Menu dialog should name permissionCode as the menu visibility permission.');
+assertIncludes(menuViewSource, '页面进入所需权限码', 'Menu dialog should explain that page menus use route entry permissions.');
 assertIncludes(menuViewSource, "import XuanDecimalInput from '@/framework/components/XuanDecimalInput.vue';", 'Menu dialog should import the project decimal input.');
 assertIncludes(menuViewSource, '<XuanDecimalInput', 'Menu dialog sort field should use the project decimal input.');
 assertIncludes(menuViewSource, 'normalizeSortNo', 'Menu dialog should normalize decimal input sort value before submit.');

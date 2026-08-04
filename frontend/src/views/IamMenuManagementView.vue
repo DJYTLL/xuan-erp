@@ -5,11 +5,11 @@
   >
     <template #query>
       <QueryToolbar>
-        <el-input v-model="keyword" class="query-input" placeholder="搜索编码 / 标题 / 路径 / 权限码" clearable />
+        <el-input v-model="keyword" class="query-input" placeholder="搜索编码 / 标题 / 路径 / 菜单可见权限" clearable />
         <template #actions>
           <el-button :icon="RefreshCw" circle @click="loadMenus" />
-          <PermissionButton type="primary" permission="iam:create" @click="openCreate('page')">新增页面</PermissionButton>
-          <PermissionButton permission="iam:create" @click="openCreate('group')">新增分组</PermissionButton>
+          <PermissionButton type="primary" permission="iam-menu:create" @click="openCreate('page')">新增页面</PermissionButton>
+          <PermissionButton permission="iam-menu:create" @click="openCreate('group')">新增分组</PermissionButton>
         </template>
       </QueryToolbar>
     </template>
@@ -62,7 +62,7 @@
               <div class="menu-meta-cell">
                 <span>父菜单：{{ resolveParentLabel(row) }}</span>
                 <span>路由：{{ row.path || '未配置' }}</span>
-                <span>权限：{{ row.permissionCode || '未配置' }}</span>
+                <span>菜单可见权限：{{ row.permissionCode || '未配置' }}</span>
               </div>
             </template>
           </el-table-column>
@@ -79,111 +79,39 @@
           </el-table-column>
           <el-table-column label="操作" width="210" fixed="right">
             <template #default="{ row }">
-              <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
-              <el-button link :type="row.enabled ? 'warning' : 'success'" @click="toggleMenu(row)">
+              <PermissionButton link type="primary" permission="iam-menu:update" no-permission-mode="disable" @click="openEdit(row)">编辑</PermissionButton>
+              <PermissionButton link :type="row.enabled ? 'warning' : 'success'" permission="iam-menu:update" no-permission-mode="disable" @click="toggleMenu(row)">
                 {{ row.enabled ? '停用' : '启用' }}
-              </el-button>
+              </PermissionButton>
             </template>
           </el-table-column>
         </el-table>
       </section>
     </div>
 
-    <el-dialog v-model="dialogVisible" :title="editingMenu ? '编辑菜单' : '新增菜单'" width="720px">
-      <el-form label-position="top">
-        <el-row :gutter="16">
-          <el-col :span="24">
-            <el-form-item label="菜单类型">
-              <el-radio-group v-model="menuType" @change="handleMenuTypeChange">
-                <el-radio-button label="导航分组" value="group" />
-                <el-radio-button label="页面菜单" value="page" />
-                <el-radio-button label="分组入口" value="entry" />
-              </el-radio-group>
-              <p class="menu-type-description">{{ menuTypeDescription }}</p>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="菜单编码">
-              <el-input v-model="form.code" :disabled="Boolean(editingMenu)" placeholder="iam-role-management" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="父菜单">
-              <el-tree-select
-                v-model="form.parentId"
-                class="parent-menu-tree-select"
-                popper-class="parent-menu-tree-popper"
-                :data="parentMenuTreeOptions"
-                :props="parentMenuTreeProps"
-                node-key="value"
-                check-strictly
-                clearable
-                filterable
-                :render-after-expand="false"
-                :filter-node-method="filterParentMenuNode"
-                placeholder="顶级菜单"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="标题">
-              <el-input v-model="form.title" placeholder="角色管理" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="国际化键">
-              <el-input v-model="form.i18nKey" placeholder="menu.iamRoles" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="路由路径">
-              <el-input
-                v-model="form.path"
-                :disabled="menuType === 'group'"
-                :placeholder="menuType === 'group' ? '导航分组不需要路由路径' : '/system/iam/roles'"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="图标键">
-              <el-input v-model="form.icon" placeholder="ShieldCheck" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="权限码">
-              <el-input
-                v-model="form.permissionCode"
-                :disabled="menuType === 'group'"
-                :placeholder="menuType === 'group' ? '导航分组通常不配置权限码' : 'iam:view'"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="排序">
-              <XuanDecimalInput
-                v-model="sortNoInput"
-                :scale="0"
-                input-mode="numeric"
-                placeholder="0"
-              />
-            </el-form-item>
-          </el-col>
-        </el-row>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitMenu">保存</el-button>
-      </template>
-    </el-dialog>
+    <DynamicFormDialog
+      v-model="dialogVisible"
+      :title="editingMenu ? '编辑菜单' : '新增菜单'"
+      :description="menuTypeDescription"
+      :fields="menuFormFields"
+      :sections="menuFormSections"
+      :model="form"
+      size="lg"
+      label-position="top"
+      :confirm-permission="editingMenu ? 'iam-menu:update' : 'iam-menu:create'"
+      @submit="submitMenu"
+    />
   </ListPageShell>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { ElMessage } from 'element-plus/es/components/message/index';
 import { RefreshCw } from 'lucide-vue-next';
 import { createIamMenu, listIamMenus, setIamMenuEnabled, updateIamMenu } from '@/api/iamAdmin';
+import DynamicFormDialog from '@/framework/components/DynamicFormDialog.vue';
+import type { DynamicFormField, DynamicFormSection } from '@/framework/components/DynamicFormDialog.vue';
 import ListPageShell from '@/framework/components/ListPageShell.vue';
 import NavigationMenuTree, {
   type NavigationMenuTreeContextMenuAction,
@@ -191,7 +119,6 @@ import NavigationMenuTree, {
 } from '@/framework/components/NavigationMenuTree.vue';
 import PermissionButton from '@/framework/components/PermissionButton.vue';
 import QueryToolbar from '@/framework/components/QueryToolbar.vue';
-import XuanDecimalInput from '@/framework/components/XuanDecimalInput.vue';
 import type { IamMenu, IamMenuPayload } from '@/types/iamAdmin';
 
 defineOptions({ name: 'IamMenuManagementView' });
@@ -213,10 +140,13 @@ const dialogVisible = ref(false);
 const keyword = ref('');
 const menus = ref<IamMenu[]>([]);
 const editingMenu = ref<IamMenu | null>(null);
-const menuType = ref<MenuFormType>('page');
 const selectedNodeKey = ref(ALL_MENU_NODE);
 const selectedMenuNode = ref<NavigationMenuTreeNode | null>(null);
-const form = reactive<IamMenuPayload>({
+type MenuFormModel = IamMenuPayload & {
+  menuType: MenuFormType;
+};
+
+const form = reactive<MenuFormModel>({
   code: '',
   parentId: null,
   title: '',
@@ -225,21 +155,11 @@ const form = reactive<IamMenuPayload>({
   icon: '',
   permissionCode: '',
   sortNo: 0,
-});
-const sortNoInput = computed({
-  get: () => String(form.sortNo ?? 0),
-  set: (value: string) => {
-    form.sortNo = normalizeSortNo(value);
-  },
+  menuType: 'page',
 });
 
 const menuById = computed(() => new Map(menus.value.map((menu) => [menu.id, menu])));
 const menuByCode = computed(() => new Map(menus.value.map((menu) => [menu.code, menu])));
-const parentMenuTreeProps = {
-  label: 'label',
-  children: 'children',
-  disabled: 'disabled',
-};
 
 const childrenByParentId = computed(() => {
   const result = new Map<number | null, IamMenu[]>();
@@ -281,6 +201,75 @@ const orderedMenus = computed(() => {
   return result;
 });
 
+const menuFormFields = computed<DynamicFormField[]>(() => [
+  {
+    key: 'menuType',
+    label: '菜单类型',
+    component: 'radio-group',
+    required: true,
+    radioStyle: 'button',
+    options: [
+      { label: '导航分组', value: 'group' },
+      { label: '页面菜单', value: 'page' },
+      { label: '分组入口', value: 'entry' },
+    ],
+    span: 24,
+  },
+  {
+    key: 'code',
+    label: '菜单编码',
+    placeholder: 'iam-role-management',
+    required: true,
+    disabled: Boolean(editingMenu.value),
+    span: 12,
+  },
+  {
+    key: 'parentId',
+    label: '父菜单',
+    component: 'tree-select',
+    treeOptions: parentMenuTreeOptions.value,
+    placeholder: '顶级菜单',
+    clearable: true,
+    checkStrictly: true,
+    filterable: true,
+    renderAfterExpand: false,
+    filterNodeMethod: filterParentMenuNode,
+    span: 12,
+  },
+  { key: 'title', label: '标题', placeholder: '角色管理', required: true, span: 12 },
+  { key: 'i18nKey', label: '国际化键', placeholder: 'menu.iamRoles', span: 12 },
+  {
+    key: 'path',
+    label: '路由路径',
+    placeholder: form.menuType === 'group' ? '导航分组不需要路由路径' : '/system/iam/roles',
+    disabled: form.menuType === 'group',
+    span: 12,
+  },
+  { key: 'icon', label: '图标键', placeholder: 'ShieldCheck', span: 12 },
+  {
+    key: 'permissionCode',
+    label: '菜单可见权限',
+    placeholder: form.menuType === 'group' ? '导航分组通常不配置权限码' : '页面进入所需权限码，例如 iam-menu:view',
+    disabled: form.menuType === 'group',
+    span: 12,
+  },
+  {
+    key: 'sortNo',
+    label: '排序',
+    component: 'number',
+    placeholder: '0',
+    inputMode: 'numeric',
+    span: 12,
+  },
+]);
+
+const menuFormSections = computed<DynamicFormSection[]>(() => [
+  {
+    title: '菜单配置',
+    fields: menuFormFields.value,
+  },
+]);
+
 const searchedMenus = computed(() => {
   const value = keyword.value.trim().toLowerCase();
   if (!value) {
@@ -318,16 +307,18 @@ const filteredMenuRows = computed(() => {
 const parentMenuTreeOptions = computed<ParentOption[]>(() => buildParentMenuTreeOptions(null));
 
 const menuTypeDescription = computed(() => {
-  if (menuType.value === 'group') {
-    return '用于左侧导航折叠分组，可作为其他菜单的父级，不配置路由路径和权限码。';
+  if (form.menuType === 'group') {
+    return '用于左侧导航折叠分组，可作为其他菜单的父级，不配置路由路径和菜单可见权限。';
   }
-  if (menuType.value === 'entry') {
+  if (form.menuType === 'entry') {
     return '既能作为父级展开子菜单，也能点击进入页面；只在确实需要分组首页时使用。';
   }
-  return '用于打开具体页面，必须配置路由路径，可按需配置进入页面所需权限码。';
+  return '用于打开具体页面，必须配置路由路径，可按需配置页面进入所需权限码。';
 });
 
 onMounted(loadMenus);
+
+watch(() => form.menuType, normalizeFormByMenuType);
 
 async function loadMenus() {
   loading.value = true;
@@ -420,7 +411,7 @@ function filterParentMenuNode(value: string, data: ParentOption) {
   return data.label.toLowerCase().includes(value.toLowerCase());
 }
 
-function resetForm() {
+function resetForm(menuType: MenuFormType = 'page') {
   Object.assign(form, {
     code: '',
     parentId: null,
@@ -430,19 +421,19 @@ function resetForm() {
     icon: '',
     permissionCode: '',
     sortNo: 0,
+    menuType,
   });
 }
 
 function openCreate(type: MenuFormType = 'page') {
   editingMenu.value = null;
-  menuType.value = type;
-  resetForm();
+  resetForm(type);
   dialogVisible.value = true;
 }
 
 function openEdit(row: IamMenu) {
   editingMenu.value = row;
-  menuType.value = inferMenuType(row);
+  form.menuType = inferMenuType(row);
   Object.assign(form, {
     code: row.code,
     parentId: row.parentId,
@@ -452,15 +443,15 @@ function openEdit(row: IamMenu) {
     icon: row.icon || '',
     permissionCode: row.permissionCode || '',
     sortNo: row.sortNo,
-    enabled: row.enabled,
   });
   dialogVisible.value = true;
 }
 
-async function submitMenu() {
+async function submitMenu(value: Record<string, unknown>) {
+  Object.assign(form, value);
   normalizeFormByMenuType();
-  form.sortNo = normalizeSortNo(sortNoInput.value);
-  if ((menuType.value === 'page' || menuType.value === 'entry') && !form.path?.trim()) {
+  form.sortNo = normalizeSortNo(form.sortNo);
+  if ((form.menuType === 'page' || form.menuType === 'entry') && !form.path?.trim()) {
     ElMessage.warning('页面菜单必须填写路由路径');
     return;
   }
@@ -479,12 +470,8 @@ async function submitMenu() {
   await loadMenus();
 }
 
-function handleMenuTypeChange() {
-  normalizeFormByMenuType();
-}
-
 function normalizeFormByMenuType() {
-  if (menuType.value === 'group') {
+  if (form.menuType === 'group') {
     form.path = '';
     form.permissionCode = '';
   }

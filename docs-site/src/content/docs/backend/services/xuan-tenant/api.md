@@ -4,7 +4,7 @@ title: "xuan-tenant 接口文档"
 
 本文记录 `xuan-tenant` 的前端接口、内部服务接口和管理接口。实际开发时，每个接口必须继续补齐请求参数、响应结构、错误码、幂等规则和审计要求。
 
-当前 `xuan-tenant` 沿用已落地的 V1 权限码：租户主资源使用 `tenant:view/create/update/delete`，启用和停用统一收敛到 `tenant:lifecycle`，配置写操作统一使用 `tenant-config:manage`。这组旧码受平台统一权限模板约束，后续如需拆分为更细粒度动作，必须走受控演进。
+当前 `xuan-tenant` 使用平台统一权限模板：租户主资源使用 `tenant:view/create/update/delete`，启用使用 `tenant:enable`，停用、暂停、冻结使用 `tenant:disable`，配置写操作统一使用 `tenant-config:manage`。历史 `tenant:lifecycle` 只作为 IAM 迁移兼容来源，不再作为正式接口权限码。
 
 ## 前端接口清单
 
@@ -14,9 +14,9 @@ title: "xuan-tenant 接口文档"
 | GET | /api/tenants/{id} | Vue 管理端 | `tenant:view` | 租户详情，包含当前套餐、主域名和生命周期摘要 |
 | POST | /api/tenants | Vue 管理端 | `tenant:create` | 异步启动租户开通编排，创建成功后立即返回 `PROVISIONING`；首期只接 `IAM_BOOTSTRAP`，必须带幂等键 |
 | PUT | /api/tenants/{id} | Vue 管理端 | `tenant:update` | 更新租户基础信息，编码规范化和重复校验由应用层完成 |
-| POST | /api/tenants/{id}/enable | Vue 管理端 | `tenant:lifecycle` | 启用租户，写入生命周期历史并发布事件 |
-| POST | /api/tenants/{id}/suspend | Vue 管理端 | `tenant:lifecycle` | 暂停租户，必须填写原因 |
-| POST | /api/tenants/{id}/disable | Vue 管理端 | `tenant:lifecycle` | 停用租户，必须填写原因 |
+| POST | /api/tenants/{id}/enable | Vue 管理端 | `tenant:enable` | 启用租户，写入生命周期历史并发布事件 |
+| POST | /api/tenants/{id}/suspend | Vue 管理端 | `tenant:disable` | 暂停租户，必须填写原因 |
+| POST | /api/tenants/{id}/disable | Vue 管理端 | `tenant:disable` | 停用租户，必须填写原因 |
 | DELETE | /api/tenants/{id} | Vue 管理端 | `tenant:delete` | 逻辑删除租户，删除前应用层校验状态和关联关系 |
 | GET | /api/tenant-plans | Vue 管理端 | `tenant-plan:view` | 套餐列表查询 |
 | POST | /api/tenant-plans | Vue 管理端 | `tenant-plan:manage` | 新增套餐，套餐编码活动态唯一由应用层校验 |
@@ -40,8 +40,8 @@ title: "xuan-tenant 接口文档"
 
 | 方法 | 路径 | 调用服务 | 说明 |
 | --- | --- | --- | --- |
-| GET | /internal/tenants/{id}/status | Gateway、IAM、业务服务 | 查询租户是否存在、是否启用、是否暂停 |
-| GET | /internal/tenants/by-code/{code} | Gateway、IAM | 按规范化编码查询租户 |
+| GET | /internal/tenants/{id}/status | Gateway、IAM、业务服务 | 按内部租户 ID 查询租户是否允许登录 |
+| GET | /internal/tenants/by-code/{code}/status | IAM | 登录前按租户编码解析内部 `tenantId`，并返回租户生命周期和套餐有效期登录门禁 |
 | GET | /internal/tenants/by-domain/{domain} | Gateway | 按规范化域名解析租户入口 |
 | GET | /internal/tenants/{id}/plan | IAM、业务服务 | 查询租户当前套餐和额度 |
 | GET | /internal/tenants/{id}/configs | 业务服务 | 查询内部可读租户配置，敏感配置默认不返回明文 |

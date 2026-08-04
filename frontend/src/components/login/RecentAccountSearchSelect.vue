@@ -154,7 +154,7 @@ function removeProfile(profileKey: string) {
 }
 
 function formatLoginProfile(profile: LoginProfile) {
-  return `${profile.tenantId} / ${profile.username}`;
+  return `${profile.tenantCode} / ${profile.username}`;
 }
 
 function handleDocumentMouseDown(event: MouseEvent) {

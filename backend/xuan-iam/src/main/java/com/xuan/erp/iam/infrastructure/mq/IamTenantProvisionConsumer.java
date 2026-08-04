@@ -6,6 +6,7 @@ import com.xuan.erp.common.mq.RocketMqMessageHandler;
 import com.xuan.erp.common.mq.config.XuanRocketMqProperties;
 import com.xuan.erp.iam.application.command.BootstrapTenantAdminCommand;
 import com.xuan.erp.iam.application.service.IamTenantBootstrapApplicationService;
+import java.util.List;
 import java.util.Map;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -63,6 +64,7 @@ public class IamTenantProvisionConsumer implements RocketMqMessageHandler {
         String taskKey = text(event.get("taskKey"));
         String idempotencyKey = text(event.get("idempotencyKey"));
         String provisionStep = text(event.get("provisionStep"));
+        boolean callbackRequired = booleanValue(event.get("callbackRequired"), true);
         try {
             Integer menuGrantCount = bootstrapApplicationService.bootstrapTenant(
                     tenantId,
@@ -73,7 +75,14 @@ public class IamTenantProvisionConsumer implements RocketMqMessageHandler {
                             text(event.get("adminEmail")),
                             text(event.get("adminPhone")),
                             text(event.get("adminPasswordHash")) != null),
+                    text(event.get("iamInitTemplateCode")),
+                    stringList(event.get("columnPermissionTemplateCodes")),
+                    text(event.get("defaultColumnPermissionTemplateCode")),
+                    text(event.get("permissionHash")),
                     "xuan-tenant");
+            if (!callbackRequired) {
+                return EVENT_IAM_BOOTSTRAP_REQUESTED;
+            }
             eventProducer.publishTenantProvisionStepCompleted(
                     tenantId,
                     taskKey,
@@ -82,6 +91,9 @@ public class IamTenantProvisionConsumer implements RocketMqMessageHandler {
                     menuGrantCount);
             return "TenantIamProvisionStepCompleted";
         } catch (RuntimeException error) {
+            if (!callbackRequired) {
+                throw error;
+            }
             eventProducer.publishTenantProvisionStepFailed(
                     tenantId,
                     taskKey,
@@ -124,11 +136,31 @@ public class IamTenantProvisionConsumer implements RocketMqMessageHandler {
         return null;
     }
 
+    private boolean booleanValue(Object value, boolean defaultValue) {
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        if (value instanceof String text && !text.isBlank()) {
+            return Boolean.parseBoolean(text);
+        }
+        return defaultValue;
+    }
+
     private String text(Object value) {
         if (value == null) {
             return null;
         }
         String text = String.valueOf(value);
         return text.isBlank() ? null : text;
+    }
+
+    private List<String> stringList(Object value) {
+        if (!(value instanceof List<?> items)) {
+            return null;
+        }
+        return items.stream()
+                .map(this::text)
+                .filter(item -> item != null && !item.isBlank())
+                .toList();
     }
 }

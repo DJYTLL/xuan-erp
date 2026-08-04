@@ -3,7 +3,9 @@ package com.xuan.erp.common.security.permission;
 import com.xuan.erp.common.security.CurrentUser;
 
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -14,6 +16,7 @@ import java.util.Set;
  * @param username 用户名
  * @param roles 当前角色编码集合
  * @param permissions 当前权限编码集合
+ * @param columnPermissions 当前列权限规则
  * @param authVersion 权限版本
  */
 public record PermissionSnapshot(
@@ -22,11 +25,23 @@ public record PermissionSnapshot(
         String username,
         Set<String> roles,
         Set<String> permissions,
+        Map<String, Map<String, ColumnAccess>> columnPermissions,
         Long authVersion) {
 
     public PermissionSnapshot {
         roles = immutableCleanSet(roles);
         permissions = immutableCleanSet(permissions);
+        columnPermissions = immutableColumnPermissions(columnPermissions);
+    }
+
+    public PermissionSnapshot(
+            Long tenantId,
+            Long userId,
+            String username,
+            Set<String> roles,
+            Set<String> permissions,
+            Long authVersion) {
+        this(tenantId, userId, username, roles, permissions, Map.of(), authVersion);
     }
 
     /**
@@ -42,6 +57,7 @@ public record PermissionSnapshot(
                 currentUser.username(),
                 currentUser.roles(),
                 Set.of(),
+                Map.of(),
                 currentUser.authVersion());
     }
 
@@ -69,6 +85,21 @@ public record PermissionSnapshot(
         return Arrays.stream(permissions).anyMatch(this::has);
     }
 
+    public ColumnAccess columnAccess(String resourceKey, String columnKey) {
+        if (!hasText(resourceKey) || !hasText(columnKey)) {
+            return ColumnAccess.HIDDEN;
+        }
+        Map<String, ColumnAccess> resourceRules = columnPermissions.get(resourceKey.trim());
+        if (resourceRules == null || resourceRules.isEmpty()) {
+            return ColumnAccess.VISIBLE;
+        }
+        return resourceRules.getOrDefault(columnKey.trim(), ColumnAccess.HIDDEN);
+    }
+
+    public boolean hasColumnRules(String resourceKey) {
+        return hasText(resourceKey) && columnPermissions.containsKey(resourceKey.trim());
+    }
+
     /**
      * 判断当前快照是否为超级管理员。
      *
@@ -90,6 +121,29 @@ public record PermissionSnapshot(
                 .map(String::trim)
                 .forEach(cleaned::add);
         return Set.copyOf(cleaned);
+    }
+
+    private static Map<String, Map<String, ColumnAccess>> immutableColumnPermissions(
+            Map<String, Map<String, ColumnAccess>> values) {
+        if (values == null || values.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Map<String, ColumnAccess>> cleaned = new LinkedHashMap<>();
+        values.forEach((resourceKey, columns) -> {
+            if (!hasText(resourceKey) || columns == null || columns.isEmpty()) {
+                return;
+            }
+            Map<String, ColumnAccess> cleanedColumns = new LinkedHashMap<>();
+            columns.forEach((columnKey, access) -> {
+                if (hasText(columnKey)) {
+                    cleanedColumns.put(columnKey.trim(), access == null ? ColumnAccess.HIDDEN : access);
+                }
+            });
+            if (!cleanedColumns.isEmpty()) {
+                cleaned.put(resourceKey.trim(), Map.copyOf(cleanedColumns));
+            }
+        });
+        return Map.copyOf(cleaned);
     }
 
     private static boolean hasText(String value) {

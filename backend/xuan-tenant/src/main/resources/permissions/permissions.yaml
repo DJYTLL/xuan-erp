@@ -21,11 +21,16 @@ permissions:
     action: delete
     templateAction: delete
     note: 删除租户且必须填写删除原因
-  - code: tenant:lifecycle
+  - code: tenant:enable
     resource: tenant
-    action: lifecycle
-    templateAction: enable-disable
-    note: V1 聚合启用与停用能力，后续如需细分再演进为 tenant:enable 和 tenant:disable
+    action: enable
+    templateAction: enable
+    note: 启用或恢复租户
+  - code: tenant:disable
+    resource: tenant
+    action: disable
+    templateAction: disable
+    note: 暂停、停用或冻结租户，必须填写原因
   - code: tenant-config:view
     resource: tenant-config
     action: view

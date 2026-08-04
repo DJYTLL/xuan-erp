@@ -37,6 +37,19 @@ public record Tenant(
         return deletedAt == null;
     }
 
+    public TenantLoginEligibility loginEligibility(OffsetDateTime currentPlanExpiresAt, OffsetDateTime now) {
+        if (!active()) {
+            return TenantLoginEligibility.denied("租户已删除");
+        }
+        if (status != TenantStatus.PROVISIONED && status != TenantStatus.ENABLED) {
+            return TenantLoginEligibility.denied("租户状态不允许登录: " + status.code());
+        }
+        if (currentPlanExpiresAt != null && !currentPlanExpiresAt.isAfter(now)) {
+            return TenantLoginEligibility.denied("租户套餐已到期");
+        }
+        return TenantLoginEligibility.allow();
+    }
+
     public Tenant updateProfile(String newName, String newContactName, String newContactPhone, String newRemark, String operator, OffsetDateTime now) {
         ensureActive();
         return new Tenant(
@@ -125,6 +138,9 @@ public record Tenant(
         ensureActive();
         if (status == TenantStatus.DISABLED) {
             throw new IllegalStateException("tenant already disabled");
+        }
+        if (status != TenantStatus.ENABLED) {
+            throw new IllegalStateException("tenant must be enabled before disabling");
         }
         return new Tenant(
                 id,

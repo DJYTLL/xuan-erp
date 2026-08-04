@@ -23,6 +23,8 @@ const ComponentCenterView = createRouteCacheComponent('ComponentCenterView', () 
 const IamMenuManagementView = createRouteCacheComponent('IamMenuManagementView', () => import('@/views/IamMenuManagementView.vue'));
 const IamPermissionManagementView = createRouteCacheComponent('IamPermissionManagementView', () => import('@/views/IamPermissionManagementView.vue'));
 const IamRoleManagementView = createRouteCacheComponent('IamRoleManagementView', () => import('@/views/IamRoleManagementView.vue'));
+const IamColumnPermissionManagementView = createRouteCacheComponent('IamColumnPermissionManagementView', () => import('@/views/IamColumnPermissionManagementView.vue'));
+const IamRoleColumnPermissionManagementView = createRouteCacheComponent('IamRoleColumnPermissionManagementView', () => import('@/views/IamRoleColumnPermissionManagementView.vue'));
 const IamUserManagementView = createRouteCacheComponent('IamUserManagementView', () => import('@/views/IamUserManagementView.vue'));
 const IamTenantInitTemplateManagementView = createRouteCacheComponent('IamTenantInitTemplateManagementView', () => import('@/views/IamTenantInitTemplateManagementView.vue'));
 const TenantManagementView = createRouteCacheComponent('TenantManagementView', () => import('@/views/TenantManagementView.vue'));
@@ -31,6 +33,7 @@ const AuditLogQueryView = createRouteCacheComponent('AuditLogQueryView', () => i
 const InterfaceCostView = createRouteCacheComponent('InterfaceCostView', () => import('@/views/InterfaceCostView.vue'));
 const SqlRankingView = createRouteCacheComponent('SqlRankingView', () => import('@/views/SqlRankingView.vue'));
 const ProductManagementView = createRouteCacheComponent('ProductManagementView', () => import('@/views/ProductManagementView.vue'));
+const BusinessModuleView = createRouteCacheComponent('BusinessModuleView', () => import('@/views/BusinessModuleView.vue'));
 const PurchaseOrderCreateView = createRouteCacheComponent('PurchaseOrderCreateView', () => import('@/views/PurchaseOrderCreateView.vue'));
 const PurchaseOrderDraftView = createRouteCacheComponent('PurchaseOrderDraftView', () => import('@/views/PurchaseOrderView.vue'));
 const PurchaseOrderApprovedView = createRouteCacheComponent('PurchaseOrderApprovedView', () => import('@/views/PurchaseOrderView.vue'));
@@ -85,7 +88,7 @@ const routes: RouteRecordRaw[] = [
           cacheName: 'ComponentCenterView',
           affixTab: false,
           closable: true,
-          permission: 'iam:view',
+          permission: 'component-center:view',
         },
       },
       {
@@ -105,7 +108,7 @@ const routes: RouteRecordRaw[] = [
           cacheName: 'IamMenuManagementView',
           affixTab: false,
           closable: true,
-          permission: 'iam:view',
+          permission: 'iam-menu:view',
         },
       },
       {
@@ -120,7 +123,7 @@ const routes: RouteRecordRaw[] = [
           cacheName: 'IamPermissionManagementView',
           affixTab: false,
           closable: true,
-          permission: 'iam:view',
+          permission: 'iam-permission:view',
         },
       },
       {
@@ -135,7 +138,37 @@ const routes: RouteRecordRaw[] = [
           cacheName: 'IamRoleManagementView',
           affixTab: false,
           closable: true,
-          permission: 'iam:view',
+          permission: 'iam-role:view',
+        },
+      },
+      {
+        path: 'system/iam/column-permissions',
+        name: 'iam-column-permission-management',
+        component: IamColumnPermissionManagementView,
+        meta: {
+          title: '列权限模板',
+          titleKey: 'route.iamColumnPermissions',
+          breadcrumb: [{ titleKey: 'route.system', title: '系统设置' }, { titleKey: 'route.iamColumnPermissions', title: '列权限模板', path: '/system/iam/column-permissions' }],
+          keepAlive: true,
+          cacheName: 'IamColumnPermissionManagementView',
+          affixTab: false,
+          closable: true,
+          permission: 'iam-column-permission:view',
+        },
+      },
+      {
+        path: 'system/iam/role-column-permissions',
+        name: 'iam-role-column-permission-management',
+        component: IamRoleColumnPermissionManagementView,
+        meta: {
+          title: '角色列权限',
+          titleKey: 'route.iamRoleColumnPermissions',
+          breadcrumb: [{ titleKey: 'route.system', title: '系统设置' }, { titleKey: 'route.iamRoleColumnPermissions', title: '角色列权限', path: '/system/iam/role-column-permissions' }],
+          keepAlive: true,
+          cacheName: 'IamRoleColumnPermissionManagementView',
+          affixTab: false,
+          closable: true,
+          permission: 'iam-role-column-permission:view',
         },
       },
       {
@@ -143,14 +176,14 @@ const routes: RouteRecordRaw[] = [
         name: 'iam-user-management',
         component: IamUserManagementView,
         meta: {
-          title: '用户授权',
+          title: '用户管理',
           titleKey: 'route.iamUsers',
-          breadcrumb: [{ titleKey: 'route.system', title: '系统设置' }, { titleKey: 'route.iamUsers', title: '用户授权', path: '/system/iam/users' }],
+          breadcrumb: [{ titleKey: 'route.system', title: '系统设置' }, { titleKey: 'route.iamUsers', title: '用户管理', path: '/system/iam/users' }],
           keepAlive: true,
           cacheName: 'IamUserManagementView',
           affixTab: false,
           closable: true,
-          permission: 'iam:view',
+          permission: 'iam-user:view',
         },
       },
       {
@@ -165,7 +198,7 @@ const routes: RouteRecordRaw[] = [
           cacheName: 'IamTenantInitTemplateManagementView',
           affixTab: false,
           closable: true,
-          permission: 'iam:view',
+          permission: 'iam-init-template:view',
         },
       },
       {
@@ -249,6 +282,36 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '商品', titleKey: 'route.product' },
       },
       {
+        path: 'party',
+        name: 'party-management',
+        component: BusinessModuleView,
+        meta: {
+          title: '往来单位',
+          titleKey: 'route.party',
+          breadcrumb: [{ titleKey: 'nav.inventory', title: '进销存' }, { titleKey: 'nav.baseData', title: '基础资料' }, { titleKey: 'route.party', title: '往来单位', path: '/party' }],
+          keepAlive: true,
+          cacheName: 'BusinessModuleView',
+          affixTab: false,
+          closable: true,
+          permission: 'party:view',
+        },
+      },
+      {
+        path: 'warehouse',
+        name: 'warehouse-management',
+        component: BusinessModuleView,
+        meta: {
+          title: '仓库资料',
+          titleKey: 'route.warehouse',
+          breadcrumb: [{ titleKey: 'nav.inventory', title: '进销存' }, { titleKey: 'nav.baseData', title: '基础资料' }, { titleKey: 'route.warehouse', title: '仓库资料', path: '/warehouse' }],
+          keepAlive: true,
+          cacheName: 'BusinessModuleView',
+          affixTab: false,
+          closable: true,
+          permission: 'warehouse:view',
+        },
+      },
+      {
         path: 'inventory/products',
         name: 'products',
         component: ProductManagementView,
@@ -261,6 +324,96 @@ const routes: RouteRecordRaw[] = [
           affixTab: false,
           closable: true,
           permission: 'product:view',
+        },
+      },
+      {
+        path: 'inventory',
+        name: 'inventory-management',
+        component: BusinessModuleView,
+        meta: {
+          title: '库存管理',
+          titleKey: 'route.inventory',
+          breadcrumb: [{ titleKey: 'nav.inventory', title: '进销存' }, { title: '库存管理' }, { titleKey: 'route.inventory', title: '库存管理', path: '/inventory' }],
+          keepAlive: true,
+          cacheName: 'BusinessModuleView',
+          affixTab: false,
+          closable: true,
+          permission: 'inventory:view',
+        },
+      },
+      {
+        path: 'manufacturing',
+        name: 'manufacturing-management',
+        component: BusinessModuleView,
+        meta: {
+          title: '组装拆分',
+          titleKey: 'route.manufacturing',
+          breadcrumb: [{ titleKey: 'nav.inventory', title: '进销存' }, { title: '库存管理' }, { titleKey: 'route.manufacturing', title: '组装拆分', path: '/manufacturing' }],
+          keepAlive: true,
+          cacheName: 'BusinessModuleView',
+          affixTab: false,
+          closable: true,
+          permission: 'manufacturing:view',
+        },
+      },
+      {
+        path: 'sales',
+        name: 'sales-management',
+        component: BusinessModuleView,
+        meta: {
+          title: '销售管理',
+          titleKey: 'route.sales',
+          breadcrumb: [{ titleKey: 'nav.inventory', title: '进销存' }, { titleKey: 'nav.sales', title: '销售管理' }, { titleKey: 'route.sales', title: '销售管理', path: '/sales' }],
+          keepAlive: true,
+          cacheName: 'BusinessModuleView',
+          affixTab: false,
+          closable: true,
+          permission: 'sales:view',
+        },
+      },
+      {
+        path: 'finance',
+        name: 'finance-management',
+        component: BusinessModuleView,
+        meta: {
+          title: '财务管理',
+          titleKey: 'route.finance',
+          breadcrumb: [{ titleKey: 'route.finance', title: '财务管理', path: '/finance' }],
+          keepAlive: true,
+          cacheName: 'BusinessModuleView',
+          affixTab: false,
+          closable: true,
+          permission: 'finance:view',
+        },
+      },
+      {
+        path: 'document',
+        name: 'document-management',
+        component: BusinessModuleView,
+        meta: {
+          title: '打印管理',
+          titleKey: 'route.document',
+          breadcrumb: [{ titleKey: 'route.document', title: '打印管理', path: '/document' }],
+          keepAlive: true,
+          cacheName: 'BusinessModuleView',
+          affixTab: false,
+          closable: true,
+          permission: 'document:view',
+        },
+      },
+      {
+        path: 'report',
+        name: 'report-center',
+        component: BusinessModuleView,
+        meta: {
+          title: '报表中心',
+          titleKey: 'route.report',
+          breadcrumb: [{ titleKey: 'route.report', title: '报表中心', path: '/report' }],
+          keepAlive: true,
+          cacheName: 'BusinessModuleView',
+          affixTab: false,
+          closable: true,
+          permission: 'query:view',
         },
       },
       {
@@ -385,6 +538,23 @@ export const router = createRouter({
 router.beforeEach(async (to) => {
   const auth = useAuthStore();
   const authorization = useAuthorizationStore();
+  if (to.name === appFrameworkConfig.routes.loginRouteName) {
+    if (!auth.isAuthenticated) {
+      return true;
+    }
+    try {
+      if (!auth.currentUser) {
+        await auth.loadCurrentUser();
+      }
+      if (!authorization.isLoaded) {
+        await authorization.loadPermissionSnapshot();
+      }
+      return { name: appFrameworkConfig.routes.homeRouteName };
+    } catch {
+      await auth.logout();
+      return true;
+    }
+  }
   if (!to.meta.public && !auth.isAuthenticated) {
     return { name: appFrameworkConfig.routes.loginRouteName, query: { redirect: to.fullPath } };
   }
@@ -393,7 +563,7 @@ router.beforeEach(async (to) => {
       await auth.loadCurrentUser();
       await authorization.loadPermissionSnapshot();
     } catch {
-      void auth.logout();
+      await auth.logout();
       return { name: appFrameworkConfig.routes.loginRouteName, query: { redirect: to.fullPath } };
     }
   }
@@ -401,12 +571,9 @@ router.beforeEach(async (to) => {
     try {
       await authorization.loadPermissionSnapshot();
     } catch {
-      void auth.logout();
+      await auth.logout();
       return { name: appFrameworkConfig.routes.loginRouteName, query: { redirect: to.fullPath } };
     }
-  }
-  if (to.name === appFrameworkConfig.routes.loginRouteName && auth.isAuthenticated) {
-    return { name: appFrameworkConfig.routes.homeRouteName };
   }
   if (
     !to.meta.public

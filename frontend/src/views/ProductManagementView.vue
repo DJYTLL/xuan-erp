@@ -16,9 +16,9 @@
         </el-select>
 
         <template #actions>
-          <el-button>导入</el-button>
-          <el-button>导入结果</el-button>
-          <PermissionButton type="primary" permission="product:create" @click="openCreateProduct">新增</PermissionButton>
+          <PermissionButton v-if="canUseProductPermission('product:import')" permission="product:import">导入</PermissionButton>
+          <PermissionButton v-if="canUseProductPermission('product:import')" permission="product:import">导入结果</PermissionButton>
+          <PermissionButton v-if="canUseProductPermission('product:create')" type="primary" permission="product:create" @click="openCreateProduct">新增</PermissionButton>
         </template>
       </SearchActionBar>
     </template>
@@ -39,8 +39,17 @@
       @selection-change="selectedRows = $event"
     >
       <template #toolbar-actions>
-        <el-button text @click="exportRows">导出</el-button>
-        <el-button text type="danger" :disabled="!selectedRows.length" @click="openDeleteProducts(selectedRows)">批量删除</el-button>
+        <PermissionButton v-if="canUseProductPermission('product:export')" text permission="product:export" @click="exportRows">导出</PermissionButton>
+        <PermissionButton
+          v-if="canUseProductPermission('product:delete')"
+          text
+          type="danger"
+          permission="product:delete"
+          :disabled-reason="selectedRows.length ? '' : '请先选择商品'"
+          @click="openDeleteProducts(selectedRows)"
+        >
+          批量删除
+        </PermissionButton>
       </template>
 
       <template #cell-type>
@@ -52,9 +61,9 @@
       </template>
 
       <template #actions="{ row }">
-        <el-button link type="primary" @click="openProductDetail(row)">查看</el-button>
-        <el-button link type="primary" @click="openEditProduct(row)">编辑</el-button>
-        <el-button link type="danger" @click="openDeleteProducts([row])">删除</el-button>
+        <PermissionButton v-if="canUseProductPermission('product:view')" link type="primary" permission="product:view" @click="openProductDetail(row)">查看</PermissionButton>
+        <PermissionButton v-if="canUseProductPermission('product:update')" link type="primary" permission="product:update" @click="openEditProduct(row)">编辑</PermissionButton>
+        <PermissionButton v-if="canUseProductPermission('product:delete')" link type="danger" permission="product:delete" @click="openDeleteProducts([row])">删除</PermissionButton>
       </template>
     </XuanBrowseTable>
 
@@ -109,6 +118,7 @@ import SearchActionBar from '@/framework/components/SearchActionBar.vue';
 import XuanBrowseTable, { type XuanBrowseTableColumn } from '@/framework/components/XuanBrowseTable.vue';
 import type { BrowseTableDensity } from '@/framework/components/browseTablePreferences';
 import { useAuthStore } from '@/stores/auth';
+import { useAuthorizationStore } from '@/stores/authorization';
 
 defineOptions({ name: 'ProductManagementView' });
 
@@ -132,6 +142,7 @@ const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
+const authorizationStore = useAuthorizationStore();
 const browseTenantId = computed(() => String(authStore.tenantId ?? '0'));
 const browseUserId = computed(() => authStore.currentUser?.username || 'anonymous');
 
@@ -314,11 +325,17 @@ function search() {
 }
 
 function exportRows() {
+  if (!requireProductButtonPermission('product:export')) {
+    return;
+  }
   const rows = selectedRows.value.length ? selectedRows.value : products;
   ElMessage.success(`已准备导出 ${rows.length} 条商品数据`);
 }
 
 function openCreateProduct() {
+  if (!requireProductButtonPermission('product:create')) {
+    return;
+  }
   formMode.value = 'create';
   activeProduct.value = null;
   Object.assign(productForm, {
@@ -342,6 +359,9 @@ function openCreateProduct() {
 }
 
 function openEditProduct(row: ProductRow) {
+  if (!requireProductButtonPermission('product:update')) {
+    return;
+  }
   formMode.value = 'edit';
   activeProduct.value = row;
   Object.assign(productForm, {
@@ -365,11 +385,17 @@ function openEditProduct(row: ProductRow) {
 }
 
 function openProductDetail(row: ProductRow) {
+  if (!requireProductButtonPermission('product:view')) {
+    return;
+  }
   activeProduct.value = row;
   detailVisible.value = true;
 }
 
 function openDeleteProducts(rows: ProductRow[]) {
+  if (!requireProductButtonPermission('product:delete')) {
+    return;
+  }
   if (!rows.length) {
     ElMessage.warning('请先选择商品');
     return;
@@ -379,6 +405,10 @@ function openDeleteProducts(rows: ProductRow[]) {
 }
 
 function submitProductForm(value: Record<string, unknown>) {
+  const permission = formMode.value === 'create' ? 'product:create' : 'product:update';
+  if (!requireProductButtonPermission(permission)) {
+    return;
+  }
   Object.assign(productForm, value);
   productCustomFields.value = Array.isArray(value.customFields) ? value.customFields as DynamicCustomField[] : [];
   formVisible.value = false;
@@ -386,10 +416,25 @@ function submitProductForm(value: Record<string, unknown>) {
 }
 
 function confirmProductDelete() {
+  if (!requireProductButtonPermission('product:delete')) {
+    return;
+  }
   const count = batchRows.value.length;
   batchVisible.value = false;
   selectedRows.value = [];
   batchRows.value = [];
   ElMessage.success(`已确认删除 ${count} 条商品`);
+}
+
+function requireProductButtonPermission(permission: string) {
+  if (authorizationStore.hasButtonPermission(permission)) {
+    return true;
+  }
+  ElMessage.warning('当前账号无权执行该操作');
+  return false;
+}
+
+function canUseProductPermission(permission: string) {
+  return authorizationStore.hasButtonPermission(permission);
 }
 </script>

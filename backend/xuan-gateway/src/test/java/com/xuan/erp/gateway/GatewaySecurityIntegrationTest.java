@@ -8,6 +8,8 @@ import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import com.alibaba.csp.sentinel.adapter.gateway.sc.callback.BlockRequestHandler;
+import com.alibaba.csp.sentinel.adapter.gateway.sc.callback.GatewayCallbackManager;
 import com.xuan.erp.common.audit.AuditWriteEvent;
 import com.xuan.erp.common.audit.AuditWriteSubmission;
 import com.xuan.erp.common.audit.SafeAuditWritePublisher;
@@ -21,10 +23,13 @@ import org.springframework.cloud.gateway.route.RouteDefinition;
 import org.springframework.cloud.gateway.route.RouteDefinitionLocator;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Import;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.codec.ServerCodecConfigurer;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,6 +39,8 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsConfigurationSource;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
+import org.springframework.web.reactive.function.server.ServerResponse;
+import org.springframework.web.reactive.result.view.ViewResolver;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
@@ -69,7 +76,13 @@ import org.mockito.ArgumentCaptor;
                 "xuan.gateway.security.audience=xuan-gateway",
                 "xuan.gateway.security.iam-service-name=xuan-iam",
                 "xuan.gateway.security.permission-rules[0].paths[0]=/api/test/admin",
-                "xuan.gateway.security.permission-rules[0].authority=admin:access"
+                "xuan.gateway.security.permission-rules[0].authority=admin:access",
+                "xuan.gateway.security.permission-rules[1].paths[0]=/api/tenants/**",
+                "xuan.gateway.security.permission-rules[1].authority=tenant:view",
+                "xuan.gateway.security.permission-rules[2].paths[0]=/api/tenants/column-permission-options",
+                "xuan.gateway.security.permission-rules[2].authorities[0]=tenant:view",
+                "xuan.gateway.security.permission-rules[2].authorities[1]=iam-column-permission:view",
+                "xuan.gateway.security.permission-rules[2].authorities[2]=iam-role-column-permission:view"
         })
 @Import(GatewaySecurityIntegrationTest.TestEndpoints.class)
 class GatewaySecurityIntegrationTest {
@@ -96,6 +109,15 @@ class GatewaySecurityIntegrationTest {
 
     @Autowired
     private com.xuan.erp.gateway.infrastructure.config.GatewaySecurityProperties gatewaySecurityProperties;
+
+    @Autowired
+    private Environment environment;
+
+    @Autowired
+    private BlockRequestHandler sentinelGatewayBlockRequestHandler;
+
+    @Autowired
+    private ServerCodecConfigurer serverCodecConfigurer;
 
     private RSAKey rsaKey;
 
@@ -149,6 +171,22 @@ class GatewaySecurityIntegrationTest {
         assertEquals("req-missing-token", event.requestId());
     }
 
+    // 测试未显式传入请求 ID 时，安全审计会使用 Gateway 生成的 TraceId 作为可追踪请求 ID。
+    @Test
+    void usesGeneratedTraceIdAsSecurityAuditRequestIdWhenRequestIdMissing() {
+        webTestClient.get()
+                .uri("/api/test/secured")
+                .exchange()
+                .expectStatus().isUnauthorized()
+                .expectHeader().valueMatches("X-Trace-Id", "xuan-[A-Za-z0-9]{32}");
+
+        ArgumentCaptor<AuditWriteEvent> eventCaptor = ArgumentCaptor.forClass(AuditWriteEvent.class);
+        verify(securityAuditPublisher).publish(eventCaptor.capture());
+        AuditWriteEvent event = eventCaptor.getValue();
+        assertNotNull(event.requestId());
+        assertTrue(event.requestId().startsWith("xuan-"));
+    }
+
     // 测试合法的 IAM access token 能通过网关认证并访问受保护路由。
     @Test
     void allowsRequestWithValidIamAccessToken() throws Exception {
@@ -174,6 +212,38 @@ class GatewaySecurityIntegrationTest {
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(String.class).isEqualTo("1|1001|gateway-user|iam:view");
+    }
+
+    // 测试外部伪造的身份 Header 即使打到匿名放行路径，也不会被网关转发给下游。
+    @Test
+    void stripsSpoofedIdentityHeadersOnPublicPaths() {
+        webTestClient.get()
+                .uri("/v3/api-docs/header-probe")
+                .header("X-User-Id", "999")
+                .header("X-Tenant-Id", "888")
+                .header("X-Username", "fake-admin")
+                .header("X-Roles", "super_admin")
+                .header("X-Auth-Version", "999")
+                .header("X-Permissions", "*")
+                .header("X-Trace-Id", "client-trace-001")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .isEqualTo("identity=<none>|permissions=<none>|trace=client-trace-001");
+    }
+
+    // 测试外部没有 TraceId 时，由 Gateway 生成并向下游透传。
+    @Test
+    void generatesTraceIdWhenMissing() {
+        webTestClient.get()
+                .uri("/v3/api-docs/header-probe")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(String.class)
+                .value(body -> {
+                    assertTrue(body.startsWith("identity=<none>|permissions=<none>|trace=xuan-"));
+                    assertTrue(body.length() > "identity=<none>|permissions=<none>|trace=xuan-".length());
+                });
     }
 
     // 测试 kid 刷新后仍然不存在时，网关统一返回 401。
@@ -317,6 +387,44 @@ class GatewaySecurityIntegrationTest {
                 .expectBody(String.class).isEqualTo("secured");
     }
 
+    // 测试角色列权限页面可通过专用权限读取租户下拉选项，不被租户管理 tenant:view 粗粒度规则误拦。
+    @Test
+    void allowsTenantColumnPermissionOptionsWithRoleColumnPermission() throws Exception {
+        when(jwkProvider.jwkSetForKid("kid-1")).thenReturn(Mono.just(new JWKSet(rsaKey.toPublicJWK())));
+
+        webTestClient.get()
+                .uri("/api/tenants/column-permission-options?pageNum=1&pageSize=200")
+                .header("Authorization", "Bearer " + signedToken(
+                        rsaKey,
+                        "kid-1",
+                        Instant.parse("2030-01-01T00:05:00Z"),
+                        List.of("iam-role-column-permission:view")))
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().contentTypeCompatibleWith(MediaType.TEXT_PLAIN)
+                .expectBody(String.class).isEqualTo("tenant-column-options");
+    }
+
+    // 测试租户下拉选项接口在网关层仍需列权限或租户查看权限，不能退化成任意登录用户可访问。
+    @Test
+    void rejectsTenantColumnPermissionOptionsWithoutExpectedPermission() throws Exception {
+        when(jwkProvider.jwkSetForKid("kid-1")).thenReturn(Mono.just(new JWKSet(rsaKey.toPublicJWK())));
+
+        webTestClient.get()
+                .uri("/api/tenants/column-permission-options?pageNum=1&pageSize=200")
+                .header("Authorization", "Bearer " + signedToken(
+                        rsaKey,
+                        "kid-1",
+                        Instant.parse("2030-01-01T00:05:00Z"),
+                        List.of("iam:view")))
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("SECURITY_PERMISSION_DENIED")
+                .jsonPath("$.message").isEqualTo("没有访问权限");
+    }
+
     // 测试请求租户头与 token 租户不一致时，网关返回 403 并记录跨租户安全审计。
     @Test
     void writesSecurityAuditWhenTenantContextInvalid() throws Exception {
@@ -428,6 +536,65 @@ class GatewaySecurityIntegrationTest {
         assertTrue(gatewaySecurityProperties.getPublicPaths().contains("/v3/api-docs"));
         assertTrue(gatewaySecurityProperties.getPublicPaths().contains("/v3/api-docs/**"));
         assertTrue(gatewaySecurityProperties.getPublicPaths().contains("/api/iam/auth/refresh"));
+    }
+
+    // 测试 Gateway 已接入 Sentinel 网关规则数据源，规则仍由 Nacos 独立 dataId 管理。
+    @Test
+    void configuresSentinelGatewayRuleDataSources() {
+        assertEquals("xuan-gateway-sentinel-gw-flow-rules.json",
+                environment.getProperty("spring.cloud.sentinel.datasource.gw-flow.nacos.data-id"));
+        assertEquals("gw-flow",
+                environment.getProperty("spring.cloud.sentinel.datasource.gw-flow.nacos.rule-type"));
+        assertEquals("xuan-gateway-sentinel-gw-api-group-rules.json",
+                environment.getProperty("spring.cloud.sentinel.datasource.gw-api-group.nacos.data-id"));
+        assertEquals("gw-api-group",
+                environment.getProperty("spring.cloud.sentinel.datasource.gw-api-group.nacos.rule-type"));
+    }
+
+    // 测试 Sentinel Gateway block 回调返回统一 429 JSON，而不是 Sentinel 默认结构或空响应。
+    @Test
+    void returnsUnifiedJsonWhenSentinelGatewayBlocksRequest() {
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/test/secured").build());
+        ServerResponse response = sentinelGatewayBlockRequestHandler
+                .handleRequest(exchange, new RuntimeException("blocked by test"))
+                .block();
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.TOO_MANY_REQUESTS, response.statusCode());
+
+        response.writeTo(exchange, new ServerResponse.Context() {
+            @Override
+            public List<org.springframework.http.codec.HttpMessageWriter<?>> messageWriters() {
+                return serverCodecConfigurer.getWriters();
+            }
+
+            @Override
+            public List<ViewResolver> viewResolvers() {
+                return List.copyOf(applicationContext.getBeansOfType(ViewResolver.class).values());
+            }
+        }).block();
+
+        assertEquals(MediaType.APPLICATION_JSON, exchange.getResponse().getHeaders().getContentType());
+        assertEquals(
+                "{\"code\":\"GATEWAY_RATE_LIMITED\",\"message\":\"请求过于频繁，请稍后再试\",\"data\":null}",
+                exchange.getResponse().getBodyAsString().block());
+    }
+
+    // 测试 Sentinel 运行时回调管理器实际注册了 Gateway 的统一 429 响应处理器。
+    @Test
+    void registersUnifiedSentinelGatewayBlockHandlerWithCallbackManager() {
+        BlockRequestHandler registeredHandler = GatewayCallbackManager.getBlockHandler();
+        assertEquals(sentinelGatewayBlockRequestHandler.getClass(), registeredHandler.getClass());
+
+        MockServerWebExchange exchange = MockServerWebExchange.from(
+                MockServerHttpRequest.get("/api/test/secured").build());
+        ServerResponse response = registeredHandler
+                .handleRequest(exchange, new RuntimeException("blocked by callback manager"))
+                .block();
+
+        assertNotNull(response);
+        assertEquals(HttpStatus.TOO_MANY_REQUESTS, response.statusCode());
     }
 
     // 测试前端登录预检请求所需的 CORS 配置已注册到 Gateway Security 链路。
@@ -635,6 +802,25 @@ class GatewaySecurityIntegrationTest {
                 @org.springframework.web.bind.annotation.RequestHeader("X-Username") String username,
                 @org.springframework.web.bind.annotation.RequestHeader("X-Permissions") String permissions) {
             return String.join("|", userId, tenantId, username, permissions);
+        }
+
+        @GetMapping("/v3/api-docs/header-probe")
+        String publicHeaderProbe(
+                @org.springframework.web.bind.annotation.RequestHeader(value = "X-User-Id", required = false) String userId,
+                @org.springframework.web.bind.annotation.RequestHeader(value = "X-Permissions", required = false) String permissions,
+                @org.springframework.web.bind.annotation.RequestHeader(value = "X-Trace-Id", required = false) String traceId) {
+            return "identity=" + valueOrNone(userId)
+                    + "|permissions=" + valueOrNone(permissions)
+                    + "|trace=" + valueOrNone(traceId);
+        }
+
+        @GetMapping("/api/tenants/column-permission-options")
+        String tenantColumnPermissionOptions() {
+            return "tenant-column-options";
+        }
+
+        private String valueOrNone(String value) {
+            return value == null || value.isBlank() ? "<none>" : value;
         }
 
         @PostMapping("/api/iam/auth/login")

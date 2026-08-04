@@ -5,7 +5,6 @@ const root = process.cwd();
 const viewsRoot = path.join(root, 'src/views');
 
 const legacyRawNumberInputPages = new Set([
-  'IamRoleManagementView.vue',
   'TenantManagementView.vue',
 ]);
 

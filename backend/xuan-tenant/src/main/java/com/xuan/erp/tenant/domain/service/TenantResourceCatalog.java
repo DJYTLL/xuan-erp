@@ -18,7 +18,10 @@ public record TenantResourceCatalog(List<TenantResourceDefinition> resources) {
                 ), true),
                 new TenantResourceDefinition("tenant-plan-assignments", "tenant_plan_assignment", List.of(
                         "tenant_id", "previous_plan_id", "plan_id", "status", "effective_at", "expires_at",
-                        "assigned_at", "assigned_by", "change_reason", "source", "remark"
+                        "assigned_at", "assigned_by", "change_reason", "source", "remark",
+                        "permission_sync_expected_hash", "permission_sync_status",
+                        "permission_sync_last_checked_at", "permission_sync_last_synced_at",
+                        "permission_sync_last_error_code", "permission_sync_last_error_message"
                 ), true),
                 new TenantResourceDefinition("tenant-domains", "tenant_domain", List.of(
                         "tenant_id", "domain", "normalized_domain", "status", "is_primary",

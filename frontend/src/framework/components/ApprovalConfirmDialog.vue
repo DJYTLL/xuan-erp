@@ -4,6 +4,7 @@
     :title="copy.title"
     :width="width"
     class="approval-confirm-dialog"
+    align-center
     @update:model-value="emit('update:modelValue', $event)"
   >
     <div class="confirm-summary" :class="`confirm-summary-${copy.type}`">

@@ -41,12 +41,12 @@ assert(
 );
 
 assert(
-  roleViewSource.includes('authorizationStore.loadPermissionSnapshot'),
-  '角色授权保存成功后应重新拉取 /api/iam/permissions/current。',
+  roleViewSource.includes('authorizationStore.refreshCurrentAuthorizationContext'),
+  '角色授权保存成功后应重新拉取 /api/iam/permissions/current 和 /api/iam/menus/current。',
 );
 
 const saveIndex = roleViewSource.indexOf('await setIamRolePermissions');
-const refreshIndex = roleViewSource.indexOf('authorizationStore.loadPermissionSnapshot', saveIndex);
+const refreshIndex = roleViewSource.indexOf('authorizationStore.refreshCurrentAuthorizationContext', saveIndex);
 const successIndex = roleViewSource.indexOf("ElMessage.success('角色授权已保存')", saveIndex);
 
 assert(saveIndex >= 0, '角色授权页应调用 setIamRolePermissions 保存授权。');

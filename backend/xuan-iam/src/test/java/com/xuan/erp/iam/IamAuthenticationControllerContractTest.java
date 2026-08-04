@@ -37,6 +37,15 @@ class IamAuthenticationControllerContractTest {
     }
 
     @Test
+    void currentTokenEndpointsValidateTenantStatusBeforeReturningSessionData() throws IOException {
+        String controller = Files.readString(CONTROLLER_PATH);
+
+        int validationCount = controller
+                .split("authenticationApplicationService.validateCurrentTenantStatus\\(currentUser\\);", -1).length - 1;
+        assertTrue(validationCount >= 3, "current-user、current-menus、current-permissions 都必须校验租户状态");
+    }
+
+    @Test
     void iamSecurityFilterChainRunsBeforeSharedDefaultServletSecurityChain() throws IOException {
         String securityConfiguration = Files.readString(SECURITY_CONFIGURATION_PATH);
 

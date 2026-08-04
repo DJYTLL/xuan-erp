@@ -1,15 +1,18 @@
 package com.xuan.erp.common.security.autoconfigure;
 
 import com.xuan.erp.common.security.permission.CachedPermissionSnapshotProvider;
+import com.xuan.erp.common.security.permission.IamPermissionSnapshotUriSupplier;
 import com.xuan.erp.common.security.permission.PermissionSnapshotProvider;
 import com.xuan.erp.common.security.permission.RemoteIamPermissionSnapshotProvider;
 import com.xuan.erp.common.security.permission.XuanPermissionExpression;
+import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -47,10 +50,27 @@ public class XuanPermissionSecurityAutoConfiguration {
      */
     @Bean
     @ConditionalOnMissingBean
+    IamPermissionSnapshotUriSupplier iamPermissionSnapshotUriSupplier(
+            XuanPermissionSecurityProperties properties,
+            ListableBeanFactory beanFactory) {
+        ServiceDiscoveryUriResolverSupport discoverySupport = new ServiceDiscoveryUriResolverSupport(
+                beanFactory,
+                XuanPermissionSecurityAutoConfiguration.class.getClassLoader());
+        return discoverySupport.buildUriSupplier(properties.getIamServiceName(), properties.getIamSnapshotPath())
+                .<IamPermissionSnapshotUriSupplier>map(uriSupplier -> uriSupplier::get)
+                .orElseGet(() -> {
+                    URI iamSnapshotUri = requiredIamSnapshotUri(properties);
+                    return () -> reactor.core.publisher.Mono.just(iamSnapshotUri);
+                });
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    @Lazy
     RemoteIamPermissionSnapshotProvider remoteIamPermissionSnapshotProvider(
             WebClient.Builder webClientBuilder,
-            XuanPermissionSecurityProperties properties) {
-        return new RemoteIamPermissionSnapshotProvider(webClientBuilder.build(), requiredIamSnapshotUri(properties));
+            IamPermissionSnapshotUriSupplier iamPermissionSnapshotUriSupplier) {
+        return new RemoteIamPermissionSnapshotProvider(webClientBuilder.build(), iamPermissionSnapshotUriSupplier::get);
     }
 
     /**
@@ -63,7 +83,7 @@ public class XuanPermissionSecurityAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(PermissionSnapshotProvider.class)
     CachedPermissionSnapshotProvider permissionSnapshotProvider(
-            RemoteIamPermissionSnapshotProvider remoteProvider,
+            @Lazy RemoteIamPermissionSnapshotProvider remoteProvider,
             XuanPermissionSecurityProperties properties) {
         return new CachedPermissionSnapshotProvider(remoteProvider, requiredCacheTtl(properties), Clock.systemUTC());
     }
@@ -83,7 +103,7 @@ public class XuanPermissionSecurityAutoConfiguration {
     private URI requiredIamSnapshotUri(XuanPermissionSecurityProperties properties) {
         URI uri = properties.getIamSnapshotUri();
         if (uri == null || uri.toString().isBlank()) {
-            throw new IllegalStateException("xuan.security.permission.iam-snapshot-uri 未配置");
+            throw new IllegalStateException("未找到可用的 DiscoveryClient，且 xuan.security.permission.iam-snapshot-uri 未配置");
         }
         return uri;
     }

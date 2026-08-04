@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
- * Converts IAM business exceptions to the API envelope before the request falls through to /error.
+ * 统一将 IAM 业务异常转换为标准 API 响应，避免请求落入默认错误端点。
  */
 @RestControllerAdvice(basePackages = "com.xuan.erp.iam.interfaces.controller")
 public class IamApiExceptionHandler {

@@ -15,21 +15,21 @@ class IamTenantBootstrapGatewayAdapterTest {
     void delegatesBootstrapFunctionToMapper() {
         IamTenantBootstrapMapper mapper = mock(IamTenantBootstrapMapper.class);
         IamTenantBootstrapGatewayAdapter gateway = new IamTenantBootstrapGatewayAdapter(mapper);
-        when(mapper.bootstrapTenant(1001L, "admin", "hash", "租户管理员", null, null, "tenant-service")).thenReturn(12);
+        when(mapper.bootstrapTenant(1001L, "admin", "hash", "租户管理员", null, null, "standard", "tenant-service")).thenReturn(12);
 
-        Integer insertedCount = gateway.bootstrapTenant(1001L, "admin", "hash", "租户管理员", null, null, "tenant-service");
+        Integer insertedCount = gateway.bootstrapTenant(1001L, "admin", "hash", "租户管理员", null, null, "standard", "tenant-service");
 
         assertEquals(12, insertedCount);
-        verify(mapper).bootstrapTenant(1001L, "admin", "hash", "租户管理员", null, null, "tenant-service");
+        verify(mapper).bootstrapTenant(1001L, "admin", "hash", "租户管理员", null, null, "standard", "tenant-service");
     }
 
     @Test
     void returnsZeroWhenMapperReturnsNull() {
         IamTenantBootstrapMapper mapper = mock(IamTenantBootstrapMapper.class);
         IamTenantBootstrapGatewayAdapter gateway = new IamTenantBootstrapGatewayAdapter(mapper);
-        when(mapper.bootstrapTenant(1001L, "admin", "hash", "租户管理员", null, null, "tenant-service")).thenReturn(null);
+        when(mapper.bootstrapTenant(1001L, "admin", "hash", "租户管理员", null, null, null, "tenant-service")).thenReturn(null);
 
-        Integer insertedCount = gateway.bootstrapTenant(1001L, "admin", "hash", "租户管理员", null, null, "tenant-service");
+        Integer insertedCount = gateway.bootstrapTenant(1001L, "admin", "hash", "租户管理员", null, null, null, "tenant-service");
 
         assertEquals(0, insertedCount);
     }

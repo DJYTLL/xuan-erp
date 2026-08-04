@@ -42,8 +42,18 @@
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <el-button text @click="exportRows">导出</el-button>
-        <el-button v-if="mode === 'draft'" text type="primary" :disabled="!selectedRows.length" @click="openBatchSubmit">批量提交</el-button>
+        <PermissionButton text permission="procurement:view" no-permission-mode="disable" @click="exportRows">导出</PermissionButton>
+        <PermissionButton
+          v-if="mode === 'draft'"
+          text
+          type="primary"
+          permission="procurement:audit"
+          no-permission-mode="disable"
+          :disabled-reason="selectedRows.length ? '' : '请先选择采购单'"
+          @click="openBatchSubmit"
+        >
+          批量提交
+        </PermissionButton>
       </template>
 
       <el-table :data="pagedOrders" :size="tableDensity" height="520" border @selection-change="selectedRows = $event">
@@ -64,10 +74,10 @@
         <el-table-column v-if="visibleColumns.createdAt" prop="createdAt" label="创建时间" min-width="160" />
         <el-table-column label="操作" fixed="right" width="190">
           <template #default="{ row }">
-            <el-button link type="primary" @click="openOrderDetail(row)">查看</el-button>
-            <el-button v-if="mode === 'draft'" link type="primary" @click="openApproval('submit', row)">提交</el-button>
+            <PermissionButton link type="primary" permission="procurement:view" no-permission-mode="disable" @click="openOrderDetail(row)">查看</PermissionButton>
+            <PermissionButton v-if="mode === 'draft'" link type="primary" permission="procurement:audit" no-permission-mode="disable" @click="openApproval('submit', row)">提交</PermissionButton>
             <el-dropdown v-if="mode === 'draft'" trigger="click">
-              <el-button link type="primary">更多</el-button>
+              <PermissionButton link type="primary" permission="procurement:audit" no-permission-mode="disable">更多</PermissionButton>
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item @click="openApproval('approve', row)">审核通过</el-dropdown-item>

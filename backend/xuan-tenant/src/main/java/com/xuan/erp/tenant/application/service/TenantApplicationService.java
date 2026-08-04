@@ -1,6 +1,7 @@
 package com.xuan.erp.tenant.application.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xuan.erp.common.api.PageResult;
 import com.xuan.erp.common.exception.BusinessException;
@@ -14,6 +15,7 @@ import com.xuan.erp.tenant.application.query.TenantDetailView;
 import com.xuan.erp.tenant.application.query.TenantInternalStatusView;
 import com.xuan.erp.tenant.domain.model.Tenant;
 import com.xuan.erp.tenant.domain.model.TenantDetailSupplement;
+import com.xuan.erp.tenant.domain.model.TenantLoginEligibility;
 import com.xuan.erp.tenant.domain.model.TenantPlan;
 import com.xuan.erp.tenant.domain.model.TenantPlanAssignment;
 import com.xuan.erp.tenant.domain.model.TenantProvisionTask;
@@ -24,10 +26,12 @@ import com.xuan.erp.tenant.domain.model.type.TenantPlanStatus;
 import com.xuan.erp.tenant.domain.model.type.TenantStatus;
 import com.xuan.erp.tenant.domain.repository.TenantPlanAssignmentRepository;
 import com.xuan.erp.tenant.domain.repository.TenantPlanRepository;
+import com.xuan.erp.tenant.domain.repository.TenantIamBootstrapGateway;
 import com.xuan.erp.tenant.domain.repository.TenantProvisionTaskRepository;
 import com.xuan.erp.tenant.domain.repository.TenantRepository;
 import com.xuan.erp.tenant.domain.repository.TenantStatusHistoryRepository;
 import java.time.OffsetDateTime;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -50,6 +54,7 @@ public class TenantApplicationService {
     private final TenantProvisionApplicationService tenantProvisionApplicationService;
     private final TenantPlanRepository tenantPlanRepository;
     private final TenantPlanAssignmentRepository tenantPlanAssignmentRepository;
+    private final TenantIamBootstrapGateway tenantIamBootstrapGateway;
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -69,7 +74,7 @@ public class TenantApplicationService {
             TenantStatusHistoryRepository statusHistoryRepository,
             @Nullable TenantProvisionTaskRepository provisionTaskRepository,
             @Nullable TenantProvisionApplicationService tenantProvisionApplicationService) {
-        this(tenantRepository, statusHistoryRepository, provisionTaskRepository, tenantProvisionApplicationService, null, null, null);
+        this(tenantRepository, statusHistoryRepository, provisionTaskRepository, tenantProvisionApplicationService, null, null, null, null);
     }
 
     public TenantApplicationService(
@@ -79,7 +84,19 @@ public class TenantApplicationService {
             @Nullable TenantProvisionApplicationService tenantProvisionApplicationService,
             @Nullable PasswordEncoder passwordEncoder) {
         this(tenantRepository, statusHistoryRepository, provisionTaskRepository, tenantProvisionApplicationService,
-                passwordEncoder, null, null);
+                passwordEncoder, null, null, null);
+    }
+
+    public TenantApplicationService(
+            TenantRepository tenantRepository,
+            TenantStatusHistoryRepository statusHistoryRepository,
+            @Nullable TenantProvisionTaskRepository provisionTaskRepository,
+            @Nullable TenantProvisionApplicationService tenantProvisionApplicationService,
+            @Nullable PasswordEncoder passwordEncoder,
+            @Nullable TenantPlanRepository tenantPlanRepository,
+            @Nullable TenantPlanAssignmentRepository tenantPlanAssignmentRepository) {
+        this(tenantRepository, statusHistoryRepository, provisionTaskRepository, tenantProvisionApplicationService,
+                passwordEncoder, tenantPlanRepository, tenantPlanAssignmentRepository, null);
     }
 
     @Autowired
@@ -90,13 +107,15 @@ public class TenantApplicationService {
             @Nullable TenantProvisionApplicationService tenantProvisionApplicationService,
             @Nullable PasswordEncoder passwordEncoder,
             @Nullable TenantPlanRepository tenantPlanRepository,
-            @Nullable TenantPlanAssignmentRepository tenantPlanAssignmentRepository) {
+            @Nullable TenantPlanAssignmentRepository tenantPlanAssignmentRepository,
+            @Nullable TenantIamBootstrapGateway tenantIamBootstrapGateway) {
         this.tenantRepository = tenantRepository;
         this.statusHistoryRepository = statusHistoryRepository;
         this.provisionTaskRepository = provisionTaskRepository;
         this.tenantProvisionApplicationService = tenantProvisionApplicationService;
         this.tenantPlanRepository = tenantPlanRepository;
         this.tenantPlanAssignmentRepository = tenantPlanAssignmentRepository;
+        this.tenantIamBootstrapGateway = tenantIamBootstrapGateway;
         this.passwordEncoder = passwordEncoder == null ? PasswordEncoderFactories.createDelegatingPasswordEncoder() : passwordEncoder;
     }
 
@@ -106,15 +125,44 @@ public class TenantApplicationService {
     }
 
     public TenantInternalStatusView getTenantInternalStatus(Long tenantId) {
-        TenantDetailView detail = getTenant(tenantId);
-        String deniedReason = loginDeniedReason(detail, OffsetDateTime.now());
+        Tenant tenant = requireTenant(tenantId);
+        return toInternalStatusView(tenant);
+    }
+
+    public TenantInternalStatusView getTenantInternalStatusByCode(String tenantCode) {
+        String normalizedCode = Tenant.normalizeCode(tenantCode);
+        Tenant tenant = tenantRepository.findActiveByNormalizedCode(normalizedCode)
+                .orElseThrow(() -> new BusinessException("TENANT_NOT_FOUND", "租户不存在"));
+        return toInternalStatusView(tenant);
+    }
+
+    private TenantInternalStatusView toInternalStatusView(Tenant tenant) {
+        TenantDetailSupplement supplement = tenantRepository.getDetailSupplement(tenant.id());
+        TenantLoginEligibility eligibility = tenant.loginEligibility(supplement.currentPlanExpiresAt(), OffsetDateTime.now());
+        TenantPlan currentPlan = supplement.currentPlanId() == null || tenantPlanRepository == null
+                ? null
+                : tenantPlanRepository.findById(supplement.currentPlanId()).orElse(null);
+        String iamInitTemplateCode = iamInitTemplateCode(currentPlan);
+        List<String> columnPermissionTemplateCodes = columnPermissionTemplateCodes(currentPlan);
+        String defaultColumnPermissionTemplateCode = defaultColumnPermissionTemplateCode(currentPlan);
+        String permissionHash = currentPlan == null
+                ? supplement.permissionSyncExpectedHash()
+                : TenantPermissionSyncFingerprint.hash(
+                iamInitTemplateCode,
+                columnPermissionTemplateCodes,
+                defaultColumnPermissionTemplateCode);
         return new TenantInternalStatusView(
-                detail.id(),
-                detail.code(),
-                detail.status(),
-                deniedReason == null,
-                deniedReason,
-                detail.currentPlanExpiresAt());
+                tenant.id(),
+                tenant.code(),
+                tenant.name(),
+                tenant.status(),
+                eligibility.allowed(),
+                eligibility.deniedReason(),
+                supplement.currentPlanExpiresAt(),
+                permissionHash,
+                iamInitTemplateCode,
+                columnPermissionTemplateCodes,
+                defaultColumnPermissionTemplateCode);
     }
 
     public TenantDetailView createTenant(CreateTenantCommand command) {
@@ -152,21 +200,11 @@ public class TenantApplicationService {
                             null,
                             null
                     ));
-                    assignInitialPlan(saved.id(), command.planId(), command.planExpiresAt(), operator, now);
+                    TenantPlan initialPlan = assignInitialPlan(saved.id(), command.planId(), command.planExpiresAt(), operator, now);
                     appendHistory(saved.id(), null, saved.status(), "CREATE", "租户创建", operator);
-                    startProvisioning(saved.id(), taskKey, command.idempotencyKey(), operator, command);
+                    startProvisioning(saved.id(), taskKey, command.idempotencyKey(), operator, command, initialPlan);
                     return saved;
                 });
-    }
-
-    private String loginDeniedReason(TenantDetailView detail, OffsetDateTime now) {
-        if (detail.status() != TenantStatus.PROVISIONED && detail.status() != TenantStatus.ENABLED) {
-            return "租户状态不允许登录: " + detail.status().code();
-        }
-        if (detail.currentPlanExpiresAt() != null && !detail.currentPlanExpiresAt().isAfter(now)) {
-            return "租户套餐已到期";
-        }
-        return null;
     }
 
     public TenantDetailView updateTenant(Long tenantId, UpdateTenantCommand command) {
@@ -358,6 +396,7 @@ public class TenantApplicationService {
     }
 
     private TenantDetailView toDetailView(Tenant tenant, TenantDetailSupplement supplement) {
+        String expectedHash = expectedPermissionHash(supplement);
         return new TenantDetailView(
                 tenant.id(),
                 tenant.code(),
@@ -375,6 +414,12 @@ public class TenantApplicationService {
                 supplement.currentPlanExpiresAt(),
                 supplement.primaryDomainId(),
                 supplement.primaryDomain(),
+                expectedHash,
+                permissionSyncStatus(tenant.id(), expectedHash, supplement.permissionSyncStatus()),
+                supplement.permissionSyncLastCheckedAt(),
+                supplement.permissionSyncLastSyncedAt(),
+                supplement.permissionSyncLastErrorCode(),
+                supplement.permissionSyncLastErrorMessage(),
                 supplement.statusHistoryCount(),
                 supplement.latestStatusChangeType(),
                 supplement.latestStatusChangedAt()
@@ -383,6 +428,27 @@ public class TenantApplicationService {
 
     private TenantDetailView toDetailViewWithSupplement(Tenant tenant) {
         return toDetailView(tenant, tenantRepository.getDetailSupplement(tenant.id()));
+    }
+
+    private String expectedPermissionHash(TenantDetailSupplement supplement) {
+        if (supplement.currentPlanId() == null || tenantPlanRepository == null) {
+            return supplement.permissionSyncExpectedHash();
+        }
+        return tenantPlanRepository.findById(supplement.currentPlanId())
+                .map(plan -> TenantPermissionSyncFingerprint.hash(
+                        iamInitTemplateCode(plan),
+                        columnPermissionTemplateCodes(plan),
+                        defaultColumnPermissionTemplateCode(plan)))
+                .orElse(supplement.permissionSyncExpectedHash());
+    }
+
+    private String permissionSyncStatus(Long tenantId, String expectedHash, String localStatus) {
+        if (expectedHash == null || expectedHash.isBlank() || tenantIamBootstrapGateway == null) {
+            return localStatus;
+        }
+        return tenantIamBootstrapGateway.findLastSyncedPermissionHash(tenantId)
+                .map(lastSyncedHash -> expectedHash.equals(lastSyncedHash) ? "SYNCED" : "PENDING_REPAIR")
+                .orElse(localStatus);
     }
 
     private Tenant requireTenant(Long tenantId) {
@@ -409,9 +475,9 @@ public class TenantApplicationService {
         ));
     }
 
-    private void assignInitialPlan(Long tenantId, Long planId, OffsetDateTime planExpiresAt, String operator, OffsetDateTime now) {
+    private TenantPlan assignInitialPlan(Long tenantId, Long planId, OffsetDateTime planExpiresAt, String operator, OffsetDateTime now) {
         if (planId == null) {
-            return;
+            return null;
         }
         if (tenantPlanRepository == null || tenantPlanAssignmentRepository == null) {
             throw new BusinessException("TENANT_PLAN_ASSIGNMENT_NOT_CONFIGURED", "租户套餐分配未配置");
@@ -441,6 +507,7 @@ public class TenantApplicationService {
                 null,
                 null,
                 null));
+        return plan;
     }
 
     private String requireText(String value, String message) {
@@ -462,14 +529,25 @@ public class TenantApplicationService {
         }
     }
 
-    private void startProvisioning(Long tenantId, String taskKey, String idempotencyKey, String requestedBy, CreateTenantCommand command) {
+    private void startProvisioning(
+            Long tenantId,
+            String taskKey,
+            String idempotencyKey,
+            String requestedBy,
+            CreateTenantCommand command,
+            TenantPlan initialPlan) {
         if (tenantProvisionApplicationService == null) {
             return;
         }
-        tenantProvisionApplicationService.startProvisioning(tenantId, taskKey, idempotencyKey, requestedBy, adminBootstrap(command));
+        tenantProvisionApplicationService.startProvisioning(
+                tenantId,
+                taskKey,
+                idempotencyKey,
+                requestedBy,
+                adminBootstrap(command, initialPlan));
     }
 
-    private TenantAdminBootstrapCommand adminBootstrap(CreateTenantCommand command) {
+    private TenantAdminBootstrapCommand adminBootstrap(CreateTenantCommand command, TenantPlan initialPlan) {
         String adminUsername = textOrDefault(command.adminUsername(), "admin");
         String adminPassword = textOrDefault(command.adminPassword(), "123456");
         String adminDisplayName = textOrDefault(command.adminDisplayName(), "租户管理员");
@@ -478,7 +556,57 @@ public class TenantApplicationService {
                 passwordEncoder.encode(adminPassword),
                 adminDisplayName,
                 textOrNull(command.adminEmail()),
-                textOrNull(command.adminPhone()));
+                textOrNull(command.adminPhone()),
+                iamInitTemplateCode(initialPlan),
+                columnPermissionTemplateCodes(initialPlan),
+                defaultColumnPermissionTemplateCode(initialPlan));
+    }
+
+    private String iamInitTemplateCode(TenantPlan plan) {
+        JsonNode value = featureFlags(plan).path("iamInitTemplateCode");
+        if (!value.isTextual()) {
+            return null;
+        }
+        return textOrNull(value.asText());
+    }
+
+    private List<String> columnPermissionTemplateCodes(TenantPlan plan) {
+        JsonNode value = featureFlags(plan).path("columnPermissionTemplateCodes");
+        if (value.isMissingNode() || value.isNull()) {
+            return null;
+        }
+        if (!value.isArray()) {
+            throw new BusinessException("TENANT_PLAN_FEATURE_FLAGS_INVALID", "套餐列权限模板编码必须是 JSON 数组");
+        }
+        LinkedHashSet<String> codes = new LinkedHashSet<>();
+        value.forEach(item -> {
+            if (item.isTextual()) {
+                String code = textOrNull(item.asText());
+                if (code != null) {
+                    codes.add(code);
+                }
+            }
+        });
+        return List.copyOf(codes);
+    }
+
+    private String defaultColumnPermissionTemplateCode(TenantPlan plan) {
+        JsonNode value = featureFlags(plan).path("defaultColumnPermissionTemplateCode");
+        if (!value.isTextual()) {
+            return null;
+        }
+        return textOrNull(value.asText());
+    }
+
+    private JsonNode featureFlags(TenantPlan plan) {
+        if (plan == null || plan.featureFlagsJson() == null || plan.featureFlagsJson().isBlank()) {
+            return objectMapper.createObjectNode();
+        }
+        try {
+            return objectMapper.readTree(plan.featureFlagsJson());
+        } catch (JsonProcessingException error) {
+            throw new BusinessException("TENANT_PLAN_FEATURE_FLAGS_INVALID", "租户套餐功能标记不是合法 JSON");
+        }
     }
 
     private String textOrDefault(String value, String defaultValue) {

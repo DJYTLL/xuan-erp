@@ -25,7 +25,7 @@ public record IamCurrentPermissionSnapshotResponse(
         @Schema(description = "当前用户按钮权限编码列表")
         List<String> buttonPermissions,
         @Schema(description = "当前用户列权限映射")
-        Map<String, List<String>> columnPermissions,
+        Map<String, Map<String, String>> columnPermissions,
         @Schema(description = "当前用户字段编辑权限映射")
         Map<String, List<String>> fieldPermissions,
         @Schema(description = "当前用户数据范围列表")

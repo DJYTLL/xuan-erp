@@ -180,7 +180,10 @@ public class GatewayBearerAuthenticationWebFilter implements WebFilter {
     }
 
     private Long requestedTenantId(ServerWebExchange exchange) {
-        String tenantId = exchange.getRequest().getHeaders().getFirst(GatewayIdentityHeaders.TENANT_ID);
+        String tenantId = GatewayRequestHeaderWebFilter.requestedTenantId(exchange);
+        if (tenantId == null || tenantId.isBlank()) {
+            tenantId = exchange.getRequest().getHeaders().getFirst(GatewayIdentityHeaders.TENANT_ID);
+        }
         if (tenantId == null || tenantId.isBlank()) {
             return null;
         }

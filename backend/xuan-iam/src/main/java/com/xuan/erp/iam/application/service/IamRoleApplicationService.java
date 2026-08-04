@@ -4,6 +4,7 @@ import com.xuan.erp.common.exception.BusinessException;
 import com.xuan.erp.iam.application.command.CreateIamRoleCommand;
 import com.xuan.erp.iam.application.command.SetIamRolePermissionsCommand;
 import com.xuan.erp.iam.application.command.UpdateIamRoleCommand;
+import com.xuan.erp.iam.application.query.IamAssignablePermissionView;
 import com.xuan.erp.iam.application.query.IamRolePermissionGrantView;
 import com.xuan.erp.iam.domain.model.IamAuthorizationSnapshot;
 import com.xuan.erp.iam.domain.model.IamPermission;
@@ -13,8 +14,10 @@ import com.xuan.erp.iam.domain.repository.IamAuthorizationSnapshotRepository;
 import com.xuan.erp.iam.domain.repository.IamPermissionRepository;
 import com.xuan.erp.iam.domain.repository.IamRolePermissionRepository;
 import com.xuan.erp.iam.domain.repository.IamRoleRepository;
+import com.xuan.erp.iam.domain.repository.IamTenantPermissionEntitlementRepository;
 import com.xuan.erp.iam.domain.repository.IamUserRepository;
 import java.time.OffsetDateTime;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -33,18 +36,21 @@ public class IamRoleApplicationService {
     private final IamRolePermissionRepository rolePermissionRepository;
     private final IamUserRepository userRepository;
     private final IamAuthorizationSnapshotRepository snapshotRepository;
+    private final IamTenantPermissionEntitlementRepository tenantPermissionEntitlementRepository;
 
     public IamRoleApplicationService(
             IamRoleRepository roleRepository,
             IamPermissionRepository permissionRepository,
             IamRolePermissionRepository rolePermissionRepository,
             IamUserRepository userRepository,
-            IamAuthorizationSnapshotRepository snapshotRepository) {
+            IamAuthorizationSnapshotRepository snapshotRepository,
+            IamTenantPermissionEntitlementRepository tenantPermissionEntitlementRepository) {
         this.roleRepository = roleRepository;
         this.permissionRepository = permissionRepository;
         this.rolePermissionRepository = rolePermissionRepository;
         this.userRepository = userRepository;
         this.snapshotRepository = snapshotRepository;
+        this.tenantPermissionEntitlementRepository = tenantPermissionEntitlementRepository;
     }
 
     public List<IamRole> listRoles(Long tenantId) {
@@ -75,8 +81,7 @@ public class IamRoleApplicationService {
     }
 
     public IamRole updateRole(Long roleId, UpdateIamRoleCommand command) {
-        IamRole existing = roleRepository.findById(roleId)
-                .orElseThrow(() -> new BusinessException("IAM_ROLE_NOT_FOUND", "角色不存在"));
+        IamRole existing = requireWritableRole(roleId);
         OffsetDateTime now = OffsetDateTime.now();
         return roleRepository.save(new IamRole(
                 existing.id(),
@@ -95,8 +100,7 @@ public class IamRoleApplicationService {
     }
 
     public IamRole setRoleEnabled(Long roleId, boolean enabled) {
-        IamRole existing = roleRepository.findById(roleId)
-                .orElseThrow(() -> new BusinessException("IAM_ROLE_NOT_FOUND", "角色不存在"));
+        IamRole existing = requireWritableRole(roleId);
         OffsetDateTime now = OffsetDateTime.now();
         return roleRepository.save(new IamRole(
                 existing.id(),
@@ -116,16 +120,23 @@ public class IamRoleApplicationService {
 
     public IamRolePermissionGrantView getRolePermissions(Long tenantId, Long roleId) {
         requireRoleInTenant(tenantId, roleId);
+        List<String> availablePermissionCodes = availablePermissionCodes(tenantId);
         return new IamRolePermissionGrantView(
                 tenantId,
                 roleId,
-                rolePermissionRepository.findPermissionCodesByRoleId(tenantId, roleId));
+                trimByAvailablePermissionCodes(
+                        rolePermissionRepository.findPermissionCodesByRoleId(tenantId, roleId),
+                        availablePermissionCodes),
+                availablePermissionCodes,
+                availablePermissionViews(availablePermissionCodes));
     }
 
     @Transactional
     public IamRolePermissionGrantView replaceRolePermissions(SetIamRolePermissionsCommand command) {
-        requireRoleInTenant(command.tenantId(), command.roleId());
+        requireWritableRoleInTenant(command.tenantId(), command.roleId());
         List<String> codes = normalizeCodes(command.permissionCodes());
+        List<String> availablePermissionCodes = availablePermissionCodes(command.tenantId());
+        requireWithinTenantEntitlementPool(command.tenantId(), codes, availablePermissionCodes);
         List<IamPermission> permissions = codes.stream()
                 .map(code -> permissionRepository.findByCode(code)
                         .filter(IamPermission::enabled)
@@ -140,7 +151,85 @@ public class IamRoleApplicationService {
                 command.tenantId(),
                 command.roleId(),
                 trimToNull(command.operator()) == null ? "system" : command.operator().trim());
-        return new IamRolePermissionGrantView(command.tenantId(), command.roleId(), codes);
+        return new IamRolePermissionGrantView(
+                command.tenantId(),
+                command.roleId(),
+                codes,
+                availablePermissionCodes,
+                availablePermissionViews(availablePermissionCodes));
+    }
+
+    private List<String> availablePermissionCodes(Long tenantId) {
+        if (tenantId != null && tenantId <= 0) {
+            return permissionRepository.findActivePermissions().stream()
+                    .filter(IamPermission::enabled)
+                    .map(IamPermission::code)
+                    .filter(code -> code != null && !code.isBlank())
+                    .distinct()
+                    .sorted()
+                    .toList();
+        }
+        return tenantPermissionEntitlementRepository.findPermissionCodesByTenantId(tenantId).stream()
+                .filter(code -> code != null && !code.isBlank())
+                .map(String::trim)
+                .distinct()
+                .sorted()
+                .toList();
+    }
+
+    private List<IamAssignablePermissionView> availablePermissionViews(List<String> availablePermissionCodes) {
+        if (availablePermissionCodes == null || availablePermissionCodes.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Boolean> available = availablePermissionCodes.stream()
+                .collect(LinkedHashMap::new, (map, code) -> map.put(code, true), LinkedHashMap::putAll);
+        return permissionRepository.findActivePermissions().stream()
+                .filter(IamPermission::enabled)
+                .filter(permission -> available.containsKey(permission.code()))
+                .map(permission -> new IamAssignablePermissionView(
+                        permission.id(),
+                        permission.code(),
+                        permission.name(),
+                        permission.serviceName(),
+                        permission.menuCode(),
+                        permission.description(),
+                        permission.enabled()))
+                .sorted((left, right) -> left.code().compareTo(right.code()))
+                .toList();
+    }
+
+    private void requireWithinTenantEntitlementPool(Long tenantId, List<String> requestedCodes, List<String> availablePermissionCodes) {
+        if (tenantId == null || tenantId <= 0 || requestedCodes.isEmpty()) {
+            return;
+        }
+        Map<String, Boolean> available = availablePermissionCodes.stream()
+                .collect(LinkedHashMap::new, (map, code) -> map.put(code, true), LinkedHashMap::putAll);
+        List<String> outsideCodes = requestedCodes.stream()
+                .filter(code -> !available.containsKey(code))
+                .toList();
+        if (!outsideCodes.isEmpty()) {
+            throw new BusinessException(
+                    "IAM_TENANT_PERMISSION_OUT_OF_SCOPE",
+                    "角色授权不能超出租户权限池: " + String.join(", ", outsideCodes));
+        }
+    }
+
+    private List<String> trimByAvailablePermissionCodes(List<String> permissionCodes, List<String> availablePermissionCodes) {
+        if (permissionCodes == null || permissionCodes.isEmpty()) {
+            return List.of();
+        }
+        if (availablePermissionCodes == null || availablePermissionCodes.isEmpty()) {
+            return List.of();
+        }
+        Map<String, Boolean> available = availablePermissionCodes.stream()
+                .collect(LinkedHashMap::new, (map, code) -> map.put(code, true), LinkedHashMap::putAll);
+        return permissionCodes.stream()
+                .filter(code -> code != null && !code.isBlank())
+                .map(String::trim)
+                .filter(available::containsKey)
+                .distinct()
+                .sorted()
+                .toList();
     }
 
     private void refreshAffectedUserAuthorizationSnapshots(Long tenantId, Long roleId, String operator) {
@@ -201,7 +290,7 @@ public class IamRoleApplicationService {
                 permissionCodes,
                 List.of(),
                 existing == null ? Map.of() : existing.columnSettings(),
-                snapshotHash(roleIds, permissionCodes),
+                IamAuthorizationSnapshotHash.from(roleIds, permissionCodes),
                 existing == null ? null : existing.expiresAt(),
                 now,
                 existing == null ? operator : existing.createdBy(),
@@ -211,11 +300,39 @@ public class IamRoleApplicationService {
     }
 
     private void requireRoleInTenant(Long tenantId, Long roleId) {
-        requirePositive(tenantId, "租户 ID 不能为空");
+        if (tenantId == null) {
+            throw new BusinessException("IAM_INVALID_ARGUMENT", "租户 ID 不能为空");
+        }
         IamRole role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new BusinessException("IAM_ROLE_NOT_FOUND", "角色不存在"));
         if (!role.tenantId().equals(tenantId)) {
             throw new BusinessException("IAM_ROLE_TENANT_MISMATCH", "角色不属于指定租户");
+        }
+    }
+
+    private IamRole requireWritableRole(Long roleId) {
+        IamRole role = roleRepository.findById(roleId)
+                .orElseThrow(() -> new BusinessException("IAM_ROLE_NOT_FOUND", "角色不存在"));
+        ensureRoleWritable(role);
+        return role;
+    }
+
+    private IamRole requireWritableRoleInTenant(Long tenantId, Long roleId) {
+        if (tenantId == null) {
+            throw new BusinessException("IAM_INVALID_ARGUMENT", "租户 ID 不能为空");
+        }
+        IamRole role = roleRepository.findById(roleId)
+                .orElseThrow(() -> new BusinessException("IAM_ROLE_NOT_FOUND", "角色不存在"));
+        if (!role.tenantId().equals(tenantId)) {
+            throw new BusinessException("IAM_ROLE_TENANT_MISMATCH", "角色不属于指定租户");
+        }
+        ensureRoleWritable(role);
+        return role;
+    }
+
+    private void ensureRoleWritable(IamRole role) {
+        if (role.tenantId() != null && role.tenantId() == 0L) {
+            throw new BusinessException("IAM_PLATFORM_ROLE_READ_ONLY", "平台级角色当前仅支持查看");
         }
     }
 
@@ -253,9 +370,4 @@ public class IamRoleApplicationService {
         return value.trim();
     }
 
-    private String snapshotHash(List<Long> roleIds, List<String> permissionCodes) {
-        return String.join(",", permissionCodes)
-                + "|"
-                + roleIds.stream().map(String::valueOf).reduce((left, right) -> left + "," + right).orElse("");
-    }
 }

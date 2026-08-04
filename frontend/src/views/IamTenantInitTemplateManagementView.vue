@@ -9,7 +9,7 @@
         </el-select>
         <template #actions>
           <el-button :icon="RefreshCw" circle @click="loadTemplates" />
-          <PermissionButton type="primary" permission="iam:create" @click="openCreate">新增模板</PermissionButton>
+          <PermissionButton type="primary" permission="iam-init-template:create" @click="openCreate">新增模板</PermissionButton>
         </template>
       </QueryToolbar>
     </template>
@@ -36,67 +36,45 @@
       <el-table-column prop="description" label="说明" min-width="260" show-overflow-tooltip />
       <el-table-column label="操作" width="220" fixed="right">
         <template #default="{ row }">
-          <el-button link type="primary" @click="openGrant(row)">权限</el-button>
-          <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
+          <PermissionButton link type="primary" permission="iam-init-template:update" no-permission-mode="disable" @click="openGrant(row)">权限</PermissionButton>
+          <PermissionButton link type="primary" permission="iam-init-template:update" no-permission-mode="disable" @click="openEdit(row)">编辑</PermissionButton>
         </template>
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="dialogVisible" :title="editingTemplate ? '编辑模板' : '新增模板'" width="640px">
-      <el-form label-position="top">
-        <el-row :gutter="16">
-          <el-col :span="12">
-            <el-form-item label="模板编码">
-              <el-input v-model.trim="form.code" :disabled="Boolean(editingTemplate)" placeholder="standard" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="模板名称">
-              <el-input v-model.trim="form.name" placeholder="标准模板" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="启用">
-              <el-switch v-model="form.enabled" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="默认模板">
-              <el-switch v-model="form.defaultTemplate" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="24">
-            <el-form-item label="说明">
-              <el-input v-model.trim="form.description" type="textarea" :rows="3" placeholder="模板用途说明" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submitTemplate">保存</el-button>
-      </template>
-    </el-dialog>
+    <DynamicFormDialog
+      v-model="dialogVisible"
+      :title="editingTemplate ? '编辑模板' : '新增模板'"
+      :fields="templateFormFields"
+      :sections="templateFormSections"
+      :model="form"
+      size="md"
+      label-position="top"
+      :confirm-permission="editingTemplate ? 'iam-init-template:update' : 'iam-init-template:create'"
+      :loading="submitting"
+      @submit="submitTemplate"
+    />
 
-    <el-dialog
+    <DynamicFormDialog
       v-model="grantVisible"
-      class="init-template-grant-dialog"
       :title="grantDialogTitle"
-      width="1080px"
-      top="6vh"
-      destroy-on-close
+      :render-form="false"
+      description="按菜单树维护初始化模板的默认权限"
+      helper-text="拖动标题栏移动，拖动四角调整大小"
+      variant="workspace"
+      width="96vw"
+      :confirm-permission="'iam-init-template:update'"
+      @submit="submitGrant"
     >
-      <MenuPermissionAssignment
-        v-model="selectedPermissionCodes"
-        :menus="menus"
-        :permissions="permissions"
-        :page-required-permission-map="businessPageRequiredPermissionMap"
-      />
-      <template #footer>
-        <el-button @click="grantVisible = false">取消</el-button>
-        <PermissionButton type="primary" permission="iam:update" @click="submitGrant">保存权限</PermissionButton>
+      <template #body>
+        <MenuPermissionAssignment
+          v-model="selectedPermissionCodes"
+          :menus="menus"
+          :permissions="permissions"
+          :page-required-permission-map="businessPageRequiredPermissionMap"
+        />
       </template>
-    </el-dialog>
+    </DynamicFormDialog>
   </ListPageShell>
 </template>
 
@@ -106,13 +84,15 @@ import { ElMessage } from 'element-plus/es/components/message/index';
 import { RefreshCw } from 'lucide-vue-next';
 import {
   createIamTenantInitTemplate,
-  listIamMenus,
+  listIamMenuOptions,
   listIamPermissions,
   listIamTenantInitTemplates,
   setIamTenantInitTemplatePermissions,
   updateIamTenantInitTemplate,
 } from '@/api/iamAdmin';
 import { businessPageRequiredPermissionMap } from '@/config/businessPageRequiredPermissions';
+import DynamicFormDialog from '@/framework/components/DynamicFormDialog.vue';
+import type { DynamicFormField, DynamicFormSection } from '@/framework/components/DynamicFormDialog.vue';
 import ListPageShell from '@/framework/components/ListPageShell.vue';
 import MenuPermissionAssignment from '@/framework/components/MenuPermissionAssignment.vue';
 import PermissionButton from '@/framework/components/PermissionButton.vue';
@@ -166,6 +146,50 @@ const grantDialogTitle = computed(() => (
   grantingTemplate.value ? `模板权限 - ${grantingTemplate.value.name}` : '模板权限'
 ));
 
+const templateFormFields = computed<DynamicFormField[]>(() => [
+  {
+    key: 'code',
+    label: '模板编码',
+    placeholder: 'standard',
+    disabled: Boolean(editingTemplate.value),
+    required: true,
+    span: 12,
+  },
+  {
+    key: 'name',
+    label: '模板名称',
+    placeholder: '标准模板',
+    required: true,
+    span: 12,
+  },
+  {
+    key: 'enabled',
+    label: '启用',
+    component: 'switch',
+    span: 12,
+  },
+  {
+    key: 'defaultTemplate',
+    label: '默认模板',
+    component: 'switch',
+    span: 12,
+  },
+  {
+    key: 'description',
+    label: '说明',
+    component: 'textarea',
+    placeholder: '模板用途说明',
+    span: 24,
+  },
+]);
+
+const templateFormSections = computed<DynamicFormSection[]>(() => [
+  {
+    title: '模板信息',
+    fields: templateFormFields.value,
+  },
+]);
+
 onMounted(async () => {
   await Promise.all([loadTemplates(), loadMenus(), loadPermissions()]);
 });
@@ -180,7 +204,7 @@ async function loadTemplates() {
 }
 
 async function loadMenus() {
-  menus.value = await listIamMenus();
+  menus.value = await listIamMenuOptions();
 }
 
 async function loadPermissions() {
@@ -215,7 +239,8 @@ function openEdit(row: IamTenantInitTemplate) {
   dialogVisible.value = true;
 }
 
-async function submitTemplate() {
+async function submitTemplate(value: Record<string, unknown>) {
+  Object.assign(form, value);
   if (!form.code?.trim() || !form.name?.trim()) {
     ElMessage.warning('请填写模板编码和模板名称');
     return;
@@ -261,11 +286,4 @@ async function submitGrant() {
   width: 132px;
 }
 
-:global(.init-template-grant-dialog) {
-  max-width: calc(100vw - 48px);
-}
-
-:global(.init-template-grant-dialog .el-dialog__body) {
-  padding-top: 8px;
-}
 </style>

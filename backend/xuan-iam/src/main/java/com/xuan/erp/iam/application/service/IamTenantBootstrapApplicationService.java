@@ -3,7 +3,14 @@ package com.xuan.erp.iam.application.service;
 import com.xuan.erp.common.exception.BusinessException;
 import com.xuan.erp.iam.application.command.BootstrapTenantAdminCommand;
 import com.xuan.erp.iam.application.port.IamTenantBootstrapGateway;
+import com.xuan.erp.iam.domain.repository.IamTenantPermissionSyncStateRepository;
+import java.time.OffsetDateTime;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Objects;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
 /**
@@ -21,10 +28,30 @@ public class IamTenantBootstrapApplicationService {
 
     private final IamTenantBootstrapGateway bootstrapGateway;
     private final PasswordEncoder passwordEncoder;
+    private final IamColumnPermissionApplicationService columnPermissionApplicationService;
+    private final IamTenantPermissionSyncStateRepository syncStateRepository;
 
     public IamTenantBootstrapApplicationService(IamTenantBootstrapGateway bootstrapGateway, PasswordEncoder passwordEncoder) {
+        this(bootstrapGateway, passwordEncoder, null, null);
+    }
+
+    public IamTenantBootstrapApplicationService(
+            IamTenantBootstrapGateway bootstrapGateway,
+            PasswordEncoder passwordEncoder,
+            @Nullable IamColumnPermissionApplicationService columnPermissionApplicationService) {
+        this(bootstrapGateway, passwordEncoder, columnPermissionApplicationService, null);
+    }
+
+    @Autowired
+    public IamTenantBootstrapApplicationService(
+            IamTenantBootstrapGateway bootstrapGateway,
+            PasswordEncoder passwordEncoder,
+            @Nullable IamColumnPermissionApplicationService columnPermissionApplicationService,
+            @Nullable IamTenantPermissionSyncStateRepository syncStateRepository) {
         this.bootstrapGateway = bootstrapGateway;
         this.passwordEncoder = passwordEncoder;
+        this.columnPermissionApplicationService = columnPermissionApplicationService;
+        this.syncStateRepository = syncStateRepository;
     }
 
     /**
@@ -37,31 +64,111 @@ public class IamTenantBootstrapApplicationService {
         return bootstrapTenant(tenantId, null, requestedBy);
     }
 
+    public Integer bootstrapTenant(Long tenantId, BootstrapTenantAdminCommand adminCommand, String requestedBy) {
+        return bootstrapTenant(tenantId, adminCommand, null, requestedBy);
+    }
+
     /**
      * 初始化指定租户的 IAM 基础授权，并创建租户管理员账号。
      *
      * 管理员信息由租户开通流程传入；未传入时使用 admin/123456
      * 作为当前阶段的默认账号。明文密码会在进入数据库函数前转成哈希。
      */
-    public Integer bootstrapTenant(Long tenantId, BootstrapTenantAdminCommand adminCommand, String requestedBy) {
+    public Integer bootstrapTenant(
+            Long tenantId,
+            BootstrapTenantAdminCommand adminCommand,
+            String iamInitTemplateCode,
+            String requestedBy) {
+        return bootstrapTenant(tenantId, adminCommand, iamInitTemplateCode, null, null, null, requestedBy);
+    }
+
+    public Integer bootstrapTenant(
+            Long tenantId,
+            BootstrapTenantAdminCommand adminCommand,
+            String iamInitTemplateCode,
+            List<String> columnPermissionTemplateCodes,
+            String defaultColumnPermissionTemplateCode,
+            String requestedBy) {
+        return bootstrapTenant(
+                tenantId,
+                adminCommand,
+                iamInitTemplateCode,
+                columnPermissionTemplateCodes,
+                defaultColumnPermissionTemplateCode,
+                null,
+                requestedBy);
+    }
+
+    public Integer bootstrapTenant(
+            Long tenantId,
+            BootstrapTenantAdminCommand adminCommand,
+            String iamInitTemplateCode,
+            List<String> columnPermissionTemplateCodes,
+            String defaultColumnPermissionTemplateCode,
+            String permissionHash,
+            String requestedBy) {
         if (tenantId == null || tenantId <= 0) {
             throw new BusinessException("IAM_INVALID_ARGUMENT", "租户 ID 不能为空");
         }
 
+        String operator = operator(requestedBy);
         String adminUsername = textOrDefault(adminCommand == null ? null : adminCommand.username(), DEFAULT_ADMIN_USERNAME);
         String adminPasswordHash = adminPasswordHash(adminCommand);
         String adminDisplayName = textOrDefault(adminCommand == null ? null : adminCommand.displayName(), DEFAULT_ADMIN_DISPLAY_NAME);
         String adminEmail = textOrNull(adminCommand == null ? null : adminCommand.email());
         String adminPhone = textOrNull(adminCommand == null ? null : adminCommand.phone());
 
-        return bootstrapGateway.bootstrapTenant(
+        Integer insertedCount = bootstrapGateway.bootstrapTenant(
                 tenantId,
                 adminUsername,
                 adminPasswordHash,
                 adminDisplayName,
                 adminEmail,
                 adminPhone,
-                operator(requestedBy));
+                textOrNull(iamInitTemplateCode),
+                operator);
+        if (columnPermissionApplicationService != null && columnPermissionTemplateCodes != null) {
+            columnPermissionApplicationService.replaceTenantTemplateAssignmentsByCodes(
+                    tenantId,
+                    normalizeColumnTemplateCodes(columnPermissionTemplateCodes),
+                    textOrNull(defaultColumnPermissionTemplateCode),
+                    operator);
+        }
+        markPermissionHashSynced(tenantId, permissionHash, operator);
+        return insertedCount;
+    }
+
+    public void ensureTenantPermissionSynced(
+            Long tenantId,
+            String iamInitTemplateCode,
+            List<String> columnPermissionTemplateCodes,
+            String defaultColumnPermissionTemplateCode,
+            String permissionHash,
+            String requestedBy) {
+        String normalizedHash = textOrNull(permissionHash);
+        if (tenantId == null || tenantId <= 0 || normalizedHash == null || syncStateRepository == null) {
+            return;
+        }
+        if (syncStateRepository.findLastSyncedPermissionHash(tenantId)
+                .filter(normalizedHash::equals)
+                .isPresent()) {
+            return;
+        }
+        bootstrapTenant(
+                tenantId,
+                null,
+                iamInitTemplateCode,
+                columnPermissionTemplateCodes,
+                defaultColumnPermissionTemplateCode,
+                normalizedHash,
+                requestedBy);
+    }
+
+    public String lastSyncedPermissionHash(Long tenantId) {
+        if (tenantId == null || tenantId <= 0 || syncStateRepository == null) {
+            return null;
+        }
+        return syncStateRepository.findLastSyncedPermissionHash(tenantId).orElse(null);
     }
 
     /**
@@ -96,5 +203,25 @@ public class IamTenantBootstrapApplicationService {
             throw new BusinessException("IAM_INVALID_ARGUMENT", message);
         }
         return text;
+    }
+
+    private List<String> normalizeColumnTemplateCodes(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return List.of();
+        }
+        return values.stream()
+                .map(this::textOrNull)
+                .filter(Objects::nonNull)
+                .collect(LinkedHashSet<String>::new, LinkedHashSet::add, LinkedHashSet::addAll)
+                .stream()
+                .toList();
+    }
+
+    private void markPermissionHashSynced(Long tenantId, String permissionHash, String operator) {
+        String normalizedHash = textOrNull(permissionHash);
+        if (syncStateRepository == null || normalizedHash == null) {
+            return;
+        }
+        syncStateRepository.markSynced(tenantId, normalizedHash, operator, OffsetDateTime.now());
     }
 }

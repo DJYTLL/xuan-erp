@@ -11,7 +11,7 @@ import {
   setStoredAuthSession,
 } from '@/framework/auth/tokenStorage';
 import { useAuthorizationStore } from '@/stores/authorization';
-import type { CurrentUser, LoginRequest } from '@/types/auth';
+import type { CurrentUser, LoginRequest, LoginResponse } from '@/types/auth';
 
 interface AuthState {
   token: string | null;
@@ -33,6 +33,23 @@ export const useAuthStore = defineStore('auth', {
     isAuthenticated: (state) => Boolean(state.token),
     username: (state) => state.currentUser?.username || appFrameworkConfig.shell.defaultAvatarText,
     tenantId: (state) => state.currentUser?.tenantId ?? 0,
+    tenantCode: (state) => state.currentUser?.tenantCode?.trim() || (state.currentUser?.tenantId === 0 ? 'platform' : ''),
+    tenantName: (state) => state.currentUser?.tenantName?.trim() || '',
+    tenantDisplayLabel: (state) => {
+      const tenantId = state.currentUser?.tenantId ?? 0;
+      const tenantCode = state.currentUser?.tenantCode?.trim() || (tenantId === 0 ? 'platform' : '');
+      const tenantName = state.currentUser?.tenantName?.trim() || (tenantId === 0 ? '平台租户' : '');
+      if (tenantName && tenantCode) {
+        return `${tenantName}（${tenantCode}）`;
+      }
+      if (tenantName) {
+        return tenantName;
+      }
+      if (tenantCode) {
+        return tenantCode;
+      }
+      return tenantId > 0 ? `租户 ${tenantId}` : '平台租户';
+    },
     hasPermission: (state) => (permission?: string | string[]) => {
       if (!permission) {
         return true;
@@ -48,6 +65,9 @@ export const useAuthStore = defineStore('auth', {
   actions: {
     async login(request: LoginRequest) {
       const response = await login(request);
+      this.applySession(response);
+    },
+    applySession(response: LoginResponse) {
       this.token = response.accessToken;
       this.tokenExpiresAt = response.accessTokenExpiresAt;
       this.refreshToken = response.refreshToken;
@@ -62,13 +82,7 @@ export const useAuthStore = defineStore('auth', {
         throw new Error('缺少 refresh token');
       }
       const response = await refreshToken(storedRefreshToken);
-      this.token = response.accessToken;
-      this.tokenExpiresAt = response.accessTokenExpiresAt;
-      this.refreshToken = response.refreshToken;
-      this.refreshTokenExpiresAt = response.refreshTokenExpiresAt;
-      this.currentUser = response.currentUser;
-      setStoredAuthSession(appFrameworkConfig, response);
-      setBearerToken(response.accessToken);
+      this.applySession(response);
       return response;
     },
     async loadCurrentUser() {

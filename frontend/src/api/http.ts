@@ -1,5 +1,6 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { handleHttpError } from './http-error';
+import { getGatewayApiBaseUrl } from './gateway-base';
 import { appFrameworkConfig } from '@/app/frameworkConfig';
 import {
   clearStoredAuthSession,
@@ -8,16 +9,19 @@ import {
   getStoredLocale,
   setStoredAuthSession,
 } from '@/framework/auth/tokenStorage';
+import { emitAuthSessionRefreshed } from '@/framework/auth/sessionEvents';
 import type { ApiResponse, LoginResponse } from '@/types/auth';
 
 type RefreshRetryConfig = InternalAxiosRequestConfig & {
   _retryAfterRefresh?: boolean;
 };
 
+type RefreshRetryReason = 'unauthorized' | 'forbidden-permission';
+
 let pendingRefreshRequest: Promise<LoginResponse> | null = null;
 
 export const http = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '',
+  baseURL: getGatewayApiBaseUrl(),
   timeout: 15000,
 });
 
@@ -45,13 +49,16 @@ http.interceptors.request.use((config) => {
 http.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (shouldAttemptRefresh(error)) {
+    const refreshReason = getRefreshRetryReason(error);
+    if (refreshReason) {
       try {
         const refreshed = await refreshAccessToken();
         return retryOriginalRequest(error, refreshed.accessToken);
       } catch {
-        clearStoredAuthSession(appFrameworkConfig);
-        setBearerToken(null);
+        if (refreshReason === 'unauthorized') {
+          clearStoredAuthSession(appFrameworkConfig);
+          setBearerToken(null);
+        }
       }
     }
     await handleHttpError(error);
@@ -60,22 +67,32 @@ http.interceptors.response.use(
 );
 
 function shouldAttemptRefresh(error: unknown) {
+  return Boolean(getRefreshRetryReason(error));
+}
+
+function getRefreshRetryReason(error: unknown): RefreshRetryReason | null {
   const axiosError = error as AxiosError;
   const status = axiosError.response?.status || null;
-  if (status !== 401) {
-    return false;
-  }
   const config = axiosError.config as RefreshRetryConfig | undefined;
   if (!config || config._retryAfterRefresh) {
-    return false;
+    return null;
   }
   const requestPath = normalizeRequestPath(config.url);
   if (requestPath.endsWith(appFrameworkConfig.auth.loginPath)
     || requestPath.endsWith(appFrameworkConfig.auth.refreshTokenPath)
     || requestPath.endsWith(appFrameworkConfig.auth.logoutPath)) {
-    return false;
+    return null;
   }
-  return Boolean(getStoredRefreshToken(appFrameworkConfig));
+  if (!getStoredRefreshToken(appFrameworkConfig)) {
+    return null;
+  }
+  if (status === 401) {
+    return 'unauthorized';
+  }
+  if (status === 403 && getResponseErrorCode(error) === 'SECURITY_PERMISSION_DENIED') {
+    return 'forbidden-permission';
+  }
+  return null;
 }
 
 async function refreshAccessToken() {
@@ -96,7 +113,7 @@ async function requestRefreshToken() {
     appFrameworkConfig.auth.refreshTokenPath,
     { refreshToken },
     {
-      baseURL: import.meta.env.VITE_API_BASE_URL || '',
+      baseURL: getGatewayApiBaseUrl(),
       timeout: 15000,
       headers: {
         'Accept-Language': getCurrentLocale(),
@@ -106,6 +123,7 @@ async function requestRefreshToken() {
   const refreshed = unwrap<LoginResponse>(response.data);
   setStoredAuthSession(appFrameworkConfig, refreshed);
   setBearerToken(refreshed.accessToken);
+  emitAuthSessionRefreshed(refreshed);
   return refreshed;
 }
 
@@ -132,4 +150,13 @@ function normalizeRequestPath(url?: string) {
   } catch {
     return url.split('?')[0] || '';
   }
+}
+
+function getResponseErrorCode(error: unknown) {
+  const body = (error as AxiosError<ApiResponse<unknown>>).response?.data;
+  if (!body || typeof body !== 'object' || !('code' in body)) {
+    return '';
+  }
+  const code = body.code;
+  return code === null || code === undefined ? '' : String(code);
 }

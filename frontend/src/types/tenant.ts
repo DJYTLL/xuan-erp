@@ -1,5 +1,7 @@
 export type TenantStatus = 'PROVISIONING' | 'PROVISIONED' | 'ENABLED' | 'SUSPENDED' | 'DISABLED';
 
+export type TenantPermissionSyncStatus = 'SYNCED' | 'PENDING_REPAIR' | 'REPAIRING' | 'FAILED';
+
 export type TenantProvisionTaskStatus = 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELED';
 
 export type TenantProvisionTaskStepStatus = 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'SKIPPED';
@@ -32,6 +34,11 @@ export interface Tenant {
   currentPlanExpiresAt: string | null;
   primaryDomainId: number | null;
   primaryDomain: string | null;
+  permissionSyncStatus: TenantPermissionSyncStatus | null;
+  permissionSyncStatusLabel: string | null;
+  permissionSyncLastCheckedAt: string | null;
+  permissionSyncLastSyncedAt: string | null;
+  permissionSyncLastErrorMessage: string | null;
   statusHistoryCount: number;
   latestStatusChangeType: string | null;
   latestStatusChangedAt: string | null;
@@ -58,6 +65,18 @@ export interface UpdateTenantPayload {
   contactName?: string;
   contactPhone?: string;
   remark?: string;
+  idempotencyKey?: string;
+}
+
+export interface ChangeTenantStatusPayload {
+  reason: string;
+  operator?: string;
+  idempotencyKey?: string;
+}
+
+export interface DeleteTenantPayload {
+  reason: string;
+  operator?: string;
   idempotencyKey?: string;
 }
 

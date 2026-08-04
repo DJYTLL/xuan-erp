@@ -15,7 +15,7 @@ public record IamAuthorizationSnapshotView(
         List<Long> roleIds,
         List<String> permissionCodes,
         List<String> menuCodes,
-        Map<String, List<String>> columnSettings,
+        Map<String, Map<String, String>> columnSettings,
         String snapshotHash,
         OffsetDateTime builtAt
 ) {

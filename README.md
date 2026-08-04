@@ -62,5 +62,5 @@ npm run dev
 npm run build
 ```
 
-本地开发默认使用 Vite 同源代理访问后端：前端请求 `/api/**`，代理目标通过 `VITE_DEV_PROXY_TARGET` 配置，参考 `frontend\.env.example`。当前登录接口按后端 IAM 契约调用 `POST /api/iam/auth/login`，请求体为 `tenantId + username + password`。如部署到独立前端域名，可设置 `VITE_API_BASE_URL` 为网关地址，并在网关侧放通 CORS。
+本地开发默认使用 Vite 同源代理访问后端：前端浏览器统一请求相对路径 `/api/**`，开发代理固定转发到 Gateway `http://127.0.0.1:8100`。推荐固定访问 `http://127.0.0.1:5173`；`localhost:5173` 会重定向到 `127.0.0.1:5173`，避免浏览器 `localStorage` 按 origin 隔离导致两个地址登录态不一致。当前登录接口按后端 IAM 契约调用 `POST /api/iam/auth/login`，请求体为 `tenantId + username + password`。如部署到独立前端域名，也应由网关或反向代理承接前端的 `/api/**` 请求，而不是让浏览器直连业务服务。
 

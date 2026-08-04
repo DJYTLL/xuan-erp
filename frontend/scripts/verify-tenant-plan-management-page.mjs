@@ -20,16 +20,21 @@ function assertIncludes(source, text, message) {
 }
 
 assertFile('src/api/tenants.ts');
+assertFile('src/api/iamAdmin.ts');
 assertFile('src/types/tenant.ts');
 assertFile('src/views/TenantPlanManagementView.vue');
+assertFile('src/framework/components/DynamicFormDialog.vue');
 
 const packageSource = read('package.json');
 const apiSource = read('src/api/tenants.ts');
+const iamAdminApiSource = read('src/api/iamAdmin.ts');
 const typeSource = read('src/types/tenant.ts');
 const viewSource = read('src/views/TenantPlanManagementView.vue');
+const dynamicFormSource = read('src/framework/components/DynamicFormDialog.vue');
 const routerSource = read('src/router/index.ts');
 const navigationSource = read('src/config/navigation.ts');
 const messagesSource = read('src/i18n/messages.ts');
+const requiredPermissionSource = read('src/config/businessPageRequiredPermissions.ts');
 
 assertIncludes(
   packageSource,
@@ -50,6 +55,11 @@ assertIncludes(
 ].forEach((text) => assertIncludes(apiSource, text, `Tenant API should include ${text}.`));
 
 [
+  'listIamColumnPermissionTemplates',
+  "'/api/iam/column-permissions/templates'",
+].forEach((text) => assertIncludes(iamAdminApiSource, text, `IAM admin API should include ${text}.`));
+
+[
   'export interface TenantPlanPayload',
   'iamInitTemplateCode',
   'featureFlagsJson',
@@ -66,14 +76,32 @@ assertIncludes(
   '标准版',
   '完整版',
   'iamInitTemplateCode',
+  'columnPermissionTemplateCodes',
+  'defaultColumnPermissionTemplateCode',
+  'columnPermissionTemplateOptions',
+  'loadColumnPermissionTemplates',
+  'listIamColumnPermissionTemplates',
+  "component: 'checkbox-group'",
+  "optionStyle: 'card'",
+  "variant=\"workspace\"",
+  "workspace-size=\"md\"",
+  '基础信息',
+  '列权限边界',
+  '计费与额度',
+  '高级配置',
   'featureFlagsJson',
-  "import XuanDecimalInput from '@/framework/components/XuanDecimalInput.vue';",
-  '<XuanDecimalInput',
   'permission="tenant-plan:manage"',
   'submitPlan',
   'enableTenantPlan',
   'disableTenantPlan',
 ].forEach((text) => assertIncludes(viewSource, text, `Tenant plan page should include ${text}.`));
+
+[
+  "'checkbox-group'",
+  '<el-checkbox-group',
+  'optionStyle?:',
+  'dynamic-form-option-description',
+].forEach((text) => assertIncludes(dynamicFormSource, text, `DynamicFormDialog should include ${text}.`));
 
 if (viewSource.includes('<el-input-number')) {
   throw new Error('Tenant plan numeric edit fields should use XuanDecimalInput from the component center.');
@@ -97,5 +125,10 @@ if (viewSource.includes('<el-input-number')) {
   'tenantPlans',
   '套餐管理',
 ].forEach((text) => assertIncludes(messagesSource, text, `I18n messages should include ${text}.`));
+
+[
+  'TENANT_PLAN_MANAGEMENT_PAGE_REQUIRED_PERMISSIONS',
+  "'iam-column-permission:view'",
+].forEach((text) => assertIncludes(requiredPermissionSource, text, `Tenant plan page required permissions should include ${text}.`));
 
 console.log('Tenant plan management page contract verified.');

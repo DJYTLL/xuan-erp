@@ -10,6 +10,12 @@ public record TenantDetailSupplementRecord(
         OffsetDateTime currentPlanExpiresAt,
         Long primaryDomainId,
         String primaryDomain,
+        String permissionSyncExpectedHash,
+        String permissionSyncStatus,
+        OffsetDateTime permissionSyncLastCheckedAt,
+        OffsetDateTime permissionSyncLastSyncedAt,
+        String permissionSyncLastErrorCode,
+        String permissionSyncLastErrorMessage,
         Long statusHistoryCount,
         String latestStatusChangeType,
         OffsetDateTime latestStatusChangedAt

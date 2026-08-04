@@ -13,7 +13,7 @@
 
 ## xuan-tenant 当前映射
 
-`xuan-tenant` V1 为了保持已落地接口和测试稳定，当前保留旧权限码，但语义仍然受统一模板约束：
+`xuan-tenant` 已统一使用平台基础权限模板，历史 `tenant:lifecycle` 仅保留为 IAM 迁移兼容来源，不再作为接口和前端正式权限码：
 
 | 统一模板语义 | 当前权限码 | 说明 |
 | --- | --- | --- |
@@ -21,7 +21,8 @@
 | `tenant:create` | `tenant:create` | 租户创建能力 |
 | `tenant:update` | `tenant:update` | 租户编辑能力 |
 | `tenant:delete` | `tenant:delete` | 租户删除能力 |
-| `tenant:enable` / `tenant:disable` | `tenant:lifecycle` | V1 阶段用一个生命周期权限聚合启用、停用等动作，后续如需细分再拆开 |
+| `tenant:enable` | `tenant:enable` | 租户启用、恢复能力 |
+| `tenant:disable` | `tenant:disable` | 租户暂停、停用、冻结能力 |
 | `tenant-config:view` | `tenant-config:view` | 配置读取能力 |
 | `tenant-config:edit` | `tenant-config:manage` | 当前用 `manage` 聚合配置写操作，后续如平台统一改成 `edit`，需要走受控演进 |
 | `tenant-plan:view` | `tenant-plan:view` | 套餐和套餐分配查询能力 |

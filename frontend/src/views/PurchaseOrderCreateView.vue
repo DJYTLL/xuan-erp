@@ -9,8 +9,8 @@
     <template #actions>
       <el-button @click="goBack">返回</el-button>
       <el-button @click="resetDocument">重置</el-button>
-      <el-button type="primary" plain @click="saveDraft">保存草稿</el-button>
-      <el-button type="success" @click="submitForApproval">提交审核</el-button>
+      <PermissionButton type="primary" plain permission="procurement:create" no-permission-mode="disable" @click="saveDraft">保存草稿</PermissionButton>
+      <PermissionButton type="success" permission="procurement:audit" no-permission-mode="disable" @click="submitForApproval">提交审核</PermissionButton>
     </template>
 
     <DocumentBasicInfoCard
@@ -37,8 +37,8 @@
     />
 
     <template #summaryActions>
-      <el-button @click="saveDraft">保存草稿</el-button>
-      <el-button type="success" @click="submitForApproval">提交审核</el-button>
+      <PermissionButton permission="procurement:create" no-permission-mode="disable" @click="saveDraft">保存草稿</PermissionButton>
+      <PermissionButton type="success" permission="procurement:audit" no-permission-mode="disable" @click="submitForApproval">提交审核</PermissionButton>
     </template>
   </DocumentEditorShell>
 </template>
@@ -59,6 +59,7 @@ import DocumentLineItemsTable, {
 import DocumentSettlementCard, {
   type DocumentSettlementInfo,
 } from '@/framework/components-erp/DocumentSettlementCard.vue';
+import PermissionButton from '@/framework/components/PermissionButton.vue';
 import { useAuthStore } from '@/stores/auth';
 
 defineOptions({ name: 'PurchaseOrderCreateView' });

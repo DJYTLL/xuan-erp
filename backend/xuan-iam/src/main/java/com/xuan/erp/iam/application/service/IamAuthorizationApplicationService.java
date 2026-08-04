@@ -45,7 +45,7 @@ public class IamAuthorizationApplicationService {
                 permissionCodes,
                 menuCodes,
                 Map.of(),
-                snapshotHash(roleIds, permissionCodes, menuCodes),
+                IamAuthorizationSnapshotHash.from(roleIds, permissionCodes, menuCodes),
                 null,
                 now,
                 "system",
@@ -91,14 +91,6 @@ public class IamAuthorizationApplicationService {
                 .stream()
                 .sorted()
                 .toList();
-    }
-
-    private String snapshotHash(List<Long> roleIds, List<String> permissionCodes, List<String> menuCodes) {
-        return String.join(",", permissionCodes)
-                + "|"
-                + String.join(",", menuCodes)
-                + "|"
-                + roleIds.stream().map(String::valueOf).reduce((left, right) -> left + "," + right).orElse("");
     }
 
     private void requirePositive(Long value, String message) {

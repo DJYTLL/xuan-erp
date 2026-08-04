@@ -19,6 +19,7 @@ const packageSource = read('package.json');
 const authTypesSource = read('src/types/auth.ts');
 const authApiSource = read('src/api/auth.ts');
 const httpSource = read('src/api/http.ts');
+const viteConfigSource = read('vite.config.ts');
 const tokenStorageSource = read('src/framework/auth/tokenStorage.ts');
 const authStoreSource = read('src/stores/auth.ts');
 const frameworkTypesSource = read('src/framework/config/types.ts');
@@ -50,6 +51,27 @@ assert(
 assert(
   appConfigSource.includes("refreshTokenPath: '/api/iam/auth/refresh'"),
   'Xuan ERP 配置应指向 IAM refresh 接口。',
+);
+
+assert(
+  viteConfigSource.includes("const apiProxyTarget = 'http://127.0.0.1:8100'"),
+  'Vite dev proxy 默认目标应使用 127.0.0.1:8100，避免 localhost 解析导致前端代理 500。',
+);
+
+assert(
+  viteConfigSource.includes("const canonicalDevOrigin = 'http://127.0.0.1:5173'")
+    && viteConfigSource.includes("proxyHeaders.set('origin', canonicalDevOrigin)"),
+  'Vite dev proxy 应固定转发给 Gateway 的 Origin，避免临时端口或旧浏览器来源触发 Gateway CORS 拒绝。',
+);
+
+assert(
+  viteConfigSource.includes('createApiProxyPlugin(apiProxyTarget)'),
+  'Vite dev server 应使用项目内 fetch 代理转发 /api，避免内置 http-proxy 在当前 Node/Gateway 组合下解析失败。',
+);
+
+assert(
+  viteConfigSource.includes("if (!request.url?.startsWith('/api'))"),
+  '项目内 fetch 代理应只处理 /api 前缀，不能影响 Vite 静态资源和 HMR。',
 );
 
 for (const marker of [

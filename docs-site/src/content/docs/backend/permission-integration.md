@@ -27,13 +27,15 @@ title: "权限接入规范"
 - `GET /api/iam/menus/current`
 - `GET /api/iam/permissions/current`
 
-第一阶段只复用现有表：
+第一阶段只复用现有表和快照字段：
 
 - `iam_menu`
 - `iam_permission`
 - `iam_authorization_snapshot`
+- `iam_tenant_column_setting`
+- `iam_role_column_setting`
 
-当前本地 `backend/xuan-iam/src/main/resources/db/migration/` 已扫描到最新版本为 `V3__extend_iam_tenant_bootstrap_admin_account.sql`。第一阶段不新增 Flyway migration，不修改 `V1`、`V2`、`V3` 历史文件，只做读路径接口和结果组装。
+当前本地 `backend/xuan-iam/src/main/resources/db/migration/` 已扫描到最新版本为 `V20__sync_tenant_admin_permissions_by_init_template.sql`。本次文档收口不新增 Flyway migration，不修改历史文件；后续如涉及表、字段、索引、约束、初始化数据或函数调整，必须从 `V21__*.sql` 顺序追加。
 
 第一阶段权限快照重点给前端使用的字段是：
 
@@ -43,11 +45,11 @@ title: "权限接入规范"
 - `columnPermissions`
 - `authVersion`
 
-下面三个字段目前只是契约占位，第一阶段返回空结构：
+下面三个字段目前只是契约占位，第一阶段返回空结构，不代表字段权限、数据范围权限和状态动作权限已经真实落地：
 
-- `fieldPermissions`
-- `dataScopes`
-- `stateActionRules`
+- `fieldPermissions` 返回空对象
+- `dataScopes` 返回空列表
+- `stateActionRules` 返回空对象
 
 所以第一阶段目标不是“所有细颗粒权限都已配置完成”，而是“前端和 Gateway 之后的业务服务有了统一可消费的当前用户授权快照入口”。
 
