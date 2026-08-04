@@ -174,9 +174,10 @@ public class GatewayBearerAuthenticationWebFilter implements WebFilter {
     }
 
     private boolean isPlatformSuperAdmin(CurrentUser currentUser) {
-        return currentUser.roles().contains("super_admin")
+        return Long.valueOf(0L).equals(currentUser.tenantId())
+                && (currentUser.roles().contains("super_admin")
                 || "super_admin".equals(currentUser.username())
-                || "superadmin".equals(currentUser.username());
+                || "superadmin".equals(currentUser.username()));
     }
 
     private Long requestedTenantId(ServerWebExchange exchange) {

@@ -788,4 +788,28 @@ class IamMigrationContractTest {
         assertTrue(v44.contains("idx_iam_tenant_permission_sync_state_hash"));
         assertFalse(v44.contains("DROP TABLE"), "V44 只能追加同步状态表，不能删除历史表");
     }
+
+    @Test
+    void v45BackfillsRoleColumnPermissionPageDependenciesWithoutRewritingHistory() throws IOException {
+        Path v45Path = MIGRATION_DIR.resolve("V45__backfill_role_column_permission_page_dependencies.sql");
+        assertTrue(Files.exists(v45Path), "必须通过 V45 回填角色列权限页面运行依赖权限，不能改写 V1-V44 历史迁移");
+
+        String v45 = Files.readString(v45Path);
+
+        assertTrue(v45.contains("'iam-role-column-permission:view'"));
+        assertTrue(v45.contains("'iam-role-column-permission:update'"));
+        assertTrue(v45.contains("'iam-role:view'"));
+        assertTrue(v45.contains("'iam-column-permission:view'"));
+        assertTrue(v45.contains("iam_role_permission"));
+        assertTrue(v45.contains("iam_tenant_permission_entitlement"));
+        assertTrue(v45.contains("MIN(entitlement.init_template_code)"));
+        assertTrue(v45.contains("GROUP BY entitlement.tenant_id, dependency.id"));
+        assertTrue(v45.contains("iam_tenant_init_permission_template"));
+        assertTrue(v45.contains("iam_tenant_init_role_template"));
+        assertTrue(v45.contains("iam_authorization_snapshot"));
+        assertTrue(v45.contains("auth_version = snapshot.auth_version + 1"));
+        assertTrue(v45.contains("role-column-dependencies-v45"));
+        assertFalse(v45.contains("CREATE TABLE"), "V45 只回填权限依赖数据，不应新增业务表");
+        assertFalse(v45.contains("DROP TABLE"), "V45 不能删除历史表");
+    }
 }

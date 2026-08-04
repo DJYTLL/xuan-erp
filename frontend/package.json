@@ -48,6 +48,7 @@
     "verify:authorization-context-refresh": "node scripts/verify-authorization-context-refresh.mjs",
     "verify:login-safe-render-plan-refresh": "node scripts/verify-login-safe-render-and-plan-refresh.mjs",
     "verify:role-column-permission-error-hints": "node scripts/verify-role-column-permission-error-hints.mjs",
+    "verify:role-column-permission-dependencies": "node scripts/verify-role-column-permission-dependencies.mjs",
     "verify:local-dev-host": "node scripts/verify-local-dev-host-contract.mjs",
     "verify:column-permission-management": "node scripts/verify-column-permission-management.mjs",
     "verify:product-management-permissions": "node scripts/verify-product-management-permissions.mjs",

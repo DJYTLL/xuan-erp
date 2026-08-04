@@ -136,6 +136,8 @@ const IAM_COLUMN_PERMISSION_MANAGEMENT_PAGE_REQUIRED_PERMISSIONS = [
 ];
 
 const IAM_ROLE_COLUMN_PERMISSION_MANAGEMENT_PAGE_REQUIRED_PERMISSIONS = [
+  'iam-role:view',
+  'iam-column-permission:view',
   'iam-role-column-permission:view',
   'iam-role-column-permission:update',
 ];

@@ -2,9 +2,12 @@ package com.xuan.erp.tenant;
 
 import com.xuan.erp.tenant.interfaces.controller.TenantController;
 import com.xuan.erp.tenant.interfaces.controller.TenantConfigController;
+import com.xuan.erp.tenant.interfaces.controller.TenantContactController;
+import com.xuan.erp.tenant.interfaces.controller.TenantDomainController;
 import com.xuan.erp.tenant.interfaces.controller.TenantInternalStatusController;
 import com.xuan.erp.tenant.interfaces.controller.TenantPlanAssignmentController;
 import com.xuan.erp.tenant.interfaces.controller.TenantPlanController;
+import com.xuan.erp.tenant.interfaces.controller.TenantResourceController;
 import com.xuan.erp.tenant.interfaces.controller.TenantScopedConfigController;
 import com.xuan.erp.tenant.infrastructure.config.TenantSecurityConfiguration;
 import java.nio.file.Files;
@@ -65,6 +68,38 @@ class TenantControllerContractTest {
         assertEquals("@xuanPermission.has('tenant-plan:assign')", permission(TenantPlanAssignmentController.class.getDeclaredMethod("createAssignment", com.xuan.erp.tenant.interfaces.dto.TenantPlanAssignmentRequest.class)));
         assertEquals("@xuanPermission.has('tenant-plan:assign')", permission(TenantPlanAssignmentController.class.getDeclaredMethod("updateAssignment", Long.class, com.xuan.erp.tenant.interfaces.dto.TenantPlanAssignmentRequest.class)));
         assertEquals("@xuanPermission.has('tenant-plan:assign')", permission(TenantPlanAssignmentController.class.getDeclaredMethod("deleteAssignment", Long.class, com.xuan.erp.tenant.interfaces.dto.DeleteRequest.class)));
+    }
+
+    @Test
+    void tenantDomainControllerMethodsExposeExpectedPermissionCodes() throws Exception {
+        assertEquals("@xuanPermission.has('tenant:view')", permission(TenantDomainController.class.getDeclaredMethod("listDomains")));
+        assertEquals("@xuanPermission.has('tenant:view')", permission(TenantDomainController.class.getDeclaredMethod("getDomain", Long.class)));
+        assertEquals("@xuanPermission.has('tenant:update')", permission(TenantDomainController.class.getDeclaredMethod("createDomain", com.xuan.erp.tenant.interfaces.dto.TenantDomainRequest.class)));
+        assertEquals("@xuanPermission.has('tenant:update')", permission(TenantDomainController.class.getDeclaredMethod("updateDomain", Long.class, com.xuan.erp.tenant.interfaces.dto.TenantDomainRequest.class)));
+        assertEquals("@xuanPermission.has('tenant:update')", permission(TenantDomainController.class.getDeclaredMethod("deleteDomain", Long.class, com.xuan.erp.tenant.interfaces.dto.DeleteRequest.class)));
+    }
+
+    @Test
+    void tenantContactControllerMethodsExposeExpectedPermissionCodes() throws Exception {
+        assertEquals("@xuanPermission.has('tenant:view')", permission(TenantContactController.class.getDeclaredMethod("listContacts")));
+        assertEquals("@xuanPermission.has('tenant:view')", permission(TenantContactController.class.getDeclaredMethod("getContact", Long.class)));
+        assertEquals("@xuanPermission.has('tenant:update')", permission(TenantContactController.class.getDeclaredMethod("createContact", com.xuan.erp.tenant.interfaces.dto.TenantContactRequest.class)));
+        assertEquals("@xuanPermission.has('tenant:update')", permission(TenantContactController.class.getDeclaredMethod("updateContact", Long.class, com.xuan.erp.tenant.interfaces.dto.TenantContactRequest.class)));
+        assertEquals("@xuanPermission.has('tenant:update')", permission(TenantContactController.class.getDeclaredMethod("deleteContact", Long.class, com.xuan.erp.tenant.interfaces.dto.DeleteRequest.class)));
+    }
+
+    @Test
+    void tenantResourceControllerMethodsExposeExpectedPermissionGuards() throws Exception {
+        assertEquals("@tenantResourcePermissionGuard.canRead(#resourceName)",
+                permission(TenantResourceController.class.getDeclaredMethod("list", String.class)));
+        assertEquals("@tenantResourcePermissionGuard.canRead(#resourceName)",
+                permission(TenantResourceController.class.getDeclaredMethod("get", String.class, Long.class)));
+        assertEquals("@tenantResourcePermissionGuard.canCreate(#resourceName)",
+                permission(TenantResourceController.class.getDeclaredMethod("create", String.class, java.util.Map.class)));
+        assertEquals("@tenantResourcePermissionGuard.canUpdate(#resourceName)",
+                permission(TenantResourceController.class.getDeclaredMethod("update", String.class, Long.class, java.util.Map.class)));
+        assertEquals("@tenantResourcePermissionGuard.canDelete(#resourceName)",
+                permission(TenantResourceController.class.getDeclaredMethod("delete", String.class, Long.class, com.xuan.erp.tenant.interfaces.dto.DeleteRequest.class)));
     }
 
     @Test
