@@ -20,6 +20,10 @@
 | `tenant:view` | `tenant:view` | 租户查询能力 |
 | `tenant:create` | `tenant:create` | 租户创建能力 |
 | `tenant:update` | `tenant:update` | 租户编辑能力 |
+| `tenant-domain:view` | `tenant-domain:view` | 域名读取能力 |
+| `tenant-domain:manage` | `tenant-domain:manage` | 当前聚合域名创建、编辑、验证和删除写操作 |
+| `tenant-contact:view` | `tenant-contact:view` | 联系人读取能力 |
+| `tenant-contact:manage` | `tenant-contact:manage` | 当前聚合联系人创建、编辑和删除写操作 |
 | `tenant:delete` | `tenant:delete` | 租户删除能力 |
 | `tenant:enable` | `tenant:enable` | 租户启用、恢复能力 |
 | `tenant:disable` | `tenant:disable` | 租户暂停、停用、冻结能力 |

@@ -19,6 +19,12 @@ function assertIncludes(source, text, message) {
   }
 }
 
+function assertMatches(source, pattern, message) {
+  if (!pattern.test(source)) {
+    throw new Error(message);
+  }
+}
+
 assertFile('src/api/tenants.ts');
 assertFile('src/api/iamAdmin.ts');
 assertFile('src/types/tenant.ts');
@@ -86,6 +92,12 @@ const requiredPermissionSource = read('src/config/businessPageRequiredPermission
   "'tenant:enable'",
   "'tenant:disable'",
   "'tenant:delete'",
+  "'tenant-domain:view'",
+  "'tenant-domain:manage'",
+  "'tenant-contact:view'",
+  "'tenant-contact:manage'",
+  "'tenant-config:view'",
+  "'tenant-config:manage'",
 ].forEach((text) => assertIncludes(requiredPermissionSource, text, `Tenant page required permissions should include ${text}.`));
 
 const browseTableSchemaSource = read('src/config/tenantBrowseTableSchema.ts');
@@ -104,6 +116,7 @@ const browseTableSchemaSource = read('src/config/tenantBrowseTableSchema.ts');
   "columnKey: 'contactPhone'",
   "columnKey: 'provisionedAt'",
   "columnKey: 'permissionSyncStatus'",
+  "title: '权限同步状态'",
   'resolveTenantPermissionSyncStatus',
 ].forEach((text) => assertIncludes(browseTableSchemaSource, text, `Shared tenant browse table schema should include ${text}.`));
 
@@ -146,12 +159,16 @@ const viewSource = read('src/views/TenantManagementView.vue');
   'submitDisableTenant',
   'submitDeleteTenant',
   'tenant:enable',
+  "stateResource: 'tenant'",
+  "stateAction: 'enable'",
+  'stateCode: (row) => row.status',
   'tenant:disable',
+  "stateAction: 'disable'",
   'tenant:delete',
+  "stateAction: 'delete'",
   'tenant-plan:assign',
   'permission-sync-repair',
   '立即修复',
-  '权限同步状态',
   'submitPermissionSyncRepair',
   'resolveTenantPermissionSyncStatus',
   'tenant-provision:view',
@@ -183,8 +200,6 @@ const viewSource = read('src/views/TenantManagementView.vue');
   '初始化任务',
   '失败原因',
   'resolveProvisionErrorText',
-  "function canEnableTenant(tenant: Tenant) {\n  return tenant.status === 'PROVISIONED' || tenant.status === 'DISABLED';\n}",
-  "function canDisableTenant(tenant: Tenant) {\n  return tenant.status === 'ENABLED';\n}",
   'const createdTenant = await createTenant',
   'selectedTenant.value = createdTenant',
   'provisionDrawerVisible.value = true',
@@ -192,6 +207,17 @@ const viewSource = read('src/views/TenantManagementView.vue');
   '失败重试',
   'PROVISIONING',
 ].forEach((text) => assertIncludes(viewSource, text, `Tenant page should include ${text}.`));
+
+assertMatches(
+  viewSource,
+  /function\s+canEnableTenant\s*\(\s*tenant:\s*Tenant\s*\)\s*\{[\s\S]*tenant\.status\s*===\s*'PROVISIONED'[\s\S]*tenant\.status\s*===\s*'DISABLED'[\s\S]*\}/,
+  'Tenant page should allow enabling PROVISIONED and DISABLED tenants.',
+);
+assertMatches(
+  viewSource,
+  /function\s+canDisableTenant\s*\(\s*tenant:\s*Tenant\s*\)\s*\{[\s\S]*tenant\.status\s*===\s*'ENABLED'[\s\S]*\}/,
+  'Tenant page should allow disabling ENABLED tenants.',
+);
 
 [
   'column-permission-template',

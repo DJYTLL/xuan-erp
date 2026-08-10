@@ -94,13 +94,38 @@
     >
       <template #body>
         <p v-if="grantReadonly" class="grant-readonly-note">平台级角色当前仅支持查看权限分配结果</p>
-        <MenuPermissionAssignment
-          v-model="selectedPermissionCodes"
-          :menus="menus"
-          :permissions="grantAvailablePermissions"
-          :page-required-permission-map="roleGrantRequiredPermissionMap"
-          :readonly="grantReadonly"
-        />
+        <el-tabs v-model="activeGrantTab" class="grant-tabs">
+          <el-tab-pane label="基础权限" name="base">
+            <MenuPermissionAssignment
+              v-model="selectedPermissionCodes"
+              :menus="menus"
+              :permissions="grantAvailablePermissions"
+              :page-required-permission-map="roleGrantRequiredPermissionMap"
+              :readonly="grantReadonly"
+            />
+          </el-tab-pane>
+          <el-tab-pane label="状态动作权限" name="stateAction">
+            <div v-if="canViewStateActionRules" class="state-action-panel">
+              <QueryToolbar>
+                <el-select v-model="selectedStateActionResource" class="query-input" placeholder="资源" filterable>
+                  <el-option
+                    v-for="resource in stateActionResources"
+                    :key="resource"
+                    :label="resource"
+                    :value="resource"
+                  />
+                </el-select>
+              </QueryToolbar>
+              <StateActionPermissionMatrix
+                v-model="selectedStateActionRules"
+                :states="visibleStateActionStates"
+                :actions="visibleStateActionActions"
+                :readonly="grantReadonly || !canUpdateStateActionRules"
+              />
+            </div>
+            <el-empty v-else description="缺少状态动作权限查看权限" />
+          </el-tab-pane>
+        </el-tabs>
       </template>
     </DynamicFormDialog>
   </ListPageShell>
@@ -113,9 +138,13 @@ import { RefreshCw } from 'lucide-vue-next';
 import {
   createIamRole,
   getIamRolePermissions,
+  getIamRoleStateActionRules,
+  listIamResourceActions,
+  listIamResourceStates,
   listIamRoles,
   setIamRoleEnabled,
   setIamRolePermissions,
+  setIamRoleStateActionRules,
   updateIamRole,
 } from '@/api/iamAdmin';
 import DynamicFormDialog from '@/framework/components/DynamicFormDialog.vue';
@@ -124,6 +153,8 @@ import ListPageShell from '@/framework/components/ListPageShell.vue';
 import MenuPermissionAssignment from '@/framework/components/MenuPermissionAssignment.vue';
 import PermissionButton from '@/framework/components/PermissionButton.vue';
 import QueryToolbar from '@/framework/components/QueryToolbar.vue';
+import StateActionPermissionMatrix from '@/framework/components/StateActionPermissionMatrix.vue';
+import type { StateActionMatrixRule } from '@/framework/components/StateActionPermissionMatrix.vue';
 import { businessPageRequiredPermissionMap } from '@/config/businessPageRequiredPermissions';
 import { useAuthStore } from '@/stores/auth';
 import { useAuthorizationStore } from '@/stores/authorization';
@@ -131,6 +162,8 @@ import type { CurrentMenuNode } from '@/types/auth';
 import type {
   IamMenu,
   IamPermission,
+  IamResourceAction,
+  IamResourceState,
   IamRole,
   IamRolePayload,
 } from '@/types/iamAdmin';
@@ -152,6 +185,11 @@ const grantingRole = ref<IamRole | null>(null);
 const grantReadonly = ref(false);
 const selectedPermissionCodes = ref<string[]>([]);
 const grantAvailablePermissionCodes = ref<string[]>([]);
+const activeGrantTab = ref('base');
+const resourceStates = ref<IamResourceState[]>([]);
+const resourceActions = ref<IamResourceAction[]>([]);
+const selectedStateActionRules = ref<StateActionMatrixRule[]>([]);
+const selectedStateActionResource = ref('');
 const form = reactive<Record<string, unknown>>({
   code: '',
   name: '',
@@ -181,6 +219,17 @@ const grantDialogTitle = computed(() => {
 });
 
 const roleDialogConfirmPermission = computed(() => (editingRole.value ? 'iam-role:update' : 'iam-role:create'));
+const canViewStateActionRules = computed(() => authorizationStore.hasButtonPermission('iam-state-action:view'));
+const canUpdateStateActionRules = computed(() => authorizationStore.hasButtonPermission('iam-state-action:update'));
+const stateActionResources = computed(() => {
+  const resources = [
+    ...resourceStates.value.map((state) => state.resourceKey),
+    ...resourceActions.value.map((action) => action.resourceKey),
+  ];
+  return [...new Set(resources)].sort((left, right) => left.localeCompare(right));
+});
+const visibleStateActionStates = computed(() => resourceStates.value.filter((state) => state.resourceKey === selectedStateActionResource.value));
+const visibleStateActionActions = computed(() => resourceActions.value.filter((action) => action.resourceKey === selectedStateActionResource.value));
 
 const roleFormFields = computed<DynamicFormField[]>(() => [
   {
@@ -305,11 +354,13 @@ function grantActionHint(row: IamRole) {
 async function openGrant(row: IamRole) {
   grantingRole.value = row;
   grantReadonly.value = row.tenantId <= 0;
+  activeGrantTab.value = 'base';
   const grant = await getIamRolePermissions(row.tenantId, row.id);
   grantAvailablePermissionCodes.value = grant.availablePermissionCodes || [];
   permissions.value = grant.availablePermissions || [];
   selectedPermissionCodes.value = grant.permissionCodes;
   selectedPermissionCodes.value = selectedPermissionCodes.value.filter((code) => grantAvailablePermissionCodes.value.includes(code));
+  await loadStateActionGrant(row);
   grantVisible.value = true;
 }
 
@@ -327,9 +378,42 @@ async function submitGrant() {
     selectedPermissionCodes.value,
     authStore.username,
   );
+  if (canUpdateStateActionRules.value) {
+    await setIamRoleStateActionRules(
+      grantingRole.value.id,
+      {
+        tenantId: grantingRole.value.tenantId,
+        rules: selectedStateActionRules.value,
+        operator: authStore.username,
+      },
+    );
+  }
   await authorizationStore.refreshCurrentAuthorizationContext();
   grantVisible.value = false;
   ElMessage.success('角色授权已保存');
+}
+
+async function loadStateActionGrant(row: IamRole) {
+  resourceStates.value = [];
+  resourceActions.value = [];
+  selectedStateActionRules.value = [];
+  selectedStateActionResource.value = '';
+  if (!canViewStateActionRules.value) {
+    return;
+  }
+  const [states, actions, rules] = await Promise.all([
+    listIamResourceStates({ tenantId: row.tenantId, enabled: true }),
+    listIamResourceActions({ tenantId: row.tenantId, enabled: true }),
+    getIamRoleStateActionRules(row.tenantId, row.id),
+  ]);
+  resourceStates.value = states;
+  resourceActions.value = actions;
+  selectedStateActionRules.value = rules.map((rule) => ({
+    resourceKey: rule.resourceKey,
+    stateCode: rule.stateCode,
+    actionCode: rule.actionCode,
+  }));
+  selectedStateActionResource.value = stateActionResources.value[0] || '';
 }
 
 function ensureBusinessTenantReady() {
@@ -393,6 +477,16 @@ function flattenCurrentMenuNodes(sourceMenus: CurrentMenuNode[], parentId: numbe
   color: #1d4ed8;
   background: #eff6ff;
   font-size: 13px;
+}
+
+.grant-tabs {
+  min-height: 520px;
+}
+
+.state-action-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 </style>

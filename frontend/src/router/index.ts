@@ -25,6 +25,7 @@ const IamPermissionManagementView = createRouteCacheComponent('IamPermissionMana
 const IamRoleManagementView = createRouteCacheComponent('IamRoleManagementView', () => import('@/views/IamRoleManagementView.vue'));
 const IamColumnPermissionManagementView = createRouteCacheComponent('IamColumnPermissionManagementView', () => import('@/views/IamColumnPermissionManagementView.vue'));
 const IamRoleColumnPermissionManagementView = createRouteCacheComponent('IamRoleColumnPermissionManagementView', () => import('@/views/IamRoleColumnPermissionManagementView.vue'));
+const IamStateActionPermissionManagementView = createRouteCacheComponent('IamStateActionPermissionManagementView', () => import('@/views/IamStateActionPermissionManagementView.vue'));
 const IamUserManagementView = createRouteCacheComponent('IamUserManagementView', () => import('@/views/IamUserManagementView.vue'));
 const IamTenantInitTemplateManagementView = createRouteCacheComponent('IamTenantInitTemplateManagementView', () => import('@/views/IamTenantInitTemplateManagementView.vue'));
 const TenantManagementView = createRouteCacheComponent('TenantManagementView', () => import('@/views/TenantManagementView.vue'));
@@ -169,6 +170,21 @@ const routes: RouteRecordRaw[] = [
           affixTab: false,
           closable: true,
           permission: 'iam-role-column-permission:view',
+        },
+      },
+      {
+        path: 'system/iam/state-action-permissions',
+        name: 'iam-state-action-management',
+        component: IamStateActionPermissionManagementView,
+        meta: {
+          title: '状态动作权限',
+          titleKey: 'route.iamStateActionPermissions',
+          breadcrumb: [{ titleKey: 'route.system', title: '系统设置' }, { titleKey: 'route.iamStateActionPermissions', title: '状态动作权限', path: '/system/iam/state-action-permissions' }],
+          keepAlive: true,
+          cacheName: 'IamStateActionPermissionManagementView',
+          affixTab: false,
+          closable: true,
+          permission: 'iam-state-action:view',
         },
       },
       {

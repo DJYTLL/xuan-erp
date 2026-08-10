@@ -16,6 +16,26 @@ permissions:
     action: update
     templateAction: update
     note: 修改租户基础信息
+  - code: tenant-domain:view
+    resource: tenant-domain
+    action: view
+    templateAction: view
+    note: 查看租户域名、验证状态和主域名信息
+  - code: tenant-domain:manage
+    resource: tenant-domain
+    action: manage
+    templateAction: edit
+    note: 当前聚合租户域名创建、编辑、验证和删除写操作
+  - code: tenant-contact:view
+    resource: tenant-contact
+    action: view
+    templateAction: view
+    note: 查看租户联系人、主联系人标记和联系方式
+  - code: tenant-contact:manage
+    resource: tenant-contact
+    action: manage
+    templateAction: edit
+    note: 当前聚合租户联系人创建、编辑和删除写操作
   - code: tenant:delete
     resource: tenant
     action: delete

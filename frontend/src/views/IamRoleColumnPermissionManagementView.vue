@@ -32,6 +32,28 @@
         <el-input v-model="roleKeyword" class="query-input" placeholder="搜索角色编码 / 名称" clearable />
         <el-input v-model="menuKeyword" class="query-input" placeholder="搜索菜单 / 页面" clearable />
         <template #actions>
+          <el-popover
+            v-if="!hasRoleColumnPermissionDependencyWarning"
+            placement="bottom-end"
+            trigger="hover"
+            :width="360"
+            popper-class="role-column-dependency-popover"
+          >
+            <template #reference>
+              <el-button class="dependency-compact-trigger" :icon="CheckCircle" text bg size="small">
+                接口依赖
+              </el-button>
+            </template>
+            <div class="dependency-popover-content">
+              <strong>接口依赖已具备</strong>
+              <span>当前页面需要角色查询、列权限资源、角色列权限规则查看权限。</span>
+              <div class="dependency-popover-list">
+                <span v-for="dependency in roleColumnPermissionDependencyStatuses" :key="dependency.permission">
+                  {{ dependency.permission }} · 已具备
+                </span>
+              </div>
+            </div>
+          </el-popover>
           <el-button :icon="RefreshCw" circle @click="loadPage" />
           <PermissionButton
             type="primary"
@@ -47,19 +69,19 @@
       </QueryToolbar>
     </template>
 
-    <section class="role-column-dependency-strip" :class="{ warning: missingDependencyHints.length || roleColumnPermissionErrorMessage }">
+    <section v-if="hasRoleColumnPermissionDependencyWarning" class="role-column-dependency-strip warning">
       <div>
-        <strong>接口依赖</strong>
-        <span>角色查询、列权限资源、角色列权限规则都需要具备查看权限。</span>
+        <strong>接口依赖异常</strong>
+        <span>角色列权限页需要同时具备下面这些接口权限，缺少任意一项都会导致页面数据无法完整加载。</span>
       </div>
       <div class="dependency-items">
         <span
-          v-for="dependency in roleColumnPermissionDependencies"
+          v-for="dependency in roleColumnPermissionDependencyStatuses"
           :key="dependency.permission"
           class="dependency-chip"
-          :class="{ missing: !authStore.hasPermission(dependency.permission) }"
+          :class="{ missing: !dependency.allowed }"
         >
-          {{ dependency.permission }} · {{ authStore.hasPermission(dependency.permission) ? '已具备' : dependency.message }}
+          {{ dependency.permission }} · {{ dependency.allowed ? '已具备' : dependency.message }}
         </span>
       </div>
       <span v-if="roleColumnPermissionErrorMessage" class="dependency-error">{{ roleColumnPermissionErrorMessage }}</span>
@@ -233,7 +255,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus/es/components/message/index';
-import { ChevronDown, ChevronUp, PanelLeftClose, PanelLeftOpen, RefreshCw } from 'lucide-vue-next';
+import { CheckCircle, ChevronDown, ChevronUp, PanelLeftClose, PanelLeftOpen, RefreshCw } from 'lucide-vue-next';
 import { resolveRoleColumnPermissionForbiddenMessage } from '@/api/http-error';
 import {
   getIamColumnPermissionTemplateItems,
@@ -402,11 +424,18 @@ const activePageMenu = computed(() => (
 ));
 const activePageTitle = computed(() => activePageMenu.value?.title || selectedMenuNode.value?.title || '角色列权限');
 const activePagePath = computed(() => activePageMenu.value?.path || '');
-const readonly = computed(() => !authStore.hasPermission('iam-role-column-permission:update') || targetTenantId.value <= 0);
+const readonly = computed(() => !authorizationStore.hasButtonPermission('iam-role-column-permission:update') || targetTenantId.value <= 0);
 const canSaveRoleRules = computed(() => Boolean(activeRole.value) && !readonly.value && isRuleDirty.value);
-const missingDependencyHints = computed(() => roleColumnPermissionDependencies
-  .filter((dependency) => !authStore.hasPermission(dependency.permission))
+const roleColumnPermissionDependencyStatuses = computed(() => roleColumnPermissionDependencies.map((dependency) => ({
+  ...dependency,
+  allowed: authorizationStore.hasButtonPermission(dependency.permission),
+})));
+const missingDependencyHints = computed(() => roleColumnPermissionDependencyStatuses.value
+  .filter((dependency) => !dependency.allowed)
   .map((dependency) => dependency.message));
+const hasRoleColumnPermissionDependencyWarning = computed(() => (
+  missingDependencyHints.value.length > 0 || Boolean(roleColumnPermissionErrorMessage.value)
+));
 
 const tenantAssignableRuleByColumnId = computed(() => {
   const next = new Map<number, IamColumnPermissionTemplateItem>();
@@ -1036,6 +1065,46 @@ async function loadIamUserPreviewRows() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dependency-compact-trigger {
+  color: #166534;
+}
+
+:global(.role-column-dependency-popover) {
+  max-width: min(360px, calc(100vw - 32px));
+}
+
+.dependency-popover-content {
+  display: grid;
+  gap: 8px;
+  color: var(--xuan-text);
+}
+
+.dependency-popover-content strong {
+  font-size: 13px;
+}
+
+.dependency-popover-content > span {
+  color: var(--xuan-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dependency-popover-list {
+  display: grid;
+  gap: 6px;
+}
+
+.dependency-popover-list span {
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  padding: 5px 8px;
+  background: #f0fdf4;
+  color: #166534;
+  font-size: 12px;
+  line-height: 1.4;
+  word-break: break-all;
 }
 
 .role-column-dependency-strip {

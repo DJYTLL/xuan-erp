@@ -16,8 +16,8 @@ class TenantResourcePermissionGuardTest {
 
     @Test
     void mapsReadPermissionsByResourceName() {
-        assertEquals(Optional.of("tenant:view"), guard.requiredPermission("tenant-domains", TenantResourcePermissionGuard.Action.READ));
-        assertEquals(Optional.of("tenant:view"), guard.requiredPermission("tenant-contacts", TenantResourcePermissionGuard.Action.READ));
+        assertEquals(Optional.of("tenant-domain:view"), guard.requiredPermission("tenant-domains", TenantResourcePermissionGuard.Action.READ));
+        assertEquals(Optional.of("tenant-contact:view"), guard.requiredPermission("tenant-contacts", TenantResourcePermissionGuard.Action.READ));
         assertEquals(Optional.of("tenant-plan:view"), guard.requiredPermission("tenant-plans", TenantResourcePermissionGuard.Action.READ));
         assertEquals(Optional.of("tenant-plan:view"), guard.requiredPermission("tenant-plan-assignments", TenantResourcePermissionGuard.Action.READ));
         assertEquals(Optional.of("tenant-config:view"), guard.requiredPermission("tenant-configs", TenantResourcePermissionGuard.Action.READ));
@@ -27,9 +27,9 @@ class TenantResourcePermissionGuardTest {
 
     @Test
     void mapsWritePermissionsByResourceName() {
-        assertEquals(Optional.of("tenant:update"), guard.requiredPermission("tenant-domains", TenantResourcePermissionGuard.Action.CREATE));
-        assertEquals(Optional.of("tenant:update"), guard.requiredPermission("tenant-contacts", TenantResourcePermissionGuard.Action.UPDATE));
-        assertEquals(Optional.of("tenant:update"), guard.requiredPermission("tenant-domains", TenantResourcePermissionGuard.Action.DELETE));
+        assertEquals(Optional.of("tenant-domain:manage"), guard.requiredPermission("tenant-domains", TenantResourcePermissionGuard.Action.CREATE));
+        assertEquals(Optional.of("tenant-contact:manage"), guard.requiredPermission("tenant-contacts", TenantResourcePermissionGuard.Action.UPDATE));
+        assertEquals(Optional.of("tenant-domain:manage"), guard.requiredPermission("tenant-domains", TenantResourcePermissionGuard.Action.DELETE));
     }
 
     @Test

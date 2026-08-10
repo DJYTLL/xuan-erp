@@ -387,6 +387,42 @@ class GatewaySecurityIntegrationTest {
                 .expectBody(String.class).isEqualTo("secured");
     }
 
+    // 测试业务租户里的 super_admin 用户名和角色不能冒充平台超管跨租户访问。
+    @Test
+    void rejectsTenantScopedSuperAdminAcrossTenantContext() throws Exception {
+        when(jwkProvider.jwkSetForKid("kid-1")).thenReturn(Mono.just(new JWKSet(rsaKey.toPublicJWK())));
+
+        webTestClient.get()
+                .uri("/api/test/secured")
+                .header("X-Request-Id", "req-tenant-scoped-super-admin")
+                .header("X-Tenant-Id", "2002")
+                .header("Authorization", "Bearer " + signedToken(
+                        rsaKey,
+                        "kid-1",
+                        Instant.parse("2030-01-01T00:05:00Z"),
+                        1001L,
+                        "super_admin",
+                        List.of("super_admin"),
+                        List.of("*")))
+                .exchange()
+                .expectStatus().isForbidden()
+                .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_JSON)
+                .expectBody()
+                .jsonPath("$.code").isEqualTo("SECURITY_TENANT_CONTEXT_INVALID")
+                .jsonPath("$.message").isEqualTo("租户上下文无效");
+
+        ArgumentCaptor<AuditWriteEvent> eventCaptor = ArgumentCaptor.forClass(AuditWriteEvent.class);
+        verify(securityAuditPublisher).publish(eventCaptor.capture());
+        AuditWriteEvent event = eventCaptor.getValue();
+        assertEquals("security:tenant-context:invalid", event.action());
+        assertEquals(2002L, event.tenantId());
+        assertEquals(1001L, event.authTenantId());
+        assertTrue(event.crossTenant());
+        assertEquals(403, event.httpStatus());
+        assertEquals("SECURITY_TENANT_CONTEXT_INVALID", event.errorCode());
+        assertEquals("req-tenant-scoped-super-admin", event.requestId());
+    }
+
     // 测试角色列权限页面可通过专用权限读取租户下拉选项，不被租户管理 tenant:view 粗粒度规则误拦。
     @Test
     void allowsTenantColumnPermissionOptionsWithRoleColumnPermission() throws Exception {
@@ -711,6 +747,14 @@ class GatewaySecurityIntegrationTest {
                 .toList();
         assertTrue(pathPredicateArgs.contains("/api/tenants"));
         assertTrue(pathPredicateArgs.contains("/api/tenants/**"));
+        assertTrue(pathPredicateArgs.contains("/api/tenant-configs"));
+        assertTrue(pathPredicateArgs.contains("/api/tenant-configs/**"));
+        assertTrue(pathPredicateArgs.contains("/api/tenant-domains"));
+        assertTrue(pathPredicateArgs.contains("/api/tenant-domains/**"));
+        assertTrue(pathPredicateArgs.contains("/api/tenant-contacts"));
+        assertTrue(pathPredicateArgs.contains("/api/tenant-contacts/**"));
+        assertTrue(pathPredicateArgs.contains("/api/tenant-resources"));
+        assertTrue(pathPredicateArgs.contains("/api/tenant-resources/**"));
         assertTrue(pathPredicateArgs.contains("/api/tenant-plans"));
         assertTrue(pathPredicateArgs.contains("/api/tenant-plans/**"));
         assertTrue(pathPredicateArgs.contains("/api/tenant-plan-assignments"));

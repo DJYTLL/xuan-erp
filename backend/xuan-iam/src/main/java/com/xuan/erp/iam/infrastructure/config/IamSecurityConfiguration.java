@@ -1,7 +1,10 @@
 package com.xuan.erp.iam.infrastructure.config;
 
 import com.xuan.erp.common.security.jwt.JwkJwtTokenParser;
+import com.xuan.erp.common.security.permission.PermissionSnapshot;
+import com.xuan.erp.common.security.permission.XuanPermissionExpression;
 import com.xuan.erp.iam.infrastructure.security.IamBearerTokenAuthenticationFilter;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
@@ -31,6 +34,18 @@ public class IamSecurityConfiguration {
     @Bean
     IamBearerTokenAuthenticationFilter iamBearerTokenAuthenticationFilter(JwkJwtTokenParser jwtTokenParser) {
         return new IamBearerTokenAuthenticationFilter(jwtTokenParser);
+    }
+
+    @Bean("xuanPermission")
+    @ConditionalOnMissingBean(name = "xuanPermission")
+    XuanPermissionExpression iamLocalXuanPermissionExpression() {
+        return new XuanPermissionExpression((currentUser, accessToken) -> new PermissionSnapshot(
+                currentUser.tenantId(),
+                currentUser.userId(),
+                currentUser.username(),
+                currentUser.roles(),
+                currentUser.permissions(),
+                currentUser.authVersion()));
     }
 
     @Bean

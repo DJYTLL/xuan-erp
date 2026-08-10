@@ -22,3 +22,15 @@ type StoreExposesRoutePermission = Assert<
 type StoreExposesButtonPermission = Assert<
   IsSame<ReturnType<AuthorizationStoreContract['hasButtonPermission']>, boolean>
 >;
+
+type StoreExposesStateActionRules = Assert<
+  IsSame<AuthorizationStoreContract['stateActionRules'], CurrentPermissionSnapshot['stateActionRules']>
+>;
+
+type StoreExposesAllowedStateActions = Assert<
+  IsSame<ReturnType<AuthorizationStoreContract['allowedStateActions']>, string[]>
+>;
+
+type StoreExposesStateActionPermission = Assert<
+  IsSame<ReturnType<AuthorizationStoreContract['isStateActionAllowed']>, boolean>
+>;

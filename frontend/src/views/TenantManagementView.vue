@@ -34,22 +34,7 @@
       :total="total"
       height="100%"
       @row-action="handleTenantRowAction"
-    >
-      <template #cell-status="{ row }">
-        <el-tag :type="resolveTenantStatus(row.status).type" effect="plain">
-          {{ resolveTenantStatus(row.status).label }}
-        </el-tag>
-      </template>
-      <template #cell-permissionSyncStatus="{ row }">
-        <el-tag
-          :type="resolveTenantPermissionSyncStatus(row.permissionSyncStatus).type"
-          effect="plain"
-          title="权限同步状态"
-        >
-          {{ row.permissionSyncStatusLabel || resolveTenantPermissionSyncStatus(row.permissionSyncStatus).label }}
-        </el-tag>
-      </template>
-    </XuanBrowseTable>
+    />
 
     <DynamicFormDialog
       v-model="createDialogVisible"
@@ -484,6 +469,10 @@ const tenantBrowseTableSchema = computed(() => createTenantBrowseTableSchema({
       type: 'success',
       permission: 'tenant:enable',
       noPermissionMode: 'disable',
+      stateResource: 'tenant',
+      stateCode: (row) => row.status,
+      stateAction: 'enable',
+      stateNoPermissionReason: '当前租户状态不可执行该动作',
       visible: (row) => canEnableTenant(row),
       disabledReason: (row) => resolveTenantActionDisabledReason(row),
     },
@@ -493,6 +482,10 @@ const tenantBrowseTableSchema = computed(() => createTenantBrowseTableSchema({
       type: 'warning',
       permission: 'tenant:disable',
       noPermissionMode: 'disable',
+      stateResource: 'tenant',
+      stateCode: (row) => row.status,
+      stateAction: 'disable',
+      stateNoPermissionReason: '当前租户状态不可执行该动作',
       visible: (row) => canDisableTenant(row),
       disabledReason: (row) => resolveTenantActionDisabledReason(row),
     },
@@ -502,6 +495,10 @@ const tenantBrowseTableSchema = computed(() => createTenantBrowseTableSchema({
       type: 'danger',
       permission: 'tenant:delete',
       noPermissionMode: 'disable',
+      stateResource: 'tenant',
+      stateCode: (row) => row.status,
+      stateAction: 'delete',
+      stateNoPermissionReason: '当前租户状态不可执行该动作',
       visible: (row) => canDeleteTenant(row),
       disabledReason: (row) => resolveTenantActionDisabledReason(row),
     },

@@ -39,7 +39,7 @@ public class IamRoleController {
     }
 
     @Operation(summary = "查询角色列表", description = "按租户查询未逻辑删除的 IAM 角色")
-    @PreAuthorize("hasAuthority('iam-role:view')")
+    @PreAuthorize("@xuanPermission.has('iam-role:view')")
     @GetMapping
     public ApiResponse<List<IamRole>> listRoles(
             @Parameter(description = "租户 ID")
@@ -48,7 +48,7 @@ public class IamRoleController {
     }
 
     @Operation(summary = "新增角色", description = "在指定租户下新增 IAM 角色")
-    @PreAuthorize("hasAuthority('iam-role:create')")
+    @PreAuthorize("@xuanPermission.has('iam-role:create')")
     @PostMapping
     public ApiResponse<IamRole> createRole(@RequestBody CreateIamRoleRequest request) {
         return ApiResponse.success(roleApplicationService.createRole(new CreateIamRoleCommand(
@@ -59,7 +59,7 @@ public class IamRoleController {
     }
 
     @Operation(summary = "修改角色", description = "修改 IAM 角色基础资料和启用状态")
-    @PreAuthorize("hasAuthority('iam-role:update')")
+    @PreAuthorize("@xuanPermission.has('iam-role:update')")
     @PutMapping("/{roleId}")
     public ApiResponse<IamRole> updateRole(
             @Parameter(description = "角色 ID")
@@ -72,7 +72,7 @@ public class IamRoleController {
     }
 
     @Operation(summary = "启用角色", description = "启用 IAM 角色")
-    @PreAuthorize("hasAuthority('iam-role:update')")
+    @PreAuthorize("@xuanPermission.has('iam-role:update')")
     @PostMapping("/{roleId}/enable")
     public ApiResponse<IamRole> enableRole(
             @Parameter(description = "角色 ID")
@@ -81,7 +81,7 @@ public class IamRoleController {
     }
 
     @Operation(summary = "停用角色", description = "停用 IAM 角色")
-    @PreAuthorize("hasAuthority('iam-role:update')")
+    @PreAuthorize("@xuanPermission.has('iam-role:update')")
     @PostMapping("/{roleId}/disable")
     public ApiResponse<IamRole> disableRole(
             @Parameter(description = "角色 ID")
@@ -90,7 +90,7 @@ public class IamRoleController {
     }
 
     @Operation(summary = "查询角色权限", description = "查询指定租户角色当前拥有的权限编码")
-    @PreAuthorize("hasAuthority('iam-role:view')")
+    @PreAuthorize("@xuanPermission.has('iam-role:view')")
     @GetMapping("/{roleId}/permissions")
     public ApiResponse<IamRolePermissionGrantView> getRolePermissions(
             @Parameter(description = "角色 ID")
@@ -101,7 +101,7 @@ public class IamRoleController {
     }
 
     @Operation(summary = "保存角色权限", description = "使用权限编码集合替换指定角色当前权限授权")
-    @PreAuthorize("hasAuthority('iam-role:update')")
+    @PreAuthorize("@xuanPermission.has('iam-role:update')")
     @PutMapping("/{roleId}/permissions")
     public ApiResponse<IamRolePermissionGrantView> setRolePermissions(
             @Parameter(description = "角色 ID")

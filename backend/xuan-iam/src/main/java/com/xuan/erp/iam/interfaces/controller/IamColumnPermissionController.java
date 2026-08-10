@@ -57,7 +57,7 @@ public class IamColumnPermissionController {
     }
 
     @Operation(summary = "查询资源字段", description = "查询可参与列权限控制的资源字段清单")
-    @PreAuthorize("hasAnyAuthority('iam-column-permission:view', 'iam-role-column-permission:view')")
+    @PreAuthorize("@xuanPermission.hasAny('iam-column-permission:view', 'iam-role-column-permission:view')")
     @GetMapping("/resources")
     public ApiResponse<List<IamResourceColumnResponse>> listResourceColumns() {
         return ApiResponse.success(applicationService.listResourceColumns().stream()
@@ -66,7 +66,7 @@ public class IamColumnPermissionController {
     }
 
     @Operation(summary = "查询列权限模板", description = "按租户、关键字和启用状态查询列权限模板")
-    @PreAuthorize("hasAuthority('iam-column-permission:view')")
+    @PreAuthorize("@xuanPermission.has('iam-column-permission:view')")
     @GetMapping("/templates")
     public ApiResponse<List<IamColumnPermissionTemplateResponse>> listTemplates(
             @Parameter(description = "租户 ID；为空时查询平台默认模板和所有租户模板")
@@ -81,7 +81,7 @@ public class IamColumnPermissionController {
     }
 
     @Operation(summary = "新增列权限模板", description = "新增一套列权限模板")
-    @PreAuthorize("hasAuthority('iam-column-permission:create')")
+    @PreAuthorize("@xuanPermission.has('iam-column-permission:create')")
     @PostMapping("/templates")
     public ApiResponse<IamColumnPermissionTemplateResponse> createTemplate(
             @RequestBody CreateIamColumnPermissionTemplateRequest request) {
@@ -95,7 +95,7 @@ public class IamColumnPermissionController {
     }
 
     @Operation(summary = "修改列权限模板", description = "修改列权限模板基础信息")
-    @PreAuthorize("hasAuthority('iam-column-permission:update')")
+    @PreAuthorize("@xuanPermission.has('iam-column-permission:update')")
     @PutMapping("/templates/{templateId}")
     public ApiResponse<IamColumnPermissionTemplateResponse> updateTemplate(
             @Parameter(description = "模板 ID")
@@ -109,7 +109,7 @@ public class IamColumnPermissionController {
     }
 
     @Operation(summary = "启用列权限模板", description = "启用指定列权限模板")
-    @PreAuthorize("hasAuthority('iam-column-permission:update')")
+    @PreAuthorize("@xuanPermission.has('iam-column-permission:update')")
     @PostMapping("/templates/{templateId}/enable")
     public ApiResponse<IamColumnPermissionTemplateResponse> enableTemplate(
             @Parameter(description = "模板 ID")
@@ -120,7 +120,7 @@ public class IamColumnPermissionController {
     }
 
     @Operation(summary = "停用列权限模板", description = "停用指定列权限模板")
-    @PreAuthorize("hasAuthority('iam-column-permission:update')")
+    @PreAuthorize("@xuanPermission.has('iam-column-permission:update')")
     @PostMapping("/templates/{templateId}/disable")
     public ApiResponse<IamColumnPermissionTemplateResponse> disableTemplate(
             @Parameter(description = "模板 ID")
@@ -131,7 +131,7 @@ public class IamColumnPermissionController {
     }
 
     @Operation(summary = "查询列权限模板规则", description = "查询指定模板下每个资源字段的访问级别")
-    @PreAuthorize("hasAnyAuthority('iam-column-permission:view', 'iam-role-column-permission:view')")
+    @PreAuthorize("@xuanPermission.hasAny('iam-column-permission:view', 'iam-role-column-permission:view')")
     @GetMapping("/templates/{templateId}/items")
     public ApiResponse<List<IamColumnPermissionTemplateItemResponse>> listTemplateItems(
             @Parameter(description = "模板 ID")
@@ -142,7 +142,7 @@ public class IamColumnPermissionController {
     }
 
     @Operation(summary = "保存列权限模板规则", description = "使用字段规则集合替换指定模板的列权限明细")
-    @PreAuthorize("hasAuthority('iam-column-permission:update')")
+    @PreAuthorize("@xuanPermission.has('iam-column-permission:update')")
     @PutMapping("/templates/{templateId}/items")
     public ApiResponse<List<IamColumnPermissionTemplateItemResponse>> setTemplateItems(
             @Parameter(description = "模板 ID")
@@ -162,7 +162,7 @@ public class IamColumnPermissionController {
     }
 
     @Operation(summary = "查询租户可用列权限模板", description = "查询指定租户已分配、可供角色绑定的列权限模板")
-    @PreAuthorize("hasAnyAuthority('iam-column-permission:view', 'iam-role-column-permission:view')")
+    @PreAuthorize("@xuanPermission.hasAny('iam-column-permission:view', 'iam-role-column-permission:view')")
     @GetMapping("/tenants/{tenantId}/templates")
     public ApiResponse<List<IamTenantColumnPermissionTemplateAssignmentResponse>> listTenantTemplateAssignments(
             @Parameter(description = "租户 ID")
@@ -173,7 +173,7 @@ public class IamColumnPermissionController {
     }
 
     @Operation(summary = "保存租户可用列权限模板", description = "用平台列权限模板集合替换指定租户的可用模板池")
-    @PreAuthorize("hasAuthority('iam-column-permission:update')")
+    @PreAuthorize("@xuanPermission.has('iam-column-permission:update')")
     @PutMapping("/tenants/{tenantId}/templates")
     public ApiResponse<List<IamTenantColumnPermissionTemplateAssignmentResponse>> setTenantTemplateAssignments(
             @Parameter(description = "租户 ID")
@@ -190,7 +190,7 @@ public class IamColumnPermissionController {
     }
 
     @Operation(summary = "查询角色列权限规则", description = "查询指定角色独立配置的列权限字段规则")
-    @PreAuthorize("hasAuthority('iam-role-column-permission:view')")
+    @PreAuthorize("@xuanPermission.has('iam-role-column-permission:view')")
     @GetMapping("/roles/{roleId}/column-permissions")
     public ApiResponse<List<IamRoleColumnPermissionRuleResponse>> listRoleColumnPermissions(
             @Parameter(description = "角色 ID")
@@ -203,7 +203,7 @@ public class IamColumnPermissionController {
     }
 
     @Operation(summary = "保存角色列权限规则", description = "使用字段规则集合替换指定角色的独立列权限规则")
-    @PreAuthorize("hasAuthority('iam-role-column-permission:update')")
+    @PreAuthorize("@xuanPermission.has('iam-role-column-permission:update')")
     @PutMapping("/roles/{roleId}/column-permissions")
     public ApiResponse<List<IamRoleColumnPermissionRuleResponse>> setRoleColumnPermissions(
             @Parameter(description = "角色 ID")
@@ -224,7 +224,7 @@ public class IamColumnPermissionController {
     }
 
     @Operation(summary = "查询角色列权限模板绑定", description = "查询指定角色当前绑定的列权限模板")
-    @PreAuthorize("hasAnyAuthority('iam-column-permission:view', 'iam-role-column-permission:view')")
+    @PreAuthorize("@xuanPermission.hasAny('iam-column-permission:view', 'iam-role-column-permission:view')")
     @GetMapping("/roles/{roleId}/column-permission-template")
     public ApiResponse<IamRoleColumnPermissionTemplateBindingResponse> getRoleTemplateBinding(
             @Parameter(description = "角色 ID")
@@ -235,7 +235,7 @@ public class IamColumnPermissionController {
     }
 
     @Operation(summary = "保存角色列权限模板绑定", description = "使用模板替换指定角色当前列权限模板绑定")
-    @PreAuthorize("hasAuthority('iam-column-permission:update')")
+    @PreAuthorize("@xuanPermission.has('iam-column-permission:update')")
     @PutMapping("/roles/{roleId}/column-permission-template")
     public ApiResponse<IamRoleColumnPermissionTemplateBindingResponse> setRoleTemplateBinding(
             @Parameter(description = "角色 ID")

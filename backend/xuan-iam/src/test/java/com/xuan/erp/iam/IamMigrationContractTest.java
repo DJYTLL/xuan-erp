@@ -812,4 +812,99 @@ class IamMigrationContractTest {
         assertFalse(v45.contains("CREATE TABLE"), "V45 只回填权限依赖数据，不应新增业务表");
         assertFalse(v45.contains("DROP TABLE"), "V45 不能删除历史表");
     }
+
+    @Test
+    void v46RegistersTenantPermissionSyncStatusColumnWithoutRewritingHistory() throws IOException {
+        Path v46Path = MIGRATION_DIR.resolve("V46__add_tenant_permission_sync_status_column_resource.sql");
+        assertTrue(Files.exists(v46Path), "必须通过 V46 追加 tenant 权限同步状态字段资源，不能改写 V1-V45 历史迁移");
+
+        String v46 = Files.readString(v46Path);
+
+        assertTrue(v46.contains("INSERT INTO iam_resource_column"));
+        assertTrue(v46.contains("'tenant'"));
+        assertTrue(v46.contains("'permissionSyncStatus'"));
+        assertTrue(v46.contains("'权限同步状态'"));
+        assertTrue(v46.contains("'ENUM'"));
+        assertTrue(v46.contains("'tenant_admin_default', 'permissionSyncStatus', 'VISIBLE'"));
+        assertTrue(v46.contains("'tenant_readonly_masked', 'permissionSyncStatus', 'VISIBLE'"));
+        assertTrue(v46.contains("WHERE NOT EXISTS"));
+        assertTrue(v46.contains("iam_column_permission_template_item"));
+        assertFalse(v46.contains("CREATE TABLE"), "V46 只补 tenant 权限同步状态字段资源，不应新增业务表");
+        assertFalse(v46.contains("DROP TABLE"), "V46 不能删除历史表");
+    }
+
+    @Test
+    void v47RegistersTenantDomainAndContactPermissionsWithoutRewritingHistory() throws IOException {
+        Path v47Path = MIGRATION_DIR.resolve("V47__add_tenant_resource_permissions.sql");
+        assertTrue(Files.exists(v47Path), "必须通过 V47 追加租户域名和联系人权限归属，不能改写 V1-V46 历史迁移");
+
+        String v47 = Files.readString(v47Path);
+
+        assertTrue(v47.contains("'tenant-domain:view'"));
+        assertTrue(v47.contains("'tenant-domain:manage'"));
+        assertTrue(v47.contains("'tenant-contact:view'"));
+        assertTrue(v47.contains("'tenant-contact:manage'"));
+        assertTrue(v47.contains("iam_permission"));
+        assertTrue(v47.contains("iam_role_permission"));
+        assertTrue(v47.contains("iam_tenant_permission_entitlement"));
+        assertTrue(v47.contains("iam_tenant_init_permission_template"));
+        assertTrue(v47.contains("iam_tenant_init_role_template"));
+        assertTrue(v47.contains("iam_authorization_snapshot"));
+        assertTrue(v47.contains("'tenant-management'"));
+        assertFalse(v47.contains("CREATE TABLE"), "V47 只补权限归属与回填数据，不应新增业务表");
+        assertFalse(v47.contains("DROP TABLE"), "V47 不能删除历史表");
+    }
+
+    @Test
+    void v48AddsStateActionPermissionRulesWithoutRewritingHistory() throws IOException {
+        Path v48Path = MIGRATION_DIR.resolve("V48__add_state_action_permission_rules.sql");
+        assertTrue(Files.exists(v48Path), "必须通过 V48 追加状态动作权限规则，不能改写 V1-V47 历史迁移");
+
+        String v48 = Files.readString(v48Path);
+
+        assertTrue(v48.contains("CREATE TABLE IF NOT EXISTS iam_resource_state"));
+        assertTrue(v48.contains("CREATE TABLE IF NOT EXISTS iam_resource_action"));
+        assertTrue(v48.contains("CREATE TABLE IF NOT EXISTS iam_role_state_action_rule"));
+        assertTrue(v48.contains("metadata_json JSONB"));
+        assertTrue(v48.contains("idx_iam_resource_state_active"));
+        assertTrue(v48.contains("idx_iam_resource_action_active"));
+        assertTrue(v48.contains("idx_iam_role_state_action_rule_active"));
+        assertTrue(v48.contains("'iam-state-action:view'"));
+        assertTrue(v48.contains("'iam-state-action:create'"));
+        assertTrue(v48.contains("'iam-state-action:update'"));
+        assertTrue(v48.contains("'iam-state-action-management'"));
+        assertTrue(v48.contains("/system/iam/state-action-permissions"));
+        assertTrue(v48.contains("iam_role_permission"));
+        assertTrue(v48.contains("iam_tenant_permission_entitlement"));
+        assertTrue(v48.contains("iam_tenant_init_permission_template"));
+        assertTrue(v48.contains("iam_tenant_init_role_template"));
+        assertTrue(v48.contains("iam_authorization_snapshot"));
+        assertTrue(v48.contains("state-action-v48"));
+        assertFalse(v48.contains("DROP TABLE"), "V48 只能追加状态动作权限能力，不能删除历史表");
+    }
+
+    @Test
+    void v49SeedsTenantStateActionRulesWithoutRewritingHistory() throws IOException {
+        Path v49Path = MIGRATION_DIR.resolve("V49__seed_tenant_state_action_rules.sql");
+        assertTrue(Files.exists(v49Path), "必须通过 V49 追加租户状态动作权限种子，不能改写 V1-V48 历史迁移");
+
+        String v49 = Files.readString(v49Path);
+
+        assertTrue(v49.contains("INSERT INTO iam_resource_state"));
+        assertTrue(v49.contains("INSERT INTO iam_resource_action"));
+        assertTrue(v49.contains("INSERT INTO iam_role_state_action_rule"));
+        assertTrue(v49.contains("'tenant', 'PROVISIONED'"));
+        assertTrue(v49.contains("'tenant', 'ENABLED'"));
+        assertTrue(v49.contains("'tenant', 'DISABLED'"));
+        assertTrue(v49.contains("'tenant', 'enable'"));
+        assertTrue(v49.contains("'tenant', 'disable'"));
+        assertTrue(v49.contains("'tenant', 'delete'"));
+        assertTrue(v49.contains("'tenant:PROVISIONED', 'enable'"));
+        assertTrue(v49.contains("'tenant:ENABLED', 'disable'"));
+        assertTrue(v49.contains("'tenant:PROVISIONED', 'delete'"));
+        assertTrue(v49.contains("'tenant:DISABLED', 'delete'"));
+        assertTrue(v49.contains("state-action-tenant-v49"));
+        assertFalse(v49.contains("CREATE TABLE"), "V49 只追加状态动作 seed，不应新增业务表");
+        assertFalse(v49.contains("DROP TABLE"), "V49 不能删除历史表");
+    }
 }

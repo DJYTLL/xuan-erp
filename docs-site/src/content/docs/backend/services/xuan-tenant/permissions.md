@@ -8,6 +8,7 @@ title: "xuan-tenant 权限文档"
 
 - 平台统一模板要求所有微服务的基础操作优先使用 `view/create/update/delete`。
 - `xuan-tenant` 当前已统一租户生命周期权限码：启用使用 `tenant:enable`，停用、暂停、冻结使用 `tenant:disable`。
+- 域名、联系人和配置不再复用 `tenant:view` / `tenant:update`，而是使用各自独立的资源权限。
 - 历史 `tenant:lifecycle` 仅作为 IAM 迁移兼容来源保留，不再作为后端接口、前端按钮或文档中的正式权限码。
 - 配置写操作当前统一使用 `tenant-config:manage`，语义上对应配置编辑能力。
 - 租户套餐中的 `feature_flags.iamInitTemplateCode` 是 IAM 初始化模板选择器；创建租户或调整套餐后，`xuan-tenant` 通过 IAM 初始化流程让该模板重新同步租户权限池、菜单、受管角色、角色权限、管理员角色绑定和授权快照。
@@ -27,7 +28,7 @@ title: "xuan-tenant 权限文档"
 | --- | --- | --- |
 | `tenant:view` | 查询租户 | 访问租户列表、详情、生命周期历史和下拉引用数据 |
 | `tenant:create` | 创建租户 | 创建租户主档并异步启动首期编排入口，创建成功后立即返回 `PROVISIONING` |
-| `tenant:update` | 修改租户 | 修改租户名称、联系人摘要、备注等基础信息 |
+| `tenant:update` | 修改租户 | 修改租户名称、联系人摘要、备注等基础信息，不含域名、联系人和配置写操作 |
 | `tenant:enable` | 启用租户 | 启用、恢复租户 |
 | `tenant:disable` | 停用租户 | 暂停、停用、冻结租户，必须填写原因 |
 | `tenant:delete` | 删除租户 | 逻辑删除租户，删除前必须完成应用层状态和关联校验 |
@@ -35,7 +36,7 @@ title: "xuan-tenant 权限文档"
 | `tenant-plan:manage` | 维护套餐 | 新增、修改、启停套餐定义、额度和功能开关 |
 | `tenant-plan:assign` | 分配套餐 | 为租户绑定、升级、降级或取消套餐 |
 | `tenant-domain:view` | 查询域名 | 查看租户域名、验证状态和主域名 |
-| `tenant-domain:manage` | 维护域名 | 新增、验证、停用、删除租户域名 |
+| `tenant-domain:manage` | 维护域名 | 新增、修改、验证、停用、删除租户域名 |
 | `tenant-contact:view` | 查询联系人 | 查看管理员、商务、技术、财务等租户联系人 |
 | `tenant-contact:manage` | 维护联系人 | 新增、修改、删除联系人和调整主联系人 |
 | `tenant-config:view` | 查询配置 | 查看租户配置，敏感配置必须脱敏 |
@@ -77,4 +78,5 @@ title: "xuan-tenant 权限文档"
 - 部署前由受控脚本或 migration 同步到 `xuan-iam`。
 - 服务启动时只允许做本地清单自检和告警，不建议直接写 IAM 生产库。
 - 新增页面必须同时补菜单、路由 meta、接口权限、列权限映射和回归测试。
+- 当前前端还没有独立的域名、联系人、配置管理页面；因此这轮同步的重点是 IAM 权限中心、接口鉴权和后续按钮显隐契约，而不是额外发明新菜单。
 - 权限职责必须分层：`tenant:create` 负责创建租户并异步启动首期编排，`tenant-provision:view` 负责查看任务/步骤/失败原因，`tenant-provision:manage` 只负责重试、死信和人工补偿等运维动作，`tenant-provision:callback` 只负责服务回写初始化结果。

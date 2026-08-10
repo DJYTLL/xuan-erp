@@ -12,6 +12,7 @@ import com.xuan.erp.iam.domain.repository.IamColumnPermissionRepository;
 import com.xuan.erp.iam.domain.repository.IamMenuRepository;
 import com.xuan.erp.iam.domain.repository.IamPermissionRepository;
 import com.xuan.erp.iam.domain.repository.IamRolePermissionRepository;
+import com.xuan.erp.iam.domain.repository.IamStateActionRuleRepository;
 import com.xuan.erp.iam.domain.repository.IamTenantPermissionEntitlementRepository;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
@@ -407,6 +408,42 @@ class IamCurrentAuthorizationApplicationServiceTest {
     }
 
     @Test
+    void mergesStateActionRulesFromAllCurrentUserRoles() {
+        InMemoryMenuRepository menuRepository = new InMemoryMenuRepository(
+                menu(1L, "sales-order-management", null, "销售订单", "/sales/orders", "sales-order:view", 10));
+        InMemoryPermissionRepository permissionRepository = new InMemoryPermissionRepository(
+                permission("sales-order:view", "销售订单查看", "xuan-sales", "sales-order-management"));
+        InMemoryRolePermissionRepository rolePermissionRepository = new InMemoryRolePermissionRepository();
+        rolePermissionRepository.userPermissionCodes.put("5:1001", List.of("sales-order:view"));
+        rolePermissionRepository.userRoleIds.put("5:1001", List.of(10L, 20L));
+        InMemoryStateActionRuleRepository stateActionRuleRepository = new InMemoryStateActionRuleRepository();
+        stateActionRuleRepository.rulesByRole.put(10L, Map.of(
+                "sales-order:DRAFT", List.of("submit", "update"),
+                "sales-order:SUBMITTED", List.of("audit")));
+        stateActionRuleRepository.rulesByRole.put(20L, Map.of(
+                "sales-order:DRAFT", List.of("delete", "submit"),
+                "sales-order:APPROVED", List.of("close")));
+        IamCurrentAuthorizationApplicationService service = new IamCurrentAuthorizationApplicationService(
+                menuRepository,
+                permissionRepository,
+                new InMemoryAuthorizationSnapshotRepository(),
+                new InMemoryColumnPermissionRepository(),
+                rolePermissionRepository,
+                entitlements(5L, "sales-order:view"),
+                stateActionRuleRepository);
+
+        CurrentUser currentUser = new CurrentUser(
+                1001L, 5L, "tenant_admin", Set.of("tenant_admin"), 23L, Set.of("sales-order:view"));
+
+        IamCurrentPermissionSnapshotView view = service.getCurrentPermissionSnapshot(currentUser);
+
+        assertEquals(Map.of(
+                "sales-order:DRAFT", List.of("delete", "submit", "update"),
+                "sales-order:SUBMITTED", List.of("audit"),
+                "sales-order:APPROVED", List.of("close")), view.stateActionRules());
+    }
+
+    @Test
     void loadsTenantBoundedColumnPermissionsEvenWhenCurrentUserHasNoRoles() {
         InMemoryMenuRepository menuRepository = new InMemoryMenuRepository(
                 menu(1L, "iam-user-management", null, "用户授权", "/system/iam/users", "iam-user:view", 10));
@@ -537,6 +574,27 @@ class IamCurrentAuthorizationApplicationServiceTest {
                 });
             }
             return merged;
+        }
+    }
+
+    private static final class InMemoryStateActionRuleRepository implements IamStateActionRuleRepository {
+        private final Map<Long, Map<String, List<String>>> rulesByRole = new LinkedHashMap<>();
+
+        @Override
+        public Map<String, List<String>> findMergedStateActionRulesByRoleIds(Long tenantId, List<Long> roleIds) {
+            Map<String, List<String>> result = new LinkedHashMap<>();
+            for (Long roleId : roleIds) {
+                rulesByRole.getOrDefault(roleId, Map.of()).forEach((key, actions) -> {
+                    List<String> merged = java.util.stream.Stream.concat(
+                                    result.getOrDefault(key, List.of()).stream(),
+                                    actions.stream())
+                            .distinct()
+                            .sorted()
+                            .toList();
+                    result.put(key, merged);
+                });
+            }
+            return result;
         }
     }
 

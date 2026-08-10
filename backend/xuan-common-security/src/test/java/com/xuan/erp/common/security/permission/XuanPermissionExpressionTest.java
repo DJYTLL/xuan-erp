@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -41,6 +42,31 @@ class XuanPermissionExpressionTest {
         assertThat(expression.hasAny("tenant:update", "tenant:create")).isTrue();
     }
 
+    // 测试 @xuanPermission 可以同时判断基础权限和状态动作权限。
+    @Test
+    void checksPermissionAndStateActionFromSnapshotProvider() {
+        CurrentUser currentUser = new CurrentUser(7L, 1001L, "tenant-admin", Set.of(), 5L, Set.of());
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(currentUser, "access-token", Set.of()));
+        XuanPermissionExpression expression = new XuanPermissionExpression(
+                (user, accessToken) -> new PermissionSnapshot(
+                        user.tenantId(),
+                        user.userId(),
+                        user.username(),
+                        user.roles(),
+                        Set.of("sales-order:delete"),
+                        Map.of(),
+                        Set.of(),
+                        Map.of("sales-order:DRAFT", Set.of("delete")),
+                        user.authVersion()));
+
+        assertThat(expression.canStateAction("sales-order", "DRAFT", "delete")).isTrue();
+        assertThat(expression.canStateAction("sales-order", "APPROVED", "delete")).isFalse();
+        assertThat(expression.hasAndCanStateAction("sales-order:delete", "sales-order", "DRAFT", "delete")).isTrue();
+        assertThat(expression.hasAndCanStateAction("sales-order:delete", "sales-order", "APPROVED", "delete")).isFalse();
+        assertThat(expression.hasAndCanStateAction("sales-order:update", "sales-order", "DRAFT", "delete")).isFalse();
+    }
+
     // 测试 super_admin 不需要远程加载快照，直接拥有所有业务权限。
     @Test
     void letsSuperAdminBypassRemoteSnapshot() {
@@ -55,6 +81,29 @@ class XuanPermissionExpressionTest {
 
         assertThat(expression.has("tenant:delete")).isTrue();
         assertThat(loads).hasValue(0);
+    }
+
+    // 测试租户内同名 super_admin 不能被当成平台超管，只能按快照权限判断。
+    @Test
+    void doesNotTreatTenantScopedSuperAdminNameAsPlatformSuperAdmin() {
+        AtomicInteger loads = new AtomicInteger();
+        CurrentUser currentUser = new CurrentUser(2L, 1001L, "super_admin", Set.of("super_admin"), 1L, Set.of());
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(currentUser, "access-token", Set.of()));
+        XuanPermissionExpression expression = new XuanPermissionExpression((user, accessToken) -> {
+            loads.incrementAndGet();
+            return new PermissionSnapshot(
+                    user.tenantId(),
+                    user.userId(),
+                    user.username(),
+                    user.roles(),
+                    Set.of("tenant:view"),
+                    user.authVersion());
+        });
+
+        assertThat(expression.has("tenant:view")).isTrue();
+        assertThat(expression.has("tenant:delete")).isFalse();
+        assertThat(loads).hasValue(2);
     }
 
     // 测试网关或 IAM 快照下发的 * 通配权限在业务服务 @xuanPermission 中也能生效。

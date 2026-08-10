@@ -31,7 +31,7 @@ public class IamTenantBootstrapController {
     }
 
     @Operation(summary = "初始化租户 IAM", description = "为指定租户触发 IAM 菜单授权初始化")
-    @PreAuthorize("hasAuthority('iam:create')")
+    @PreAuthorize("@xuanPermission.has('iam:create')")
     @PostMapping("/{tenantId}")
     public ApiResponse<Integer> bootstrapTenant(
             @Parameter(description = "租户 ID")
@@ -50,7 +50,7 @@ public class IamTenantBootstrapController {
     }
 
     @Operation(summary = "查询租户 IAM 权限同步状态", description = "供 Tenant 对比当前套餐权限指纹和 IAM 最后同步指纹")
-    @PreAuthorize("hasAnyAuthority('tenant:view', 'tenant-plan:assign')")
+    @PreAuthorize("@xuanPermission.hasAny('tenant:view', 'tenant-plan:assign')")
     @GetMapping("/{tenantId}/permission-sync-state")
     public ApiResponse<IamTenantPermissionSyncStateResponse> getPermissionSyncState(
             @Parameter(description = "租户 ID")

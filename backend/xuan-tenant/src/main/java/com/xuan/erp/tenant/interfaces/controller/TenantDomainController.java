@@ -37,7 +37,7 @@ public class TenantDomainController {
      * 查询所有未删除的租户域名列表。
      */
     @Operation(summary = "查询租户域名列表", description = "查询所有未逻辑删除的租户域名")
-    @PreAuthorize("@xuanPermission.has('tenant:view')")
+    @PreAuthorize("@xuanPermission.has('tenant-domain:view')")
     @GetMapping
     public ApiResponse<List<TenantDomainResponse>> listDomains() {
         return ApiResponse.success(service.listDomains().stream()
@@ -49,7 +49,7 @@ public class TenantDomainController {
      * 根据域名记录 ID 查询租户域名详情。
      */
     @Operation(summary = "查询租户域名详情", description = "根据域名记录 ID 查询租户域名详情")
-    @PreAuthorize("@xuanPermission.has('tenant:view')")
+    @PreAuthorize("@xuanPermission.has('tenant-domain:view')")
     @GetMapping("/{domainId}")
     public ApiResponse<TenantDomainResponse> getDomain(@PathVariable("domainId") Long domainId) {
         return ApiResponse.success(TenantDomainAssembler.toResponse(service.getDomain(domainId)));
@@ -59,7 +59,7 @@ public class TenantDomainController {
      * 创建租户域名记录，并自动补齐规范化域名。
      */
     @Operation(summary = "创建租户域名", description = "创建租户自定义域名记录，并自动补齐规范化域名")
-    @PreAuthorize("@xuanPermission.has('tenant:update')")
+    @PreAuthorize("@xuanPermission.has('tenant-domain:manage')")
     @PostMapping
     public ApiResponse<TenantDomainResponse> createDomain(@RequestBody TenantDomainRequest request) {
         return ApiResponse.success(TenantDomainAssembler.toResponse(service.createDomain(TenantDomainAssembler.toValues(request))));
@@ -69,7 +69,7 @@ public class TenantDomainController {
      * 修改租户域名记录，例如域名状态、主域名标记和验证信息。
      */
     @Operation(summary = "修改租户域名", description = "修改租户域名状态、主域名标记和验证信息")
-    @PreAuthorize("@xuanPermission.has('tenant:update')")
+    @PreAuthorize("@xuanPermission.has('tenant-domain:manage')")
     @PutMapping("/{domainId}")
     public ApiResponse<TenantDomainResponse> updateDomain(@PathVariable("domainId") Long domainId, @RequestBody TenantDomainRequest request) {
         return ApiResponse.success(TenantDomainAssembler.toResponse(service.updateDomain(domainId, TenantDomainAssembler.toValues(request))));
@@ -79,7 +79,7 @@ public class TenantDomainController {
      * 软删除租户域名记录，并要求记录删除原因。
      */
     @Operation(summary = "删除租户域名", description = "软删除租户域名记录，并要求记录删除原因")
-    @PreAuthorize("@xuanPermission.has('tenant:update')")
+    @PreAuthorize("@xuanPermission.has('tenant-domain:manage')")
     @DeleteMapping("/{domainId}")
     public ApiResponse<Void> deleteDomain(@PathVariable("domainId") Long domainId, @RequestBody DeleteRequest request) {
         service.deleteDomain(domainId, request.reason(), request.operator());

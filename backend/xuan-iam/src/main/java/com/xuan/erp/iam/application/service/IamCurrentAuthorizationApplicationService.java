@@ -11,6 +11,7 @@ import com.xuan.erp.iam.domain.repository.IamColumnPermissionRepository;
 import com.xuan.erp.iam.domain.repository.IamMenuRepository;
 import com.xuan.erp.iam.domain.repository.IamPermissionRepository;
 import com.xuan.erp.iam.domain.repository.IamRolePermissionRepository;
+import com.xuan.erp.iam.domain.repository.IamStateActionRuleRepository;
 import com.xuan.erp.iam.domain.repository.IamTenantPermissionEntitlementRepository;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -22,6 +23,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Stream;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -38,6 +40,7 @@ public class IamCurrentAuthorizationApplicationService {
     private final IamColumnPermissionRepository columnPermissionRepository;
     private final IamRolePermissionRepository rolePermissionRepository;
     private final IamTenantPermissionEntitlementRepository tenantPermissionEntitlementRepository;
+    private final IamStateActionRuleRepository stateActionRuleRepository;
 
     public IamCurrentAuthorizationApplicationService(
             IamMenuRepository menuRepository,
@@ -46,12 +49,32 @@ public class IamCurrentAuthorizationApplicationService {
             IamColumnPermissionRepository columnPermissionRepository,
             IamRolePermissionRepository rolePermissionRepository,
             IamTenantPermissionEntitlementRepository tenantPermissionEntitlementRepository) {
+        this(
+                menuRepository,
+                permissionRepository,
+                snapshotRepository,
+                columnPermissionRepository,
+                rolePermissionRepository,
+                tenantPermissionEntitlementRepository,
+                (tenantId, roleIds) -> Map.of());
+    }
+
+    @Autowired
+    public IamCurrentAuthorizationApplicationService(
+            IamMenuRepository menuRepository,
+            IamPermissionRepository permissionRepository,
+            IamAuthorizationSnapshotRepository snapshotRepository,
+            IamColumnPermissionRepository columnPermissionRepository,
+            IamRolePermissionRepository rolePermissionRepository,
+            IamTenantPermissionEntitlementRepository tenantPermissionEntitlementRepository,
+            IamStateActionRuleRepository stateActionRuleRepository) {
         this.menuRepository = menuRepository;
         this.permissionRepository = permissionRepository;
         this.snapshotRepository = snapshotRepository;
         this.columnPermissionRepository = columnPermissionRepository;
         this.rolePermissionRepository = rolePermissionRepository;
         this.tenantPermissionEntitlementRepository = tenantPermissionEntitlementRepository;
+        this.stateActionRuleRepository = stateActionRuleRepository;
     }
 
     public IamCurrentPermissionSnapshotView getCurrentPermissionSnapshot(CurrentUser currentUser) {
@@ -73,8 +96,19 @@ public class IamCurrentAuthorizationApplicationService {
                 activeColumnPermissions(snapshot, currentUser, roleIds),
                 Map.of(),
                 List.of(),
-                Map.of(),
+                activeStateActionRules(currentUser, roleIds),
                 snapshot == null ? currentUser.authVersion() : snapshot.authVersion());
+    }
+
+    private Map<String, List<String>> activeStateActionRules(CurrentUser currentUser, List<Long> roleIds) {
+        if (isSuperAdmin(currentUser)
+                || currentUser.tenantId() == null
+                || currentUser.tenantId() <= 0
+                || roleIds == null
+                || roleIds.isEmpty()) {
+            return Map.of();
+        }
+        return stateActionRuleRepository.findMergedStateActionRulesByRoleIds(currentUser.tenantId(), roleIds);
     }
 
     private Map<String, Map<String, String>> activeColumnPermissions(

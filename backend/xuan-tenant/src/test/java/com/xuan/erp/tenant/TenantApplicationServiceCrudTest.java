@@ -3,6 +3,8 @@ package com.xuan.erp.tenant;
 import com.xuan.erp.common.exception.BusinessException;
 import com.xuan.erp.common.api.PageResult;
 import com.xuan.erp.common.security.CurrentUser;
+import com.xuan.erp.common.security.permission.PermissionSnapshot;
+import com.xuan.erp.common.security.permission.StateActionPermissionGuard;
 import com.xuan.erp.tenant.application.service.TenantApplicationService;
 import com.xuan.erp.tenant.application.service.TenantProvisionApplicationService;
 import com.xuan.erp.tenant.application.command.ChangeTenantStatusCommand;
@@ -308,6 +310,80 @@ class TenantApplicationServiceCrudTest {
         Tenant created = tenantRepository.store.get(tenantId);
         tenantRepository.store.put(tenantId, created.markProvisioned("初始化完成", "system", OffsetDateTime.now()));
 
+        service.enableTenant(tenantId, new ChangeTenantStatusCommand("开通完成", "admin"));
+
+        BusinessException error = assertThrows(BusinessException.class,
+                () -> service.deleteTenant(tenantId, new DeleteTenantCommand("误操作清理", "admin")));
+
+        assertEquals("TENANT_DELETE_FORBIDDEN", error.code());
+    }
+
+    @Test
+    void stateActionGuardDeniesTenantLifecycleBeforeDomainStateMachine() {
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                new CurrentUser(6L, 1001L, "admin", Set.of("tenant_admin"), 5L, Set.of("tenant:delete")),
+                "access-token",
+                Set.of()));
+        InMemoryTenantRepository tenantRepository = new InMemoryTenantRepository();
+        InMemoryTenantStatusHistoryRepository historyRepository = new InMemoryTenantStatusHistoryRepository();
+        StateActionPermissionGuard guard = new StateActionPermissionGuard(
+                (user, accessToken) -> PermissionSnapshot.empty(user));
+        TenantApplicationService service = new TenantApplicationService(
+                tenantRepository,
+                historyRepository,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                guard);
+        Long tenantId = service.createTenant(new CreateTenantCommand("acme", "玄云", null, null, null)).id();
+        Tenant created = tenantRepository.store.get(tenantId);
+        tenantRepository.store.put(tenantId, created.markProvisioned("初始化完成", "system", OffsetDateTime.now()));
+
+        BusinessException error = assertThrows(BusinessException.class,
+                () -> service.deleteTenant(tenantId, new DeleteTenantCommand("越权删除", "admin")));
+
+        assertEquals(StateActionPermissionGuard.DENIED_CODE, error.code());
+        assertEquals(TenantStatus.PROVISIONED, tenantRepository.findById(tenantId).orElseThrow().status());
+        assertEquals(1, historyRepository.saved.stream().filter(item -> item.tenantId().equals(tenantId)).count());
+    }
+
+    @Test
+    void stateActionGuardAllowsTenantLifecycleThenDomainStateMachineStillRejectsInvalidState() {
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                new CurrentUser(6L, 1001L, "admin", Set.of("tenant_admin"), 5L, Set.of("tenant:delete")),
+                "access-token",
+                Set.of()));
+        InMemoryTenantRepository tenantRepository = new InMemoryTenantRepository();
+        InMemoryTenantStatusHistoryRepository historyRepository = new InMemoryTenantStatusHistoryRepository();
+        StateActionPermissionGuard guard = new StateActionPermissionGuard(
+                (user, accessToken) -> new PermissionSnapshot(
+                        user.tenantId(),
+                        user.userId(),
+                        user.username(),
+                        user.roles(),
+                        Set.of("tenant:delete"),
+                        Map.of(),
+                        Set.of(),
+                        Map.of(
+                                "tenant:PROVISIONED", Set.of("enable"),
+                                "tenant:ENABLED", Set.of("delete")),
+                        user.authVersion()));
+        TenantApplicationService service = new TenantApplicationService(
+                tenantRepository,
+                historyRepository,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                guard);
+        Long tenantId = service.createTenant(new CreateTenantCommand("acme", "玄云", null, null, null)).id();
+        Tenant created = tenantRepository.store.get(tenantId);
+        tenantRepository.store.put(tenantId, created.markProvisioned("初始化完成", "system", OffsetDateTime.now()));
         service.enableTenant(tenantId, new ChangeTenantStatusCommand("开通完成", "admin"));
 
         BusinessException error = assertThrows(BusinessException.class,

@@ -32,13 +32,17 @@ import App from './App.vue';
 import { installHttpErrorHandler } from './api/http-error';
 import { getUserPreference, saveUserPreference } from './api/preferences';
 import { appFrameworkConfig } from './app/frameworkConfig';
-import { frameworkPermissionCheckerKey } from './framework/auth/permissionChecker';
-import { listenAuthSessionRefreshed } from './framework/auth/sessionEvents';
-import { frameworkPreferenceAdapterKey } from './framework/preferences/preferenceAdapter';
+import {
+  frameworkPermissionCheckerKey,
+  frameworkPreferenceAdapterKey,
+  frameworkStateActionCheckerKey,
+  listenAuthSessionRefreshed,
+} from './framework';
 import { i18n } from './i18n';
 import { router } from './router';
 import { useAuthorizationStore } from './stores/authorization';
 import { useAuthStore } from './stores/auth';
+import type { LoginResponse } from './types/auth';
 import './styles/global.css';
 import './styles/login.css';
 import './styles/shell.css';
@@ -96,6 +100,8 @@ for (const component of elementPlusComponents) {
 
 app.provide(frameworkPermissionCheckerKey, (permission) =>
   useAuthorizationStore(pinia).hasButtonPermission(permission));
+app.provide(frameworkStateActionCheckerKey, (resourceKey, stateCode, actionCode) =>
+  useAuthorizationStore(pinia).isStateActionAllowed(resourceKey, stateCode, actionCode));
 app.provide(frameworkPreferenceAdapterKey, {
   getPreference: getUserPreference,
   savePreference: saveUserPreference,
@@ -119,7 +125,7 @@ installHttpErrorHandler({
   },
 });
 
-listenAuthSessionRefreshed(async (session) => {
+listenAuthSessionRefreshed<LoginResponse>(async (session) => {
   const authStore = useAuthStore(pinia);
   const authorizationStore = useAuthorizationStore(pinia);
   authStore.applySession(session);

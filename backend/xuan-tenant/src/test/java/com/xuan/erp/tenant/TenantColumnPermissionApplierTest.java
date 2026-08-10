@@ -1,5 +1,8 @@
 package com.xuan.erp.tenant;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xuan.erp.common.api.ApiResponse;
+import com.xuan.erp.common.api.PageResult;
 import com.xuan.erp.common.security.CurrentUser;
 import com.xuan.erp.common.security.permission.ColumnAccess;
 import com.xuan.erp.common.security.permission.PermissionSnapshot;
@@ -7,6 +10,7 @@ import com.xuan.erp.common.security.permission.PermissionSnapshotProvider;
 import com.xuan.erp.tenant.domain.model.type.TenantStatus;
 import com.xuan.erp.tenant.interfaces.dto.TenantResponse;
 import com.xuan.erp.tenant.interfaces.security.TenantColumnPermissionApplier;
+import java.util.List;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.Set;
@@ -70,6 +74,55 @@ class TenantColumnPermissionApplierTest {
         assertThat(visible.primaryDomain()).isNull();
         assertThat(visible.provisionedAt()).isNull();
         assertThat(visible.remark()).isNull();
+    }
+
+    @Test
+    void serializedTenantListResponseOmitsHiddenColumnFieldsAndNeverLeaksRawSensitiveValues() throws Exception {
+        CurrentUser currentUser = new CurrentUser(7L, 1001L, "tenant-admin", Set.of("tenant_admin"), 5L, Set.of("tenant:view"));
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                currentUser,
+                "access-token",
+                Set.of()));
+        PermissionSnapshotProvider provider = (user, accessToken) -> new PermissionSnapshot(
+                user.tenantId(),
+                user.userId(),
+                user.username(),
+                user.roles(),
+                Set.of("tenant:view"),
+                Map.of("tenant", Map.of(
+                        "code", ColumnAccess.VISIBLE,
+                        "name", ColumnAccess.VISIBLE,
+                        "status", ColumnAccess.VISIBLE,
+                        "contactName", ColumnAccess.HIDDEN,
+                        "contactPhone", ColumnAccess.MASKED,
+                        "currentPlanName", ColumnAccess.HIDDEN,
+                        "currentPlanExpiresAt", ColumnAccess.HIDDEN,
+                        "primaryDomain", ColumnAccess.HIDDEN,
+                        "provisionedAt", ColumnAccess.HIDDEN,
+                        "remark", ColumnAccess.HIDDEN)),
+                user.authVersion());
+        TenantColumnPermissionApplier applier = new TenantColumnPermissionApplier(provider);
+        TenantResponse visible = applier.applyToTenantListRow(row());
+
+        String json = new ObjectMapper()
+                .findAndRegisterModules()
+                .writeValueAsString(ApiResponse.success(new PageResult<>(List.of(visible), 1, 1, 20)));
+
+        assertThat(json).contains("\"code\":\"acme\"");
+        assertThat(json).contains("\"contactPhone\":\"138****0000\"");
+        assertThat(json).doesNotContain("13800000000");
+        assertThat(json).doesNotContain("\"contactName\"");
+        assertThat(json).doesNotContain("\"currentPlanAssignmentId\"");
+        assertThat(json).doesNotContain("\"currentPlanId\"");
+        assertThat(json).doesNotContain("\"currentPlanCode\"");
+        assertThat(json).doesNotContain("\"currentPlanName\"");
+        assertThat(json).doesNotContain("\"currentPlanExpiresAt\"");
+        assertThat(json).doesNotContain("\"primaryDomainId\"");
+        assertThat(json).doesNotContain("\"primaryDomain\"");
+        assertThat(json).doesNotContain("acme.example.com");
+        assertThat(json).doesNotContain("\"provisionedAt\"");
+        assertThat(json).doesNotContain("\"remark\"");
+        assertThat(json).doesNotContain("内部备注");
     }
 
     @Test

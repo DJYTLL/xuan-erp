@@ -38,7 +38,7 @@ public class IamTenantInitTemplateController {
     }
 
     @Operation(summary = "查询租户初始化模板", description = "查询平台维护的租户初始化权限模板列表")
-    @PreAuthorize("hasAuthority('iam-init-template:view')")
+    @PreAuthorize("@xuanPermission.has('iam-init-template:view')")
     @GetMapping
     public ApiResponse<List<IamTenantInitTemplateResponse>> listTemplates() {
         return ApiResponse.success(applicationService.listTemplates().stream()
@@ -47,7 +47,7 @@ public class IamTenantInitTemplateController {
     }
 
     @Operation(summary = "新增租户初始化模板", description = "新增一套租户初始化权限模板")
-    @PreAuthorize("hasAuthority('iam-init-template:create')")
+    @PreAuthorize("@xuanPermission.has('iam-init-template:create')")
     @PostMapping
     public ApiResponse<IamTenantInitTemplateResponse> createTemplate(@RequestBody CreateIamTenantInitTemplateRequest request) {
         return ApiResponse.success(toResponse(applicationService.createTemplate(new CreateIamTenantInitTemplateCommand(
@@ -60,7 +60,7 @@ public class IamTenantInitTemplateController {
     }
 
     @Operation(summary = "修改租户初始化模板", description = "修改模板名称、说明、启用状态和默认标识")
-    @PreAuthorize("hasAuthority('iam-init-template:update')")
+    @PreAuthorize("@xuanPermission.has('iam-init-template:update')")
     @PutMapping("/{templateId}")
     public ApiResponse<IamTenantInitTemplateResponse> updateTemplate(
             @Parameter(description = "模板 ID")
@@ -74,7 +74,7 @@ public class IamTenantInitTemplateController {
     }
 
     @Operation(summary = "保存租户初始化模板权限", description = "使用权限编码集合替换指定模板的初始化权限")
-    @PreAuthorize("hasAuthority('iam-init-template:update')")
+    @PreAuthorize("@xuanPermission.has('iam-init-template:update')")
     @PutMapping("/{templateId}/permissions")
     public ApiResponse<IamTenantInitTemplateResponse> setTemplatePermissions(
             @Parameter(description = "模板 ID")

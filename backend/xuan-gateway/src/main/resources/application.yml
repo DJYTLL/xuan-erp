@@ -54,7 +54,7 @@ spring:
             - id: xuan-tenant
               uri: lb://xuan-tenant
               predicates:
-                - Path=/api/tenants,/api/tenants/**,/api/tenant-plans,/api/tenant-plans/**,/api/tenant-plan-assignments,/api/tenant-plan-assignments/**,/api/tenant-provision-tasks/**,/api/tenant-outbox-events/**,/v3/api-docs/tenant
+                - Path=/api/tenants,/api/tenants/**,/api/tenant-configs,/api/tenant-configs/**,/api/tenant-domains,/api/tenant-domains/**,/api/tenant-contacts,/api/tenant-contacts/**,/api/tenant-resources,/api/tenant-resources/**,/api/tenant-plans,/api/tenant-plans/**,/api/tenant-plan-assignments,/api/tenant-plan-assignments/**,/api/tenant-provision-tasks/**,/api/tenant-outbox-events/**,/v3/api-docs/tenant
               filters:
                 - RewritePath=/v3/api-docs/tenant,/v3/api-docs
 

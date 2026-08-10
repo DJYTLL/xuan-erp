@@ -31,6 +31,13 @@ const erpComponents = [
 ];
 
 const requiredFrameworkFiles = [
+  'framework/index.ts',
+  'framework/auth/index.ts',
+  'framework/components/index.ts',
+  'framework/components-erp/index.ts',
+  'framework/config/index.ts',
+  'framework/navigation/index.ts',
+  'framework/preferences/index.ts',
   'framework/components/browseTablePreferences.ts',
   'framework/auth/permissionChecker.ts',
   'framework/preferences/preferenceAdapter.ts',

@@ -60,6 +60,10 @@ class RemoteIamPermissionSnapshotProviderTest {
         assertThat(snapshot.columnAccess("tenant", "code")).isEqualTo(ColumnAccess.VISIBLE);
         assertThat(snapshot.columnAccess("tenant", "contactPhone")).isEqualTo(ColumnAccess.MASKED);
         assertThat(snapshot.columnAccess("tenant", "remark")).isEqualTo(ColumnAccess.HIDDEN);
+        assertThat(snapshot.dataScopes("tenant")).containsExactlyInAnyOrder("SELF", "DEPARTMENT");
+        assertThat(snapshot.hasDataScope("tenant", "SELF")).isTrue();
+        assertThat(snapshot.isStateActionAllowed("tenant", "ENABLED", "disable")).isTrue();
+        assertThat(snapshot.isStateActionAllowed("tenant", "DISABLED", "delete")).isFalse();
     }
 
     // 测试 IAM 返回的权限版本高于当前 token 时，业务服务拒绝继续使用旧 token 授权。
@@ -133,8 +137,8 @@ class RemoteIamPermissionSnapshotProviderTest {
                 buttonPermissions.stream().toList(),
                 java.util.Map.of("tenant", java.util.Map.of("code", "VISIBLE", "contactPhone", "MASKED", "remark", "HIDDEN")),
                 java.util.Map.of(),
-                java.util.List.of(),
-                java.util.Map.of(),
+                java.util.List.of("tenant:SELF", "tenant:DEPARTMENT"),
+                java.util.Map.of("tenant:ENABLED", java.util.List.of("disable", "update")),
                 Long.valueOf(authVersion));
     }
 }

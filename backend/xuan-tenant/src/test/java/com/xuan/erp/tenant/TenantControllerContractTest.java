@@ -5,19 +5,24 @@ import com.xuan.erp.tenant.interfaces.controller.TenantConfigController;
 import com.xuan.erp.tenant.interfaces.controller.TenantContactController;
 import com.xuan.erp.tenant.interfaces.controller.TenantDomainController;
 import com.xuan.erp.tenant.interfaces.controller.TenantInternalStatusController;
+import com.xuan.erp.tenant.interfaces.controller.TenantOutboxEventController;
 import com.xuan.erp.tenant.interfaces.controller.TenantPlanAssignmentController;
 import com.xuan.erp.tenant.interfaces.controller.TenantPlanController;
+import com.xuan.erp.tenant.interfaces.controller.TenantProvisionTaskController;
 import com.xuan.erp.tenant.interfaces.controller.TenantResourceController;
 import com.xuan.erp.tenant.interfaces.controller.TenantScopedConfigController;
 import com.xuan.erp.tenant.infrastructure.config.TenantSecurityConfiguration;
+import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.lang.reflect.Method;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 
@@ -25,6 +30,37 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class TenantControllerContractTest {
+
+    @Test
+    void everyExternalTenantApiHandlerHasMethodLevelAuthorization() {
+        List<Class<?>> externalApiControllers = List.of(
+                TenantController.class,
+                TenantConfigController.class,
+                TenantContactController.class,
+                TenantDomainController.class,
+                TenantOutboxEventController.class,
+                TenantPlanAssignmentController.class,
+                TenantPlanController.class,
+                TenantProvisionTaskController.class,
+                TenantResourceController.class,
+                TenantScopedConfigController.class
+        );
+
+        for (Class<?> controller : externalApiControllers) {
+            RequestMapping requestMapping = controller.getAnnotation(RequestMapping.class);
+            assertNotNull(requestMapping, controller.getName() + " 缺少类级 @RequestMapping");
+            org.junit.jupiter.api.Assertions.assertTrue(
+                    requestMapping.value()[0].startsWith("/api"),
+                    controller.getName() + " 不是外部 /api Controller，不能放进本测试清单");
+
+            for (Method method : controller.getDeclaredMethods()) {
+                if (isHandlerMethod(method)) {
+                    assertNotNull(method.getAnnotation(PreAuthorize.class),
+                            controller.getSimpleName() + "#" + method.getName() + " 缺少方法级 @PreAuthorize");
+                }
+            }
+        }
+    }
 
     @Test
     void tenantControllerMethodsExposeExpectedPermissionCodes() throws Exception {
@@ -72,20 +108,20 @@ class TenantControllerContractTest {
 
     @Test
     void tenantDomainControllerMethodsExposeExpectedPermissionCodes() throws Exception {
-        assertEquals("@xuanPermission.has('tenant:view')", permission(TenantDomainController.class.getDeclaredMethod("listDomains")));
-        assertEquals("@xuanPermission.has('tenant:view')", permission(TenantDomainController.class.getDeclaredMethod("getDomain", Long.class)));
-        assertEquals("@xuanPermission.has('tenant:update')", permission(TenantDomainController.class.getDeclaredMethod("createDomain", com.xuan.erp.tenant.interfaces.dto.TenantDomainRequest.class)));
-        assertEquals("@xuanPermission.has('tenant:update')", permission(TenantDomainController.class.getDeclaredMethod("updateDomain", Long.class, com.xuan.erp.tenant.interfaces.dto.TenantDomainRequest.class)));
-        assertEquals("@xuanPermission.has('tenant:update')", permission(TenantDomainController.class.getDeclaredMethod("deleteDomain", Long.class, com.xuan.erp.tenant.interfaces.dto.DeleteRequest.class)));
+        assertEquals("@xuanPermission.has('tenant-domain:view')", permission(TenantDomainController.class.getDeclaredMethod("listDomains")));
+        assertEquals("@xuanPermission.has('tenant-domain:view')", permission(TenantDomainController.class.getDeclaredMethod("getDomain", Long.class)));
+        assertEquals("@xuanPermission.has('tenant-domain:manage')", permission(TenantDomainController.class.getDeclaredMethod("createDomain", com.xuan.erp.tenant.interfaces.dto.TenantDomainRequest.class)));
+        assertEquals("@xuanPermission.has('tenant-domain:manage')", permission(TenantDomainController.class.getDeclaredMethod("updateDomain", Long.class, com.xuan.erp.tenant.interfaces.dto.TenantDomainRequest.class)));
+        assertEquals("@xuanPermission.has('tenant-domain:manage')", permission(TenantDomainController.class.getDeclaredMethod("deleteDomain", Long.class, com.xuan.erp.tenant.interfaces.dto.DeleteRequest.class)));
     }
 
     @Test
     void tenantContactControllerMethodsExposeExpectedPermissionCodes() throws Exception {
-        assertEquals("@xuanPermission.has('tenant:view')", permission(TenantContactController.class.getDeclaredMethod("listContacts")));
-        assertEquals("@xuanPermission.has('tenant:view')", permission(TenantContactController.class.getDeclaredMethod("getContact", Long.class)));
-        assertEquals("@xuanPermission.has('tenant:update')", permission(TenantContactController.class.getDeclaredMethod("createContact", com.xuan.erp.tenant.interfaces.dto.TenantContactRequest.class)));
-        assertEquals("@xuanPermission.has('tenant:update')", permission(TenantContactController.class.getDeclaredMethod("updateContact", Long.class, com.xuan.erp.tenant.interfaces.dto.TenantContactRequest.class)));
-        assertEquals("@xuanPermission.has('tenant:update')", permission(TenantContactController.class.getDeclaredMethod("deleteContact", Long.class, com.xuan.erp.tenant.interfaces.dto.DeleteRequest.class)));
+        assertEquals("@xuanPermission.has('tenant-contact:view')", permission(TenantContactController.class.getDeclaredMethod("listContacts")));
+        assertEquals("@xuanPermission.has('tenant-contact:view')", permission(TenantContactController.class.getDeclaredMethod("getContact", Long.class)));
+        assertEquals("@xuanPermission.has('tenant-contact:manage')", permission(TenantContactController.class.getDeclaredMethod("createContact", com.xuan.erp.tenant.interfaces.dto.TenantContactRequest.class)));
+        assertEquals("@xuanPermission.has('tenant-contact:manage')", permission(TenantContactController.class.getDeclaredMethod("updateContact", Long.class, com.xuan.erp.tenant.interfaces.dto.TenantContactRequest.class)));
+        assertEquals("@xuanPermission.has('tenant-contact:manage')", permission(TenantContactController.class.getDeclaredMethod("deleteContact", Long.class, com.xuan.erp.tenant.interfaces.dto.DeleteRequest.class)));
     }
 
     @Test
@@ -220,5 +256,12 @@ class TenantControllerContractTest {
         PreAuthorize preAuthorize = method.getAnnotation(PreAuthorize.class);
         assertNotNull(preAuthorize, method.getName() + " 缺少 @PreAuthorize");
         return preAuthorize.value();
+    }
+
+    private static boolean isHandlerMethod(Method method) {
+        return method.isAnnotationPresent(GetMapping.class)
+                || method.isAnnotationPresent(PostMapping.class)
+                || method.isAnnotationPresent(PutMapping.class)
+                || method.isAnnotationPresent(DeleteMapping.class);
     }
 }

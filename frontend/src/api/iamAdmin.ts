@@ -10,6 +10,10 @@ import type {
   IamPermission,
   IamPermissionPayload,
   IamResourceColumn,
+  IamResourceAction,
+  IamResourceActionPayload,
+  IamResourceState,
+  IamResourceStatePayload,
   IamRole,
   IamRoleColumnPermissionRule,
   IamRoleColumnPermissionRulePayload,
@@ -17,6 +21,8 @@ import type {
   IamRoleColumnPermissionTemplatePayload,
   IamTenantColumnPermissionTemplateAssignment,
   IamTenantColumnPermissionTemplateAssignmentPayload,
+  IamRoleStateActionRule,
+  IamRoleStateActionRulePayload,
   IamRolePayload,
   IamRolePermissionGrant,
   IamTenantInitTemplate,
@@ -359,4 +365,116 @@ export async function setIamRoleColumnPermissionTemplate(
     payload,
   );
   return unwrap<IamRoleColumnPermissionTemplateBinding>(response.data);
+}
+
+export async function listIamResourceStates(params: {
+  tenantId?: number;
+  resourceKey?: string;
+  enabled?: boolean;
+} = {}): Promise<IamResourceState[]> {
+  const response = await http.get<ApiResponse<IamResourceState[]> | IamResourceState[]>(
+    '/api/iam/state-action/resources/states',
+    { params },
+  );
+  return unwrap<IamResourceState[]>(response.data);
+}
+
+export async function createIamResourceState(payload: IamResourceStatePayload): Promise<IamResourceState> {
+  const response = await http.post<ApiResponse<IamResourceState> | IamResourceState>(
+    '/api/iam/state-action/resources/states',
+    payload,
+  );
+  return unwrap<IamResourceState>(response.data);
+}
+
+export async function updateIamResourceState(
+  stateId: number,
+  payload: Partial<IamResourceStatePayload>,
+): Promise<IamResourceState> {
+  const response = await http.put<ApiResponse<IamResourceState> | IamResourceState>(
+    `/api/iam/state-action/resources/states/${stateId}`,
+    payload,
+  );
+  return unwrap<IamResourceState>(response.data);
+}
+
+export async function setIamResourceStateEnabled(
+  stateId: number,
+  enabled: boolean,
+  operator?: string,
+): Promise<IamResourceState> {
+  const action = enabled ? 'enable' : 'disable';
+  const response = await http.post<ApiResponse<IamResourceState> | IamResourceState>(
+    `/api/iam/state-action/resources/states/${stateId}/${action}`,
+    null,
+    { params: { operator } },
+  );
+  return unwrap<IamResourceState>(response.data);
+}
+
+export async function listIamResourceActions(params: {
+  tenantId?: number;
+  resourceKey?: string;
+  enabled?: boolean;
+} = {}): Promise<IamResourceAction[]> {
+  const response = await http.get<ApiResponse<IamResourceAction[]> | IamResourceAction[]>(
+    '/api/iam/state-action/resources/actions',
+    { params },
+  );
+  return unwrap<IamResourceAction[]>(response.data);
+}
+
+export async function createIamResourceAction(payload: IamResourceActionPayload): Promise<IamResourceAction> {
+  const response = await http.post<ApiResponse<IamResourceAction> | IamResourceAction>(
+    '/api/iam/state-action/resources/actions',
+    payload,
+  );
+  return unwrap<IamResourceAction>(response.data);
+}
+
+export async function updateIamResourceAction(
+  actionId: number,
+  payload: Partial<IamResourceActionPayload>,
+): Promise<IamResourceAction> {
+  const response = await http.put<ApiResponse<IamResourceAction> | IamResourceAction>(
+    `/api/iam/state-action/resources/actions/${actionId}`,
+    payload,
+  );
+  return unwrap<IamResourceAction>(response.data);
+}
+
+export async function setIamResourceActionEnabled(
+  actionId: number,
+  enabled: boolean,
+  operator?: string,
+): Promise<IamResourceAction> {
+  const action = enabled ? 'enable' : 'disable';
+  const response = await http.post<ApiResponse<IamResourceAction> | IamResourceAction>(
+    `/api/iam/state-action/resources/actions/${actionId}/${action}`,
+    null,
+    { params: { operator } },
+  );
+  return unwrap<IamResourceAction>(response.data);
+}
+
+export async function getIamRoleStateActionRules(
+  tenantId: number,
+  roleId: number,
+): Promise<IamRoleStateActionRule[]> {
+  const response = await http.get<ApiResponse<IamRoleStateActionRule[]> | IamRoleStateActionRule[]>(
+    `/api/iam/state-action/roles/${roleId}/rules`,
+    { params: { tenantId } },
+  );
+  return unwrap<IamRoleStateActionRule[]>(response.data);
+}
+
+export async function setIamRoleStateActionRules(
+  roleId: number,
+  payload: IamRoleStateActionRulePayload,
+): Promise<IamRoleStateActionRule[]> {
+  const response = await http.put<ApiResponse<IamRoleStateActionRule[]> | IamRoleStateActionRule[]>(
+    `/api/iam/state-action/roles/${roleId}/rules`,
+    payload,
+  );
+  return unwrap<IamRoleStateActionRule[]>(response.data);
 }

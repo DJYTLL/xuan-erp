@@ -47,8 +47,8 @@ public class TenantResourcePermissionGuard {
             case "tenants" -> tenantPermission(action);
             case "tenant-plans" -> readOnlyPermission(action, "tenant-plan:view");
             case "tenant-plan-assignments" -> readOnlyPermission(action, "tenant-plan:view");
-            case "tenant-domains" -> readWritePermission(action, "tenant:view", "tenant:update");
-            case "tenant-contacts" -> readWritePermission(action, "tenant:view", "tenant:update");
+            case "tenant-domains" -> readWritePermission(action, "tenant-domain:view", "tenant-domain:manage");
+            case "tenant-contacts" -> readWritePermission(action, "tenant-contact:view", "tenant-contact:manage");
             case "tenant-status-histories" -> readOnlyPermission(action, "tenant:view");
             case "tenant-configs" -> readOnlyPermission(action, "tenant-config:view");
             case "tenant-provision-tasks" -> readOnlyPermission(action, "tenant-provision:view");

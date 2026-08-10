@@ -15,6 +15,11 @@
               :plain="action.plain"
               :permission="action.permission"
               :no-permission-mode="action.noPermissionMode || 'hide'"
+              :state-resource="action.stateResource"
+              :state-code="action.stateCode"
+              :state-action="action.stateAction"
+              :state-no-permission-reason="action.stateNoPermissionReason || '当前状态不可执行该动作'"
+              :disabled="Boolean(action.disabled)"
               :disabled-reason="action.disabledReason || ''"
               @click="emitToolbarAction(action)"
             >
@@ -162,6 +167,11 @@
                 :plain="action.plain"
                 :permission="action.permission"
                 :no-permission-mode="action.noPermissionMode || 'hide'"
+                :state-resource="action.stateResource"
+                :state-code="resolveRowActionStateCode(action, scope.row)"
+                :state-action="action.stateAction"
+                :state-no-permission-reason="action.stateNoPermissionReason || '当前状态不可执行该动作'"
+                :disabled="resolveRowActionDisabled(action, scope.row)"
                 :disabled-reason="resolveRowActionDisabledReason(action, scope.row)"
                 @click="emitRowAction(action, scope.row)"
               >
@@ -626,6 +636,13 @@ function resolveRowActionDisabledReason(action: XuanBrowseTableRowActionSchema<T
     return action.disabledReason(row);
   }
   return action.disabledReason || '';
+}
+
+function resolveRowActionStateCode(action: XuanBrowseTableRowActionSchema<TRow>, row: TRow) {
+  if (typeof action.stateCode === 'function') {
+    return action.stateCode(row);
+  }
+  return action.stateCode;
 }
 
 function shouldRenderTag(column: RuntimeColumn) {

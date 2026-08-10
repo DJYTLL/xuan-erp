@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xuan.erp.common.api.PageResult;
 import com.xuan.erp.common.exception.BusinessException;
 import com.xuan.erp.common.security.CurrentUserHolder;
+import com.xuan.erp.common.security.permission.StateActionPermissionGuard;
 import com.xuan.erp.tenant.application.command.ChangeTenantStatusCommand;
 import com.xuan.erp.tenant.application.command.CreateTenantCommand;
 import com.xuan.erp.tenant.application.command.DeleteTenantCommand;
@@ -55,6 +56,7 @@ public class TenantApplicationService {
     private final TenantPlanRepository tenantPlanRepository;
     private final TenantPlanAssignmentRepository tenantPlanAssignmentRepository;
     private final TenantIamBootstrapGateway tenantIamBootstrapGateway;
+    private final StateActionPermissionGuard stateActionPermissionGuard;
     private final PasswordEncoder passwordEncoder;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -99,7 +101,6 @@ public class TenantApplicationService {
                 passwordEncoder, tenantPlanRepository, tenantPlanAssignmentRepository, null);
     }
 
-    @Autowired
     public TenantApplicationService(
             TenantRepository tenantRepository,
             TenantStatusHistoryRepository statusHistoryRepository,
@@ -109,6 +110,21 @@ public class TenantApplicationService {
             @Nullable TenantPlanRepository tenantPlanRepository,
             @Nullable TenantPlanAssignmentRepository tenantPlanAssignmentRepository,
             @Nullable TenantIamBootstrapGateway tenantIamBootstrapGateway) {
+        this(tenantRepository, statusHistoryRepository, provisionTaskRepository, tenantProvisionApplicationService,
+                passwordEncoder, tenantPlanRepository, tenantPlanAssignmentRepository, tenantIamBootstrapGateway, null);
+    }
+
+    @Autowired
+    public TenantApplicationService(
+            TenantRepository tenantRepository,
+            TenantStatusHistoryRepository statusHistoryRepository,
+            @Nullable TenantProvisionTaskRepository provisionTaskRepository,
+            @Nullable TenantProvisionApplicationService tenantProvisionApplicationService,
+            @Nullable PasswordEncoder passwordEncoder,
+            @Nullable TenantPlanRepository tenantPlanRepository,
+            @Nullable TenantPlanAssignmentRepository tenantPlanAssignmentRepository,
+            @Nullable TenantIamBootstrapGateway tenantIamBootstrapGateway,
+            @Nullable StateActionPermissionGuard stateActionPermissionGuard) {
         this.tenantRepository = tenantRepository;
         this.statusHistoryRepository = statusHistoryRepository;
         this.provisionTaskRepository = provisionTaskRepository;
@@ -116,6 +132,7 @@ public class TenantApplicationService {
         this.tenantPlanRepository = tenantPlanRepository;
         this.tenantPlanAssignmentRepository = tenantPlanAssignmentRepository;
         this.tenantIamBootstrapGateway = tenantIamBootstrapGateway;
+        this.stateActionPermissionGuard = stateActionPermissionGuard;
         this.passwordEncoder = passwordEncoder == null ? PasswordEncoderFactories.createDelegatingPasswordEncoder() : passwordEncoder;
     }
 
@@ -243,6 +260,7 @@ public class TenantApplicationService {
                 () -> getTenant(tenantId),
                 () -> {
                     Tenant tenant = requireTenant(tenantId);
+                    requireTenantStateActionAllowed(tenant, "enable");
                     Tenant saved = tenantRepository.save(tenant.enable(reason, operator, OffsetDateTime.now()));
                     appendHistory(saved.id(), tenant.status(), saved.status(), "ENABLE", reason, operator);
                     return saved;
@@ -256,6 +274,7 @@ public class TenantApplicationService {
                 () -> getTenant(tenantId),
                 () -> {
                     Tenant tenant = requireTenant(tenantId);
+                    requireTenantStateActionAllowed(tenant, "disable");
                     Tenant saved = tenantRepository.save(tenant.disable(reason, operator, OffsetDateTime.now()));
                     appendHistory(saved.id(), tenant.status(), saved.status(), "DISABLE", reason, operator);
                     return saved;
@@ -269,6 +288,7 @@ public class TenantApplicationService {
                 () -> null,
                 () -> {
                     Tenant tenant = requireTenant(tenantId);
+                    requireTenantStateActionAllowed(tenant, "delete");
                     if (tenant.status() == TenantStatus.ENABLED) {
                         throw new BusinessException("TENANT_DELETE_FORBIDDEN", "启用中的租户不允许删除");
                     }
@@ -454,6 +474,12 @@ public class TenantApplicationService {
     private Tenant requireTenant(Long tenantId) {
         return tenantRepository.findById(tenantId)
                 .orElseThrow(() -> new BusinessException("TENANT_NOT_FOUND", "租户不存在"));
+    }
+
+    private void requireTenantStateActionAllowed(Tenant tenant, String actionCode) {
+        if (stateActionPermissionGuard != null) {
+            stateActionPermissionGuard.requireAllowed("tenant", tenant.status().code(), actionCode);
+        }
     }
 
     private void appendHistory(Long tenantId, TenantStatus fromStatus, TenantStatus toStatus, String changeType, String reason, String operator) {

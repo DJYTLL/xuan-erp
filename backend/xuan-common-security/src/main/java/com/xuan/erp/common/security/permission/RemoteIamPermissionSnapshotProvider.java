@@ -71,6 +71,8 @@ public class RemoteIamPermissionSnapshotProvider implements PermissionSnapshotLo
                 currentUser.roles(),
                 mergedPermissions(data),
                 columnPermissions(data.columnPermissions()),
+                dataScopes(data.dataScopes()),
+                stateActionRules(data.stateActionRules()),
                 data.authVersion() == null ? currentUser.authVersion() : data.authVersion());
     }
 
@@ -120,6 +122,39 @@ public class RemoteIamPermissionSnapshotProvider implements PermissionSnapshotLo
             });
             if (!resourceRules.isEmpty()) {
                 result.put(resourceKey.trim(), Map.copyOf(resourceRules));
+            }
+        });
+        return Map.copyOf(result);
+    }
+
+    private Set<String> dataScopes(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return Set.of();
+        }
+        Set<String> result = new LinkedHashSet<>();
+        values.stream()
+                .filter(value -> value != null && !value.isBlank())
+                .map(String::trim)
+                .forEach(result::add);
+        return Set.copyOf(result);
+    }
+
+    private Map<String, Set<String>> stateActionRules(Map<String, List<String>> values) {
+        if (values == null || values.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Set<String>> result = new LinkedHashMap<>();
+        values.forEach((ruleKey, actions) -> {
+            if (ruleKey == null || ruleKey.isBlank() || actions == null || actions.isEmpty()) {
+                return;
+            }
+            Set<String> cleanedActions = new LinkedHashSet<>();
+            actions.stream()
+                    .filter(action -> action != null && !action.isBlank())
+                    .map(String::trim)
+                    .forEach(cleanedActions::add);
+            if (!cleanedActions.isEmpty()) {
+                result.put(ruleKey.trim(), Set.copyOf(cleanedActions));
             }
         });
         return Map.copyOf(result);

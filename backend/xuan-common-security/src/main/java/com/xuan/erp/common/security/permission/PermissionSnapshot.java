@@ -17,6 +17,8 @@ import java.util.Set;
  * @param roles 当前角色编码集合
  * @param permissions 当前权限编码集合
  * @param columnPermissions 当前列权限规则
+ * @param dataScopes 当前数据范围规则，支持 `resourceKey:scopeCode` 和全局 `scopeCode`
+ * @param stateActionRules 当前状态动作规则，key 使用 `resourceKey:stateCode`，value 为动作编码集合
  * @param authVersion 权限版本
  */
 public record PermissionSnapshot(
@@ -26,12 +28,27 @@ public record PermissionSnapshot(
         Set<String> roles,
         Set<String> permissions,
         Map<String, Map<String, ColumnAccess>> columnPermissions,
+        Set<String> dataScopes,
+        Map<String, Set<String>> stateActionRules,
         Long authVersion) {
 
     public PermissionSnapshot {
         roles = immutableCleanSet(roles);
         permissions = immutableCleanSet(permissions);
         columnPermissions = immutableColumnPermissions(columnPermissions);
+        dataScopes = immutableCleanSet(dataScopes);
+        stateActionRules = immutableStateActionRules(stateActionRules);
+    }
+
+    public PermissionSnapshot(
+            Long tenantId,
+            Long userId,
+            String username,
+            Set<String> roles,
+            Set<String> permissions,
+            Map<String, Map<String, ColumnAccess>> columnPermissions,
+            Long authVersion) {
+        this(tenantId, userId, username, roles, permissions, columnPermissions, Set.of(), Map.of(), authVersion);
     }
 
     public PermissionSnapshot(
@@ -41,7 +58,7 @@ public record PermissionSnapshot(
             Set<String> roles,
             Set<String> permissions,
             Long authVersion) {
-        this(tenantId, userId, username, roles, permissions, Map.of(), authVersion);
+        this(tenantId, userId, username, roles, permissions, Map.of(), Set.of(), Map.of(), authVersion);
     }
 
     /**
@@ -56,6 +73,8 @@ public record PermissionSnapshot(
                 currentUser.userId(),
                 currentUser.username(),
                 currentUser.roles(),
+                Set.of(),
+                Map.of(),
                 Set.of(),
                 Map.of(),
                 currentUser.authVersion());
@@ -101,14 +120,104 @@ public record PermissionSnapshot(
     }
 
     /**
+     * 读取当前用户对指定业务资源可用的数据范围。
+     *
+     * @param resourceKey 业务资源标识，例如 sales-order
+     * @return 数据范围编码集合，例如 SELF、DEPARTMENT、TENANT
+     */
+    public Set<String> dataScopes(String resourceKey) {
+        if (isSuperAdmin()) {
+            return Set.of("*");
+        }
+        if (!hasText(resourceKey) || dataScopes.isEmpty()) {
+            return Set.of();
+        }
+        String normalizedResourceKey = resourceKey.trim();
+        Set<String> result = new LinkedHashSet<>();
+        for (String value : dataScopes) {
+            DataScopeKey key = DataScopeKey.parse(value);
+            if (key == null) {
+                continue;
+            }
+            if (key.resourceKey() == null || "*".equals(key.resourceKey()) || normalizedResourceKey.equals(key.resourceKey())) {
+                result.add(key.scopeCode());
+            }
+        }
+        return Set.copyOf(result);
+    }
+
+    /**
+     * 判断当前用户是否拥有指定业务资源的数据范围。
+     *
+     * @param resourceKey 业务资源标识
+     * @param scopeCode 数据范围编码
+     * @return 是否拥有
+     */
+    public boolean hasDataScope(String resourceKey, String scopeCode) {
+        if (isSuperAdmin()) {
+            return true;
+        }
+        if (!hasText(scopeCode)) {
+            return false;
+        }
+        Set<String> scopes = dataScopes(resourceKey);
+        String normalizedScopeCode = scopeCode.trim();
+        return scopes.contains("*") || scopes.contains(normalizedScopeCode);
+    }
+
+    /**
+     * 读取当前用户在指定资源状态下允许执行的动作。
+     *
+     * @param resourceKey 业务资源标识
+     * @param stateCode 状态编码
+     * @return 动作编码集合
+     */
+    public Set<String> allowedActions(String resourceKey, String stateCode) {
+        if (isSuperAdmin()) {
+            return Set.of("*");
+        }
+        StateActionKey key = StateActionKey.of(resourceKey, stateCode);
+        if (key == null) {
+            return Set.of();
+        }
+        Set<String> actions = stateActionRules.get(key.value());
+        if (actions != null) {
+            return actions;
+        }
+        Set<String> wildcardActions = stateActionRules.get(key.resourceKey() + ":*");
+        return wildcardActions == null ? Set.of() : wildcardActions;
+    }
+
+    /**
+     * 判断当前用户在指定资源状态下是否允许执行动作。
+     *
+     * @param resourceKey 业务资源标识
+     * @param stateCode 状态编码
+     * @param actionCode 动作编码
+     * @return 是否允许
+     */
+    public boolean isStateActionAllowed(String resourceKey, String stateCode, String actionCode) {
+        if (isSuperAdmin()) {
+            return true;
+        }
+        if (!hasText(actionCode)) {
+            return false;
+        }
+        Set<String> actions = allowedActions(resourceKey, stateCode);
+        String normalizedActionCode = actionCode.trim();
+        return actions.contains("*") || actions.contains(normalizedActionCode);
+    }
+
+    /**
      * 判断当前快照是否为超级管理员。
      *
      * @return 是否超级管理员
      */
     public boolean isSuperAdmin() {
-        return roles.contains("super_admin")
+        return Long.valueOf(0L).equals(tenantId)
+                && (roles.contains("super_admin")
                 || "super_admin".equals(username)
-                || "superadmin".equals(username);
+                || "superadmin".equals(username));
     }
 
     private static Set<String> immutableCleanSet(Set<String> values) {
@@ -146,7 +255,71 @@ public record PermissionSnapshot(
         return Map.copyOf(cleaned);
     }
 
+    private static Map<String, Set<String>> immutableStateActionRules(Map<String, Set<String>> values) {
+        if (values == null || values.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Set<String>> cleaned = new LinkedHashMap<>();
+        values.forEach((key, actions) -> {
+            StateActionKey stateActionKey = StateActionKey.parse(key);
+            if (stateActionKey == null || actions == null || actions.isEmpty()) {
+                return;
+            }
+            Set<String> cleanedActions = immutableCleanSet(actions);
+            if (!cleanedActions.isEmpty()) {
+                cleaned.put(stateActionKey.value(), cleanedActions);
+            }
+        });
+        return Map.copyOf(cleaned);
+    }
+
     private static boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private record DataScopeKey(String resourceKey, String scopeCode) {
+
+        private static DataScopeKey parse(String value) {
+            if (!hasText(value)) {
+                return null;
+            }
+            String normalized = value.trim();
+            int splitIndex = normalized.indexOf(':');
+            if (splitIndex < 0) {
+                return new DataScopeKey(null, normalized);
+            }
+            String resourceKey = normalized.substring(0, splitIndex).trim();
+            String scopeCode = normalized.substring(splitIndex + 1).trim();
+            if (!hasText(resourceKey) || !hasText(scopeCode)) {
+                return null;
+            }
+            return new DataScopeKey(resourceKey, scopeCode);
+        }
+    }
+
+    private record StateActionKey(String resourceKey, String stateCode) {
+
+        private String value() {
+            return resourceKey + ":" + stateCode;
+        }
+
+        private static StateActionKey of(String resourceKey, String stateCode) {
+            if (!hasText(resourceKey) || !hasText(stateCode)) {
+                return null;
+            }
+            return new StateActionKey(resourceKey.trim(), stateCode.trim());
+        }
+
+        private static StateActionKey parse(String value) {
+            if (!hasText(value)) {
+                return null;
+            }
+            String normalized = value.trim();
+            int splitIndex = normalized.indexOf(':');
+            if (splitIndex < 0) {
+                return null;
+            }
+            return of(normalized.substring(0, splitIndex), normalized.substring(splitIndex + 1));
+        }
     }
 }

@@ -31,7 +31,7 @@ public class IamAuthorizationController {
     }
 
     @Operation(summary = "查询授权快照", description = "按租户和用户查询授权快照")
-    @PreAuthorize("hasAuthority('iam:view')")
+    @PreAuthorize("@xuanPermission.has('iam:view')")
     @GetMapping
     public ApiResponse<IamAuthorizationSnapshotResponse> getSnapshot(
             @Parameter(description = "租户 ID")
@@ -42,7 +42,7 @@ public class IamAuthorizationController {
     }
 
     @Operation(summary = "重建授权快照", description = "根据角色、权限和菜单编码重建用户授权快照")
-    @PreAuthorize("hasAuthority('iam:update')")
+    @PreAuthorize("@xuanPermission.has('iam:update')")
     @PostMapping("/rebuild")
     public ApiResponse<IamAuthorizationSnapshotResponse> rebuildSnapshot(@RequestBody RebuildAuthorizationSnapshotRequest request) {
         return ApiResponse.success(IamAuthorizationAssembler.toResponse(authorizationApplicationService.rebuildSnapshot(IamAuthorizationAssembler.toCommand(request))));

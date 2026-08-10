@@ -393,6 +393,22 @@
         </section>
       </el-collapse-item>
 
+      <el-collapse-item name="state-action-permission-matrix" class="component-collapse-panel">
+        <template #title>
+          <div class="component-panel-title">
+            <strong>状态动作权限矩阵</strong>
+            <span>角色授权页和单据类页面复用，统一表达资源状态下允许的动作。</span>
+          </div>
+        </template>
+        <section class="component-preview-panel">
+          <StateActionPermissionMatrix
+            v-model="stateActionDemoRules"
+            :states="stateActionDemoStates"
+            :actions="stateActionDemoActions"
+          />
+        </section>
+      </el-collapse-item>
+
       <el-collapse-item name="document-editor" class="component-collapse-panel">
         <template #title>
           <div class="component-panel-title">
@@ -510,41 +526,44 @@ import { useI18n } from 'vue-i18n';
 import { ElMessage } from 'element-plus/es/components/message/index';
 import LanguageSwitcher from '@/components/app/LanguageSwitcher.vue';
 import ThemeSwitcher from '@/components/app/ThemeSwitcher.vue';
-import ApprovalConfirmDialog from '@/framework/components/ApprovalConfirmDialog.vue';
-import BatchConfirmDialog from '@/framework/components/BatchConfirmDialog.vue';
-import DetailDrawer from '@/framework/components/DetailDrawer.vue';
-import DocumentBasicInfoCard, {
-  type DocumentBasicInfo,
-  type DocumentSelectOption,
-} from '@/framework/components-erp/DocumentBasicInfoCard.vue';
-import DocumentEditorShell from '@/framework/components-erp/DocumentEditorShell.vue';
-import DocumentLineItemsTable, {
-  type DocumentLineItem,
-  type DocumentProductOption,
-} from '@/framework/components-erp/DocumentLineItemsTable.vue';
-import DocumentSettlementCard, {
-  type DocumentSettlementInfo,
-} from '@/framework/components-erp/DocumentSettlementCard.vue';
-import DynamicFormDialog from '@/framework/components/DynamicFormDialog.vue';
-import type { DynamicCustomField, DynamicFormField, DynamicFormSection } from '@/framework/components/DynamicFormDialog.vue';
-import MenuPermissionAssignment from '@/framework/components/MenuPermissionAssignment.vue';
-import NavigationMenuTree, {
+import {
+  ApprovalConfirmDialog,
+  BatchConfirmDialog,
+  DetailDrawer,
+  DynamicFormDialog,
+  MenuPermissionAssignment,
+  NavigationMenuTree,
+  PermissionButton,
+  SearchActionBar,
+  StateActionPermissionMatrix,
+  XuanBrowseTable,
+  XuanDateTimeRangePicker,
+  XuanDecimalInput,
+  type BrowseTableColumnPermissionSnapshot,
+  type BrowseTableDensity,
+  type DateRangeValue,
+  type DynamicCustomField,
+  type DynamicFormField,
+  type DynamicFormSection,
   type NavigationMenuTreeContextMenuAction,
   type NavigationMenuTreeNode,
-} from '@/framework/components/NavigationMenuTree.vue';
-import PermissionButton from '@/framework/components/PermissionButton.vue';
+  type StateActionMatrixRule,
+  type XuanBrowseTableSchema,
+} from '@/framework/components';
+import {
+  DocumentBasicInfoCard,
+  DocumentEditorShell,
+  DocumentLineItemsTable,
+  DocumentSettlementCard,
+  type DocumentBasicInfo,
+  type DocumentLineItem,
+  type DocumentProductOption,
+  type DocumentSelectOption,
+  type DocumentSettlementInfo,
+} from '@/framework/components-erp';
 import RecentAccountSearchSelect from '@/components/login/RecentAccountSearchSelect.vue';
-import SearchActionBar from '@/framework/components/SearchActionBar.vue';
-import XuanBrowseTable from '@/framework/components/XuanBrowseTable.vue';
-import XuanDateTimeRangePicker, { type DateRangeValue } from '@/framework/components/XuanDateTimeRangePicker.vue';
-import XuanDecimalInput from '@/framework/components/XuanDecimalInput.vue';
-import type { BrowseTableDensity } from '@/framework/components/browseTablePreferences';
-import type {
-  BrowseTableColumnPermissionSnapshot,
-  XuanBrowseTableSchema,
-} from '@/framework/components/browseTableSchema';
 import { useAuthStore } from '@/stores/auth';
-import type { IamMenu, IamPermission } from '@/types/iamAdmin';
+import type { IamMenu, IamPermission, IamResourceAction, IamResourceState } from '@/types/iamAdmin';
 import type { LoginProfile } from '@/utils/loginProfiles';
 
 defineOptions({ name: 'ComponentCenterView' });
@@ -566,6 +585,7 @@ const componentCenterActivePanels = ref([
   'browse-table',
   'navigation-menu-tree',
   'permission-assignment',
+  'state-action-permission-matrix',
 ]);
 const roleGrantPreviewModes = [
   { size: 'sm', title: 'sm', description: '小型 workspace 弹窗', width: '66vw / 72vh' },
@@ -598,6 +618,12 @@ const permissionDemoSelectedCodes = ref([
   'erp-sale-approved:view',
   'erp-purchase-draft:view',
   'erp-warehouse-stock:view',
+]);
+const stateActionDemoRules = ref<StateActionMatrixRule[]>([
+  { resourceKey: 'sales-order', stateCode: 'DRAFT', actionCode: 'update' },
+  { resourceKey: 'sales-order', stateCode: 'DRAFT', actionCode: 'submit' },
+  { resourceKey: 'sales-order', stateCode: 'SUBMITTED', actionCode: 'audit' },
+  { resourceKey: 'sales-order', stateCode: 'APPROVED', actionCode: 'close' },
 ]);
 const navigationTreeDemoKeyword = ref('');
 const navigationTreeDemoSelectedKey = ref('__all__');
@@ -896,6 +922,19 @@ const permissionDemoRequiredPermissionMap: Record<string, string[]> = {
   'erp-sale-approved': ['erp-product:view'],
   'erp-purchase-draft': ['erp-product:view'],
 };
+
+const stateActionDemoStates: IamResourceState[] = [
+  { id: 1, tenantId: 0, resourceKey: 'sales-order', stateCode: 'DRAFT', stateName: '草稿', description: null, sortNo: 10, enabled: true, metadataJson: '{}' },
+  { id: 2, tenantId: 0, resourceKey: 'sales-order', stateCode: 'SUBMITTED', stateName: '已提交', description: null, sortNo: 20, enabled: true, metadataJson: '{}' },
+  { id: 3, tenantId: 0, resourceKey: 'sales-order', stateCode: 'APPROVED', stateName: '已审核', description: null, sortNo: 30, enabled: true, metadataJson: '{}' },
+];
+
+const stateActionDemoActions: IamResourceAction[] = [
+  { id: 1, tenantId: 0, resourceKey: 'sales-order', actionCode: 'update', actionName: '编辑', permissionCode: 'sales-order:update', description: null, sortNo: 10, enabled: true, metadataJson: '{}' },
+  { id: 2, tenantId: 0, resourceKey: 'sales-order', actionCode: 'submit', actionName: '提交', permissionCode: 'sales-order:update', description: null, sortNo: 20, enabled: true, metadataJson: '{}' },
+  { id: 3, tenantId: 0, resourceKey: 'sales-order', actionCode: 'audit', actionName: '审核', permissionCode: 'sales-order:audit', description: null, sortNo: 30, enabled: true, metadataJson: '{}' },
+  { id: 4, tenantId: 0, resourceKey: 'sales-order', actionCode: 'close', actionName: '关闭', permissionCode: 'sales-order:update', description: null, sortNo: 40, enabled: true, metadataJson: '{}' },
+];
 
 const documentSupplierOptions: DocumentSelectOption[] = [
   { label: '华东配件供应商', value: 'supplier-east' },

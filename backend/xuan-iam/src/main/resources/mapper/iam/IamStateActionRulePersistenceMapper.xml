@@ -1,0 +1,261 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.xuan.erp.iam.infrastructure.persistence.mapper.IamStateActionRulePersistenceMapper">
+
+    <select id="findStates" resultType="com.xuan.erp.iam.domain.model.IamResourceState">
+        SELECT id,
+               tenant_id AS tenantId,
+               resource_key AS resourceKey,
+               state_code AS stateCode,
+               state_name AS stateName,
+               description,
+               sort_no AS sortNo,
+               is_enabled AS enabled,
+               metadata_json::text AS metadataJson
+        FROM iam_resource_state
+        WHERE deleted_at IS NULL
+          AND (
+              #{tenantId} IS NULL
+              OR tenant_id = #{tenantId}
+              OR tenant_id = 0
+          )
+          <if test="resourceKey != null and resourceKey != ''">
+          AND resource_key = #{resourceKey}
+          </if>
+          <if test="enabled != null">
+          AND is_enabled = #{enabled}
+          </if>
+        ORDER BY resource_key, tenant_id, sort_no, state_code
+    </select>
+
+    <select id="findStateById" resultType="com.xuan.erp.iam.domain.model.IamResourceState">
+        SELECT id,
+               tenant_id AS tenantId,
+               resource_key AS resourceKey,
+               state_code AS stateCode,
+               state_name AS stateName,
+               description,
+               sort_no AS sortNo,
+               is_enabled AS enabled,
+               metadata_json::text AS metadataJson
+        FROM iam_resource_state
+        WHERE id = #{stateId}
+          AND deleted_at IS NULL
+    </select>
+
+    <select id="findState" resultType="com.xuan.erp.iam.domain.model.IamResourceState">
+        SELECT id,
+               tenant_id AS tenantId,
+               resource_key AS resourceKey,
+               state_code AS stateCode,
+               state_name AS stateName,
+               description,
+               sort_no AS sortNo,
+               is_enabled AS enabled,
+               metadata_json::text AS metadataJson
+        FROM iam_resource_state
+        WHERE deleted_at IS NULL
+          AND resource_key = #{resourceKey}
+          AND state_code = #{stateCode}
+          AND tenant_id IN (#{tenantId}, 0)
+        ORDER BY CASE WHEN tenant_id = #{tenantId} THEN 0 ELSE 1 END
+        LIMIT 1
+    </select>
+
+    <select id="insertState" resultType="java.lang.Long">
+        INSERT INTO iam_resource_state (
+            tenant_id, resource_key, state_code, state_name, description, sort_no, is_enabled,
+            metadata_json, created_by, updated_by
+        )
+        VALUES (
+            #{tenantId}, #{resourceKey}, #{stateCode}, #{stateName}, #{description}, #{sortNo}, #{enabled},
+            CAST(#{metadataJson} AS jsonb), #{operator}, #{operator}
+        )
+        RETURNING id
+    </select>
+
+    <update id="updateState">
+        UPDATE iam_resource_state
+        SET state_name = #{stateName},
+            description = #{description},
+            sort_no = #{sortNo},
+            is_enabled = #{enabled},
+            metadata_json = CAST(#{metadataJson} AS jsonb),
+            updated_by = #{operator},
+            updated_at = now()
+        WHERE id = #{stateId}
+          AND deleted_at IS NULL
+    </update>
+
+    <update id="setStateEnabled">
+        UPDATE iam_resource_state
+        SET is_enabled = #{enabled},
+            updated_by = #{operator},
+            updated_at = now()
+        WHERE id = #{stateId}
+          AND deleted_at IS NULL
+    </update>
+
+    <select id="findActions" resultType="com.xuan.erp.iam.domain.model.IamResourceAction">
+        SELECT id,
+               tenant_id AS tenantId,
+               resource_key AS resourceKey,
+               action_code AS actionCode,
+               action_name AS actionName,
+               permission_code AS permissionCode,
+               description,
+               sort_no AS sortNo,
+               is_enabled AS enabled,
+               metadata_json::text AS metadataJson
+        FROM iam_resource_action
+        WHERE deleted_at IS NULL
+          AND (
+              #{tenantId} IS NULL
+              OR tenant_id = #{tenantId}
+              OR tenant_id = 0
+          )
+          <if test="resourceKey != null and resourceKey != ''">
+          AND resource_key = #{resourceKey}
+          </if>
+          <if test="enabled != null">
+          AND is_enabled = #{enabled}
+          </if>
+        ORDER BY resource_key, tenant_id, sort_no, action_code
+    </select>
+
+    <select id="findActionById" resultType="com.xuan.erp.iam.domain.model.IamResourceAction">
+        SELECT id,
+               tenant_id AS tenantId,
+               resource_key AS resourceKey,
+               action_code AS actionCode,
+               action_name AS actionName,
+               permission_code AS permissionCode,
+               description,
+               sort_no AS sortNo,
+               is_enabled AS enabled,
+               metadata_json::text AS metadataJson
+        FROM iam_resource_action
+        WHERE id = #{actionId}
+          AND deleted_at IS NULL
+    </select>
+
+    <select id="findAction" resultType="com.xuan.erp.iam.domain.model.IamResourceAction">
+        SELECT id,
+               tenant_id AS tenantId,
+               resource_key AS resourceKey,
+               action_code AS actionCode,
+               action_name AS actionName,
+               permission_code AS permissionCode,
+               description,
+               sort_no AS sortNo,
+               is_enabled AS enabled,
+               metadata_json::text AS metadataJson
+        FROM iam_resource_action
+        WHERE deleted_at IS NULL
+          AND resource_key = #{resourceKey}
+          AND action_code = #{actionCode}
+          AND tenant_id IN (#{tenantId}, 0)
+        ORDER BY CASE WHEN tenant_id = #{tenantId} THEN 0 ELSE 1 END
+        LIMIT 1
+    </select>
+
+    <select id="insertAction" resultType="java.lang.Long">
+        INSERT INTO iam_resource_action (
+            tenant_id, resource_key, action_code, action_name, permission_code, description, sort_no, is_enabled,
+            metadata_json, created_by, updated_by
+        )
+        VALUES (
+            #{tenantId}, #{resourceKey}, #{actionCode}, #{actionName}, #{permissionCode}, #{description}, #{sortNo}, #{enabled},
+            CAST(#{metadataJson} AS jsonb), #{operator}, #{operator}
+        )
+        RETURNING id
+    </select>
+
+    <update id="updateAction">
+        UPDATE iam_resource_action
+        SET action_name = #{actionName},
+            permission_code = #{permissionCode},
+            description = #{description},
+            sort_no = #{sortNo},
+            is_enabled = #{enabled},
+            metadata_json = CAST(#{metadataJson} AS jsonb),
+            updated_by = #{operator},
+            updated_at = now()
+        WHERE id = #{actionId}
+          AND deleted_at IS NULL
+    </update>
+
+    <update id="setActionEnabled">
+        UPDATE iam_resource_action
+        SET is_enabled = #{enabled},
+            updated_by = #{operator},
+            updated_at = now()
+        WHERE id = #{actionId}
+          AND deleted_at IS NULL
+    </update>
+
+    <select id="findRoleRules" resultType="com.xuan.erp.iam.domain.model.IamRoleStateActionRule">
+        SELECT rule.id,
+               rule.tenant_id AS tenantId,
+               rule.role_id AS roleId,
+               rule.resource_key AS resourceKey,
+               rule.state_code AS stateCode,
+               rule.action_code AS actionCode,
+               rule.is_enabled AS enabled
+        FROM iam_role_state_action_rule rule
+        WHERE rule.tenant_id = #{tenantId}
+          AND rule.role_id = #{roleId}
+          AND rule.deleted_at IS NULL
+        ORDER BY rule.resource_key, rule.state_code, rule.action_code
+    </select>
+
+    <update id="disableRoleRules">
+        UPDATE iam_role_state_action_rule
+        SET deleted_by = #{operator},
+            delete_reason = 'role-state-action-rules-replaced',
+            deleted_at = now(),
+            updated_by = #{operator},
+            updated_at = now()
+        WHERE tenant_id = #{tenantId}
+          AND role_id = #{roleId}
+          AND deleted_at IS NULL
+    </update>
+
+    <insert id="insertRoleRule">
+        INSERT INTO iam_role_state_action_rule (
+            tenant_id, role_id, resource_key, state_code, action_code, is_enabled, created_by, updated_by
+        )
+        VALUES (
+            #{tenantId}, #{roleId}, #{resourceKey}, #{stateCode}, #{actionCode}, true, #{operator}, #{operator}
+        )
+    </insert>
+
+    <select id="findMergedStateActionRulesByRoleIds"
+            resultType="com.xuan.erp.iam.infrastructure.persistence.mapper.IamStateActionRulePersistenceMapper$IamStateActionRuleEntry">
+        SELECT DISTINCT CONCAT(rule.resource_key, ':', rule.state_code) AS ruleKey,
+               rule.action_code AS actionCode
+        FROM iam_role_state_action_rule rule
+        JOIN iam_resource_state state
+          ON state.resource_key = rule.resource_key
+         AND state.state_code = rule.state_code
+         AND state.tenant_id IN (rule.tenant_id, 0)
+         AND state.deleted_at IS NULL
+         AND state.is_enabled = true
+        JOIN iam_resource_action action
+          ON action.resource_key = rule.resource_key
+         AND action.action_code = rule.action_code
+         AND action.tenant_id IN (rule.tenant_id, 0)
+         AND action.deleted_at IS NULL
+         AND action.is_enabled = true
+        WHERE rule.tenant_id = #{tenantId}
+          AND rule.role_id IN
+          <foreach collection="roleIds" item="roleId" open="(" separator="," close=")">
+              #{roleId}
+          </foreach>
+          AND rule.deleted_at IS NULL
+          AND rule.is_enabled = true
+        ORDER BY ruleKey, actionCode
+    </select>
+</mapper>

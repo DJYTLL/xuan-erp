@@ -4,7 +4,7 @@ title: "xuan-tenant 接口文档"
 
 本文记录 `xuan-tenant` 的前端接口、内部服务接口和管理接口。实际开发时，每个接口必须继续补齐请求参数、响应结构、错误码、幂等规则和审计要求。
 
-当前 `xuan-tenant` 使用平台统一权限模板：租户主资源使用 `tenant:view/create/update/delete`，启用使用 `tenant:enable`，停用、暂停、冻结使用 `tenant:disable`，配置写操作统一使用 `tenant-config:manage`。历史 `tenant:lifecycle` 只作为 IAM 迁移兼容来源，不再作为正式接口权限码。
+当前 `xuan-tenant` 使用平台统一权限模板：租户主资源使用 `tenant:view/create/update/delete`，域名使用 `tenant-domain:view/manage`，联系人使用 `tenant-contact:view/manage`，配置使用 `tenant-config:view/manage`，启用使用 `tenant:enable`，停用、暂停、冻结使用 `tenant:disable`。历史 `tenant:lifecycle` 只作为 IAM 迁移兼容来源，不再作为正式接口权限码。
 
 ## 前端接口清单
 
@@ -22,13 +22,22 @@ title: "xuan-tenant 接口文档"
 | POST | /api/tenant-plans | Vue 管理端 | `tenant-plan:manage` | 新增套餐，套餐编码活动态唯一由应用层校验 |
 | PUT | /api/tenant-plans/{id} | Vue 管理端 | `tenant-plan:manage` | 更新套餐定义、额度和功能开关 |
 | POST | /api/tenants/{id}/plan-assignments | Vue 管理端 | `tenant-plan:assign` | 变更租户套餐，记录 `previousPlanId`、`assignedAt`、`assignedBy` 和变更原因 |
-| GET | /api/tenants/{id}/domains | Vue 管理端 | `tenant-domain:view` | 查询租户域名 |
-| POST | /api/tenants/{id}/domains | Vue 管理端 | `tenant-domain:manage` | 绑定域名，域名规范化和活动态唯一由应用层校验 |
-| POST | /api/tenant-domains/{id}/verify | Vue 管理端 | `tenant-domain:manage` | 触发域名验证并记录验证结果 |
-| GET | /api/tenants/{id}/contacts | Vue 管理端 | `tenant-contact:view` | 查询租户管理员、商务、技术、财务等联系人 |
-| POST | /api/tenants/{id}/contacts | Vue 管理端 | `tenant-contact:manage` | 新增租户联系人，主联系人唯一由应用层校验 |
+| GET | /api/tenant-domains | Vue 管理端 | `tenant-domain:view` | 查询租户域名列表 |
+| GET | /api/tenant-domains/{id} | Vue 管理端 | `tenant-domain:view` | 查询租户域名详情 |
+| POST | /api/tenant-domains | Vue 管理端 | `tenant-domain:manage` | 绑定域名，域名规范化和活动态唯一由应用层校验 |
 | PUT | /api/tenant-contacts/{id} | Vue 管理端 | `tenant-contact:manage` | 更新租户联系人 |
+| PUT | /api/tenant-domains/{id} | Vue 管理端 | `tenant-domain:manage` | 更新域名状态、主域名标记和验证信息 |
+| DELETE | /api/tenant-domains/{id} | Vue 管理端 | `tenant-domain:manage` | 逻辑删除租户域名 |
+| GET | /api/tenant-contacts | Vue 管理端 | `tenant-contact:view` | 查询租户管理员、商务、技术、财务等联系人列表 |
+| GET | /api/tenant-contacts/{id} | Vue 管理端 | `tenant-contact:view` | 查询租户联系人详情 |
+| POST | /api/tenant-contacts | Vue 管理端 | `tenant-contact:manage` | 新增租户联系人，主联系人唯一由应用层校验 |
 | DELETE | /api/tenant-contacts/{id} | Vue 管理端 | `tenant-contact:manage` | 逻辑删除租户联系人 |
+| GET | /api/tenant-configs | Vue 管理端 | `tenant-config:view` | 查询租户配置列表 |
+| GET | /api/tenant-configs/public/{tenantId} | Vue 管理端 | `tenant-config:view` | 查询公开配置 |
+| GET | /api/tenant-configs/{id} | Vue 管理端 | `tenant-config:view` | 查询租户配置详情 |
+| POST | /api/tenant-configs | Vue 管理端 | `tenant-config:manage` | 创建租户配置 |
+| PUT | /api/tenant-configs/{id} | Vue 管理端 | `tenant-config:manage` | 更新租户配置 |
+| DELETE | /api/tenant-configs/{id} | Vue 管理端 | `tenant-config:manage` | 删除租户配置 |
 | GET | /api/tenants/{id}/configs | Vue 管理端 | `tenant-config:view` | 查询租户配置，敏感配置必须脱敏 |
 | PUT | /api/tenants/{id}/configs/{configKey} | Vue 管理端 | `tenant-config:manage` | 更新租户配置，应用层校验 valueType、敏感和加密标记 |
 | GET | /api/tenants/{id}/provision-tasks | Vue 管理端 | `tenant-provision:view` | 查询租户初始化任务和步骤 |
@@ -52,6 +61,7 @@ title: "xuan-tenant 接口文档"
 
 - Controller 只做协议适配和 DTO 转换。
 - Controller 必须补 `@PreAuthorize`，并与文档中的权限码保持一致。
+- `TenantResourceController` 只是通用入口，最终仍必须映射到具体资源权限：域名走 `tenant-domain:*`，联系人走 `tenant-contact:*`，配置走 `tenant-config:*`，不能回退到笼统的 `tenant:view` / `tenant:update`。
 - 写接口必须说明幂等键、重复提交处理和事务边界。
 - `POST /api/tenants` 是异步启动入口：创建租户主档和初始化任务成功后立即返回 `PROVISIONING`，不等待 IAM 实际完成。
 - `POST /api/tenants` 只要求 `tenant:create`，它负责“创建租户并异步启动首期编排”；查看任务、步骤和失败原因使用 `tenant-provision:view`，重试、死信和人工补偿使用 `tenant-provision:manage`。

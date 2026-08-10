@@ -66,5 +66,20 @@ assert(
   roleColumnPageSource.includes('missingDependencyHints'),
   '角色列权限页应根据当前用户快照展示缺失依赖权限。',
 );
+assert(
+  !roleColumnPageSource.includes('authStore.hasPermission(')
+    && roleColumnPageSource.includes('authorizationStore.hasButtonPermission('),
+  '角色列权限页局部只读状态和依赖提示必须读取 authorizationStore 当前权限快照，不能读取登录态里的旧 permissions。',
+);
+assert(
+  roleColumnPageSource.includes('hasRoleColumnPermissionDependencyWarning')
+    && roleColumnPageSource.includes('v-if="hasRoleColumnPermissionDependencyWarning" class="role-column-dependency-strip warning"'),
+  '角色列权限页只应在缺失依赖权限或接口失败时展开接口依赖异常提示。',
+);
+assert(
+  roleColumnPageSource.includes('dependency-compact-trigger')
+    && roleColumnPageSource.includes('v-if="!hasRoleColumnPermissionDependencyWarning"'),
+  '角色列权限页正常态应把接口依赖收敛为工具栏里的紧凑入口。',
+);
 
 console.log('Verified role column permission page shows explicit dependency permission errors.');

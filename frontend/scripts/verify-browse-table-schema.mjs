@@ -18,6 +18,7 @@ assert(existsSync(schemaPath), 'browseTableSchema.ts should exist for schema-dri
 
 const schemaSource = read('src/framework/components/browseTableSchema.ts');
 const tableSource = read('src/framework/components/XuanBrowseTable.vue');
+const permissionButtonSource = read('src/framework/components/PermissionButton.vue');
 const componentCenterSource = read('src/views/ComponentCenterView.vue');
 
 for (const marker of [
@@ -50,6 +51,23 @@ for (const marker of [
 assert(schemaSource.includes('show?: boolean'), 'Browse table pagination schema should allow consumers to hide pagination.');
 assert(tableSource.includes('<template v-if="hasToolbarContent" #toolbar>'), 'XuanBrowseTable should not render an empty toolbar slot.');
 assert(tableSource.includes('<template v-if="showPagination" #pagination>'), 'XuanBrowseTable should allow schema-driven pagination hiding.');
+assert(permissionButtonSource.includes('disabled?: boolean'), 'PermissionButton should accept explicit disabled state from schema-driven components.');
+assert(schemaSource.includes('stateResource?: string') && schemaSource.includes('stateAction?: string'), 'Browse table action schema should expose state action permission fields.');
+assert(
+  permissionButtonSource.includes('props.disabled') && permissionButtonSource.includes('Boolean(props.disabledReason)'),
+  'PermissionButton disabled state should combine explicit disabled and disabledReason.',
+);
+assert(
+  tableSource.includes(':disabled="Boolean(action.disabled)"')
+    && tableSource.includes(':disabled="resolveRowActionDisabled(action, scope.row)"'),
+  'XuanBrowseTable should pass schema disabled state into PermissionButton actions as well as plain el-button actions.',
+);
+assert(
+  tableSource.includes(':state-resource="action.stateResource"')
+    && tableSource.includes(':state-code="resolveRowActionStateCode(action, scope.row)"')
+    && tableSource.includes(':state-action="action.stateAction"'),
+  'XuanBrowseTable should pass schema state action fields into PermissionButton actions.',
+);
 
 for (const marker of [
   'browseTableSchema',

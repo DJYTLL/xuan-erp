@@ -128,6 +128,41 @@ export interface IamTenantColumnPermissionTemplateAssignment {
   templateEnabled: boolean;
 }
 
+export interface IamResourceState {
+  id: number;
+  tenantId: number;
+  resourceKey: string;
+  stateCode: string;
+  stateName: string;
+  description: string | null;
+  sortNo: number;
+  enabled: boolean;
+  metadataJson: string;
+}
+
+export interface IamResourceAction {
+  id: number;
+  tenantId: number;
+  resourceKey: string;
+  actionCode: string;
+  actionName: string;
+  permissionCode: string | null;
+  description: string | null;
+  sortNo: number;
+  enabled: boolean;
+  metadataJson: string;
+}
+
+export interface IamRoleStateActionRule {
+  id: number | null;
+  tenantId: number;
+  roleId: number;
+  resourceKey: string;
+  stateCode: string;
+  actionCode: string;
+  enabled: boolean;
+}
+
 export type IamMenuPayload = Omit<IamMenu, 'id' | 'enabled'> & { enabled?: boolean };
 export type IamPermissionPayload = Omit<IamPermission, 'id' | 'enabled'> & { enabled?: boolean };
 export type IamRolePayload = Omit<IamRole, 'id' | 'enabled'> & { enabled?: boolean };
@@ -177,5 +212,24 @@ export type IamRoleColumnPermissionRulePayload = {
 export type IamTenantColumnPermissionTemplateAssignmentPayload = {
   templateIds: number[];
   defaultTemplateId?: number | null;
+  operator?: string;
+};
+export type IamResourceStatePayload = Omit<IamResourceState, 'id' | 'enabled' | 'metadataJson'> & {
+  enabled?: boolean;
+  metadataJson?: string;
+  operator?: string;
+};
+export type IamResourceActionPayload = Omit<IamResourceAction, 'id' | 'enabled' | 'metadataJson'> & {
+  enabled?: boolean;
+  metadataJson?: string;
+  operator?: string;
+};
+export type IamRoleStateActionRulePayload = {
+  tenantId: number;
+  rules: Array<{
+    resourceKey: string;
+    stateCode: string;
+    actionCode: string;
+  }>;
   operator?: string;
 };

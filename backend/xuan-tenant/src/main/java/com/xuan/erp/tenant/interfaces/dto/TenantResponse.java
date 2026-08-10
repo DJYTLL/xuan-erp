@@ -1,8 +1,10 @@
 package com.xuan.erp.tenant.interfaces.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.xuan.erp.tenant.domain.model.type.TenantStatus;
 import java.time.OffsetDateTime;
 
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record TenantResponse(
         Long id,
         String code,

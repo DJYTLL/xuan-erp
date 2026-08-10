@@ -4,6 +4,7 @@ import com.xuan.erp.common.security.permission.CachedPermissionSnapshotProvider;
 import com.xuan.erp.common.security.permission.IamPermissionSnapshotUriSupplier;
 import com.xuan.erp.common.security.permission.PermissionSnapshotProvider;
 import com.xuan.erp.common.security.permission.RemoteIamPermissionSnapshotProvider;
+import com.xuan.erp.common.security.permission.StateActionPermissionGuard;
 import com.xuan.erp.common.security.permission.XuanPermissionExpression;
 import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -98,6 +99,18 @@ public class XuanPermissionSecurityAutoConfiguration {
     @ConditionalOnMissingBean(name = "xuanPermission")
     XuanPermissionExpression xuanPermission(PermissionSnapshotProvider permissionSnapshotProvider) {
         return new XuanPermissionExpression(permissionSnapshotProvider);
+    }
+
+    /**
+     * 创建业务命令入口使用的状态动作权限 Guard。
+     *
+     * @param permissionSnapshotProvider 权限快照 Provider
+     * @return 状态动作权限 Guard
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    StateActionPermissionGuard stateActionPermissionGuard(PermissionSnapshotProvider permissionSnapshotProvider) {
+        return new StateActionPermissionGuard(permissionSnapshotProvider);
     }
 
     private URI requiredIamSnapshotUri(XuanPermissionSecurityProperties properties) {

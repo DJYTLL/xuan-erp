@@ -127,6 +127,8 @@ const IAM_ROLE_MANAGEMENT_PAGE_REQUIRED_PERMISSIONS = [
   'iam-role:view',
   'iam-role:create',
   'iam-role:update',
+  'iam-state-action:view',
+  'iam-state-action:update',
 ];
 
 const IAM_COLUMN_PERMISSION_MANAGEMENT_PAGE_REQUIRED_PERMISSIONS = [
@@ -140,6 +142,12 @@ const IAM_ROLE_COLUMN_PERMISSION_MANAGEMENT_PAGE_REQUIRED_PERMISSIONS = [
   'iam-column-permission:view',
   'iam-role-column-permission:view',
   'iam-role-column-permission:update',
+];
+
+const IAM_STATE_ACTION_PERMISSION_MANAGEMENT_PAGE_REQUIRED_PERMISSIONS = [
+  'iam-state-action:view',
+  'iam-state-action:create',
+  'iam-state-action:update',
 ];
 
 const IAM_USER_MANAGEMENT_PAGE_REQUIRED_PERMISSIONS = [
@@ -164,6 +172,12 @@ const TENANT_MANAGEMENT_PAGE_REQUIRED_PERMISSIONS = [
   'tenant:enable',
   'tenant:disable',
   'tenant:delete',
+  'tenant-domain:view',
+  'tenant-domain:manage',
+  'tenant-contact:view',
+  'tenant-contact:manage',
+  'tenant-config:view',
+  'tenant-config:manage',
   'tenant-plan:view',
   'tenant-plan:assign',
   'tenant-provision:view',
@@ -196,6 +210,7 @@ export const businessPageRequiredPermissionMap: Record<string, string[]> = {
   'iam-role-management': IAM_ROLE_MANAGEMENT_PAGE_REQUIRED_PERMISSIONS,
   'iam-column-permission-management': IAM_COLUMN_PERMISSION_MANAGEMENT_PAGE_REQUIRED_PERMISSIONS,
   'iam-role-column-permission-management': IAM_ROLE_COLUMN_PERMISSION_MANAGEMENT_PAGE_REQUIRED_PERMISSIONS,
+  'iam-state-action-management': IAM_STATE_ACTION_PERMISSION_MANAGEMENT_PAGE_REQUIRED_PERMISSIONS,
   'iam-user-management': IAM_USER_MANAGEMENT_PAGE_REQUIRED_PERMISSIONS,
   'iam-init-template-management': IAM_INIT_TEMPLATE_MANAGEMENT_PAGE_REQUIRED_PERMISSIONS,
   'tenant-management': TENANT_MANAGEMENT_PAGE_REQUIRED_PERMISSIONS,

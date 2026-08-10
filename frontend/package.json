@@ -33,6 +33,7 @@
     "verify:user-role-grant": "node scripts/verify-user-role-grant.mjs",
     "verify:component-center-collapsible": "node scripts/verify-component-center-collapsible.mjs",
     "verify:login-memory": "node scripts/verify-login-memory.mjs",
+    "verify:framework-public-api": "node scripts/verify-framework-public-api.mjs",
     "verify:auth-401-guard": "node scripts/verify-auth-401-guard.mjs",
     "verify:http-error-real-message": "node scripts/verify-http-error-real-message.mjs",
     "verify:gateway-only-api-access": "node scripts/verify-gateway-only-api-access.mjs",
@@ -44,6 +45,7 @@
     "verify:observability-page-components": "node scripts/verify-observability-page-components.mjs",
     "verify:audit-log-query-page": "node scripts/verify-audit-log-query-page.mjs",
     "verify:tenant-management-page": "node scripts/verify-tenant-management-page.mjs",
+    "verify:tenant-column-permission-table": "node scripts/verify-tenant-column-permission-table.mjs",
     "verify:tenant-plan-management-page": "node scripts/verify-tenant-plan-management-page.mjs",
     "verify:authorization-context-refresh": "node scripts/verify-authorization-context-refresh.mjs",
     "verify:login-safe-render-plan-refresh": "node scripts/verify-login-safe-render-and-plan-refresh.mjs",
@@ -51,6 +53,7 @@
     "verify:role-column-permission-dependencies": "node scripts/verify-role-column-permission-dependencies.mjs",
     "verify:local-dev-host": "node scripts/verify-local-dev-host-contract.mjs",
     "verify:column-permission-management": "node scripts/verify-column-permission-management.mjs",
+    "verify:gateway-authz-runtime-script": "node scripts/verify-gateway-authz-runtime-script.mjs",
     "verify:product-management-permissions": "node scripts/verify-product-management-permissions.mjs",
     "verify:component-center-first": "node scripts/verify-component-center-first.mjs",
     "verify:framework-boundaries": "node scripts/verify-framework-boundaries.mjs"

@@ -58,7 +58,7 @@ public class IamUserController {
     }
 
     @Operation(summary = "查询用户列表", description = "按租户查询未逻辑删除的 IAM 用户列表")
-    @PreAuthorize("hasAuthority('iam-user:view')")
+    @PreAuthorize("@xuanPermission.has('iam-user:view')")
     @GetMapping
     public ApiResponse<List<IamUserResponse>> listUsers(
             @Parameter(description = "租户 ID")
@@ -71,7 +71,7 @@ public class IamUserController {
     }
 
     @Operation(summary = "查询用户详情", description = "根据用户 ID 查询 IAM 用户详情")
-    @PreAuthorize("hasAuthority('iam-user:view')")
+    @PreAuthorize("@xuanPermission.has('iam-user:view')")
     @GetMapping("/{userId}")
     public ApiResponse<IamUserResponse> getUser(
             @Parameter(description = "用户 ID")
@@ -83,7 +83,7 @@ public class IamUserController {
     }
 
     @Operation(summary = "创建用户", description = "创建租户内 IAM 用户账号")
-    @PreAuthorize("hasAuthority('iam-user:create')")
+    @PreAuthorize("@xuanPermission.has('iam-user:create')")
     @PostMapping
     public ApiResponse<IamUserResponse> createUser(
             @RequestBody CreateIamUserRequest request,
@@ -100,7 +100,7 @@ public class IamUserController {
     }
 
     @Operation(summary = "修改用户资料", description = "修改指定 IAM 用户基础资料，不允许通过该接口修改用户名和密码")
-    @PreAuthorize("hasAuthority('iam-user:update')")
+    @PreAuthorize("@xuanPermission.has('iam-user:update')")
     @PutMapping("/{userId}")
     public ApiResponse<IamUserResponse> updateUser(
             @Parameter(description = "用户 ID")
@@ -118,7 +118,7 @@ public class IamUserController {
     }
 
     @Operation(summary = "重置用户密码", description = "管理员重置指定 IAM 用户密码，并提升该用户权限版本")
-    @PreAuthorize("hasAuthority('iam-user:reset-password')")
+    @PreAuthorize("@xuanPermission.has('iam-user:reset-password')")
     @PostMapping("/{userId}/reset-password")
     public ApiResponse<IamUserResponse> resetPassword(
             @Parameter(description = "用户 ID")
@@ -132,7 +132,7 @@ public class IamUserController {
     }
 
     @Operation(summary = "重置租户管理员密码", description = "在租户管理页按租户重置该租户 admin 管理员账号密码")
-    @PreAuthorize("hasAuthority('tenant:admin-password:reset')")
+    @PreAuthorize("@xuanPermission.has('tenant:admin-password:reset')")
     @PostMapping("/tenants/{tenantId}/admin/reset-password")
     public ApiResponse<IamUserResponse> resetTenantAdminPassword(
             @Parameter(description = "租户 ID")
@@ -149,7 +149,7 @@ public class IamUserController {
     }
 
     @Operation(summary = "停用用户", description = "停用指定 IAM 用户并提升权限版本")
-    @PreAuthorize("hasAuthority('iam-user:delete')")
+    @PreAuthorize("@xuanPermission.has('iam-user:delete')")
     @PostMapping("/{userId}/disable")
     public ApiResponse<IamUserResponse> disableUser(
             @Parameter(description = "用户 ID")
@@ -162,7 +162,7 @@ public class IamUserController {
     }
 
     @Operation(summary = "查询用户角色", description = "查询指定租户用户当前拥有的角色 ID")
-    @PreAuthorize("hasAuthority('iam-user:view')")
+    @PreAuthorize("@xuanPermission.has('iam-user:view')")
     @GetMapping("/{userId}/roles")
     public ApiResponse<IamUserRoleGrantView> getUserRoles(
             @Parameter(description = "用户 ID")
@@ -174,7 +174,7 @@ public class IamUserController {
     }
 
     @Operation(summary = "保存用户角色", description = "使用角色 ID 集合替换指定用户当前角色授权，并刷新该用户授权快照")
-    @PreAuthorize("hasAuthority('iam-user:update')")
+    @PreAuthorize("@xuanPermission.has('iam-user:update')")
     @PutMapping("/{userId}/roles")
     public ApiResponse<IamUserRoleGrantView> setUserRoles(
             @Parameter(description = "用户 ID")

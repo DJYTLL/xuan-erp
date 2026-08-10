@@ -38,6 +38,10 @@ export type XuanBrowseTableToolbarActionSchema = {
   plain?: boolean;
   permission?: string;
   noPermissionMode?: BrowseTableNoPermissionMode;
+  stateResource?: string;
+  stateCode?: string | number | null;
+  stateAction?: string;
+  stateNoPermissionReason?: string;
   disabled?: boolean;
   disabledReason?: string;
 };
@@ -51,6 +55,10 @@ export type XuanBrowseTableRowActionSchema<TRow extends object = Record<string, 
   plain?: boolean;
   permission?: string;
   noPermissionMode?: BrowseTableNoPermissionMode;
+  stateResource?: string;
+  stateCode?: string | number | null | ((row: TRow) => string | number | null | undefined);
+  stateAction?: string;
+  stateNoPermissionReason?: string;
   visible?: boolean | ((row: TRow) => boolean);
   disabled?: boolean | ((row: TRow) => boolean);
   disabledReason?: string | ((row: TRow) => string);
